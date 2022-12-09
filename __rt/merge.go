@@ -1,0 +1,96 @@
+package __rt
+
+import (
+	"reflect"
+	"strings"
+)
+
+type NotAnArg interface {
+	NotAnArg()
+}
+
+type ToArgs interface {
+	ToArgs() []any
+}
+
+type ToNamedArgs interface {
+	ToNamedArgs() map[string]any
+}
+
+var bytesType = reflect.TypeOf([]byte{})
+
+func MergeArgs(args ...any) []any {
+	dst := make([]any, 0, len(args))
+	for _, arg := range args {
+		rv := reflect.ValueOf(arg)
+		if _, notAnArg := arg.(NotAnArg); notAnArg {
+			continue
+		} else if toArgs, ok := arg.(ToArgs); ok {
+			dst = append(dst, MergeArgs(toArgs.ToArgs()...)...)
+		} else if rv.Kind() == reflect.Slice && rv.Type() != bytesType {
+			for i := 0; i < rv.Len(); i++ {
+				dst = append(dst, rv.Index(i).Interface())
+			}
+		} else {
+			dst = append(dst, arg)
+		}
+	}
+	return dst
+}
+
+func MergeNamedArgs(argsMap map[string]any) map[string]any {
+	namedMap := make(map[string]any, len(argsMap))
+	for name, arg := range argsMap {
+		rv := reflect.ValueOf(arg)
+		if _, notAnArg := arg.(NotAnArg); notAnArg {
+			continue
+		} else if toNamedArgs, ok := arg.(ToNamedArgs); ok {
+			for k, v := range toNamedArgs.ToNamedArgs() {
+				namedMap[k] = v
+			}
+		} else if rv.Kind() == reflect.Map {
+			iter := rv.MapRange()
+			for iter.Next() {
+				k, v := iter.Key(), iter.Value()
+				if k.Kind() == reflect.String {
+					namedMap[k.String()] = v.Interface()
+				}
+			}
+		} else if rv.Kind() == reflect.Struct {
+			rt := rv.Type()
+			for i := 0; i < rt.NumField(); i++ {
+				if tag, ok := rt.Field(i).Tag.Lookup("db"); ok {
+					namedMap[tag] = rv.Field(i).Interface()
+				}
+			}
+		} else {
+			namedMap[name] = arg
+		}
+	}
+	return namedMap
+}
+
+func BindVars(data any) string {
+	var n int
+	switch rv := reflect.ValueOf(data); rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		n = int(rv.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		n = int(rv.Uint())
+	case reflect.Slice:
+		if rv.Type() == bytesType {
+			n = 1
+		} else {
+			n = rv.Len()
+		}
+	default:
+		n = 1
+	}
+
+	bindVars := make([]string, n)
+	for i := 0; i < n; i++ {
+		bindVars[i] = "?"
+	}
+
+	return strings.Join(bindVars, ", ")
+}
