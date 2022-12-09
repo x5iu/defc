@@ -152,12 +152,7 @@ type {{ $impName }}{{ $.GenericsRepr true }} struct{
         {{ $httpResponse := printf "httpResponse%s" $method.Ident -}}
         {{ $httpResponse }} *http.Response
         {{ $response := printf "response%s" $method.Ident -}}
-        {{ $response }} interface {
-        Err() error
-        ScanValues(...any) error
-        FromBytes(string, []byte) error
-        Break() bool
-        } = imp.{{ methodResp }}()
+        {{ $response }} __rt.Response = imp.{{ methodResp }}()
         )
 
         if {{ $err }} = template.Must({{ $addrTmpl }}.Parse({{ quote ($method.TmplURL) }})).
