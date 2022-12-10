@@ -1,6 +1,7 @@
 package __rt
 
 import (
+	"database/sql/driver"
 	"reflect"
 	"strings"
 )
@@ -48,6 +49,8 @@ func MergeNamedArgs(argsMap map[string]any) map[string]any {
 			for k, v := range toNamedArgs.ToNamedArgs() {
 				namedMap[k] = v
 			}
+		} else if _, ok = arg.(driver.Valuer); ok {
+			namedMap[name] = arg
 		} else if rv.Kind() == reflect.Map {
 			iter := rv.MapRange()
 			for iter.Next() {
@@ -56,8 +59,9 @@ func MergeNamedArgs(argsMap map[string]any) map[string]any {
 					namedMap[k.String()] = v.Interface()
 				}
 			}
-		} else if rv.Kind() == reflect.Struct {
-			rt := rv.Type()
+		} else if rv.Kind() == reflect.Struct ||
+			(rv.Kind() == reflect.Pointer && rv.Elem().Kind() == reflect.Struct) {
+			rt := reflect.Indirect(rv).Type()
 			for i := 0; i < rt.NumField(); i++ {
 				if tag, ok := rt.Field(i).Tag.Lookup("db"); ok {
 					namedMap[tag] = rv.Field(i).Interface()

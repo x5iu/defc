@@ -36,7 +36,7 @@ var (
 
 var defc = &cobra.Command{
 	Use:     "defc",
-	Version: "v1.0.1",
+	Version: "v1.0.2",
 	Args: func(cmd *cobra.Command, args []string) error {
 		switch mode {
 		case ModeApi, ModeSqlx:
