@@ -119,7 +119,7 @@ type Query interface {
 
 	```go
 	type ToArgs interface {
-		ToArgs() []any
+	  ToArgs() []any
 	}
 	```
 
@@ -127,7 +127,7 @@ type Query interface {
 
 	```go
 	type NotAnArg interface {
-		NotAnArg()
+	  NotAnArg()
 	}
 	```
 
@@ -145,7 +145,7 @@ type Query interface {
 
 	```go
 	type ToNamedArgs interface {
-		ToNamedArgs() map[string]any
+	  ToNamedArgs() map[string]any
 	}
 	```
 
@@ -229,7 +229,7 @@ type Service interface {
   //   "name": {{ $.name }}, 
   //   "age": {{ $.age }} 
   // }
-	CreateUser(ctx context.Context, name string, age int) (*User, error)
+  CreateUser(ctx context.Context, name string, age int) (*User, error)
 }
 ```
 
@@ -245,7 +245,7 @@ type Service interface {
 
 ```go
 type Response interface {
-	 Err() error
+   Err() error
    ScanValues(...any) error
    FromBytes(string, []byte) error
    Break() bool
@@ -282,7 +282,7 @@ type Service interface {
   Response() *Response
   
   // GetUsers GET {{ $.Service.Host }}/users?name={{ $.name }}&page={{ page }}
-	GetUsers(ctx context.Context, name string) ([]*User, error)
+  GetUsers(ctx context.Context, name string) ([]*User, error)
 }
 ```
 
