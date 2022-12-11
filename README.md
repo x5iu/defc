@@ -101,7 +101,7 @@ type Query interface {
 
 从注释的第二行开始，则为 SQL 语句定义，在这里可以书写你要执行的 SQL，支持 SQL 换行（但仍然需要在注释范围内），及多条 SQL（多行 SQL 仅支持在 `EXEC` 中使用，多条 SQL 以分号 `;` 分隔，这些 SQL 会被放在同一个事务中执行）；SQL 中的参数使用问号 `?` 占位符表示，**额外的：如果你使用的是 `PostgreSQL` 或其他不使用 `?` 占位符的数据库，你可以在 `def` 命令中使用 `--features=sqlx/rebind` 特性来将 SQL 中的 `?` 转换为适配对应数据库的占位符，例如 `PostgreSQL` 中的 `$1`。**
 
-## 查询参数定义
+### 查询参数定义
 
 那么，如何往这些问号占位符传值呢？`sqlx` 乃至 Go 标准库中 `database/sql` 中都是使用变长参数将值传递给数据库，`defc` 同样采用了这种方式，但是做了一些封装，我们将详细讲述这样的规则：
 
@@ -211,6 +211,23 @@ type Log interface {
 ```
 
 其中，`caller` 参数为当前方法的方法名，`query` 为当前查询的 SQL 语句，`args` 为查询参数，`elapse` 为查询所花费的时间。
+
+### 嵌入复杂 SQL
+
+~~很多~~少数情况下，我们会编写非常复杂非常长的 SQL 查询语句，将这些 SQL 写在注释中显然非常影响代码的可读性，也不利于 SQL 的维护，因此 `defc` 提供了在编译期嵌入 `.sql` 文件的功能（事实上所有文件类型都支持，例如 `.tmpl` 文件），只需要使用 `#include` 语句引入文件即可（这看起来像 C 语言的 `include`）：
+
+```go
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=query.go
+type Query interface {
+  // CreateUser EXEC
+  // #include insert.sql
+  CreateUser(ctx context.Context, user *User) (sql.Result, error)
+}
+```
+
+*注：`#include` 语句应存在于单独一行的注释中，并且该行只应该包含 `#include` 及文件名，每次只支持引入一个文件，但你可以多次使用 `#include` 来引入不同文件。*
+
+`#include` 的另一个最佳实践为，如果你的 SQL 总是包含一些共用的查询条件，或是查询字段，你可以将他们写在一个单独的 `.sql` 文件中，并使用 `#include` 在不同方法中引入，这样你就不用重复编写这些通用的查询语句，并且只需要更新 `.sql` 文件即可更新所有引入了该 `.sql` 文件的方法 Schema。
 
 ## api mode
 
@@ -342,3 +359,8 @@ type (
 )
 ```
 
+### 关于泛型支持
+
+目前 `defc` 对泛型的支持尚未完善和稳定，实际的使用过程中，也并未发现过多必须使用泛型的场景，这也是因为 Go 语言目前对于泛型使用的限制，接口泛型参数，只能在接口的最外层定义，而无法为接口中的方法单独定义泛型参数（但是 Rust 可以）。
+
+所以，待 Go 支持对接口方法单独定义泛型参数时，再考虑完善 `defc`对泛型的支持。
