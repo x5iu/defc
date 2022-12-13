@@ -1,7 +1,6 @@
-package main
+package gen
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -20,15 +19,16 @@ var (
 	sprintf    = fmt.Sprintf
 	quote      = strconv.Quote
 	trimPrefix = strings.TrimPrefix
+	trimSuffix = strings.TrimSuffix
 	trimSpace  = strings.TrimSpace
 	hasPrefix  = strings.HasPrefix
+	hasSuffix  = strings.HasSuffix
 	concat     = strings.Join
 	toUpper    = strings.ToUpper
 	join       = path.Join
 	isAbs      = path.IsAbs
 	read       = os.ReadFile
 	list       = os.ReadDir
-	write      = os.WriteFile
 )
 
 func getRepr(node ast.Node, src []byte) string {
@@ -150,13 +150,16 @@ func splitArgs(line string) (args []string) {
 	return args
 }
 
-func printStrings(strings []string) string {
-	var buf bytes.Buffer
-	for i, s := range strings {
-		buf.WriteString(quote(s))
-		if i < len(strings)-1 {
-			buf.WriteString(", ")
-		}
+func trimSlash(comment string) string {
+	if hasPrefix(comment, "//") {
+		comment = trimPrefix(comment, "//")
+	} else if hasPrefix(comment, "/*") {
+		comment = trimPrefix(comment, "/*")
 	}
-	return buf.String()
+
+	if hasSuffix(comment, "*/") {
+		comment = trimSuffix(comment, "*/")
+	}
+
+	return trimSpace(comment)
 }

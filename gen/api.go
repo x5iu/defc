@@ -1,13 +1,12 @@
-package main
+package gen
 
 import (
 	"bytes"
 	"fmt"
-	"github.com/spf13/cobra"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -17,45 +16,45 @@ import (
 )
 
 const (
-	ApiMethodInner    = "Inner"
-	ApiMethodResponse = "Response"
+	apiMethodInner    = "Inner"
+	apiMethodResponse = "Response"
 
 	FeatureApiCache  = "api/cache"
 	FeatureApiLog    = "api/log"
 	FeatureApiClient = "api/client"
 )
 
-func genApi(_ *cobra.Command, _ []string) error {
-	inspectCtx, err := inspectApi(join(CurrentDir, CurrentFile), LineNum+1)
+func (builder *Builder) buildApi(w io.Writer) error {
+	inspectCtx, err := inspectApi(builder.pkg, join(builder.pwd, builder.file), builder.doc, builder.pos+1, builder.feats)
 	if err != nil {
-		return fmt.Errorf("inspectApi(%s, %d): %w", quote(join(CurrentDir, CurrentFile)), LineNum, err)
+		return fmt.Errorf("inspectApi(%s, %d): %w", quote(join(builder.pwd, builder.file)), builder.pos, err)
 	}
 
 	if !checkResponse(inspectCtx.Methods) {
-		return fmt.Errorf("checkResponse: no '%s() T' method found in Interface", ApiMethodResponse)
+		return fmt.Errorf("checkResponse: no '%s() T' method found in Interface", apiMethodResponse)
 	}
 
 	for _, method := range inspectCtx.Methods {
-		if method.Ident != ApiMethodResponse && method.Ident != ApiMethodInner {
+		if method.Ident != apiMethodResponse && method.Ident != apiMethodInner {
 			if l := len(method.Out); l == 0 || !checkErrorType(method.Out[l-1]) {
 				return fmt.Errorf("checkErrorType: no 'error' found in method %s returned value",
 					quote(method.Ident))
 			}
 		}
 
-		if (method.Ident == ApiMethodResponse || method.Ident == ApiMethodInner) &&
+		if (method.Ident == apiMethodResponse || method.Ident == apiMethodInner) &&
 			(len(method.In) != 0 || len(method.Out) != 1) {
 			return fmt.Errorf(
 				"%s method can only have no income params "+
 					"and 1 returned value", quote(method.Ident))
 		}
 
-		if method.Ident == ApiMethodResponse {
+		if method.Ident == apiMethodResponse {
 			if !checkResponseType(method) {
 				return fmt.Errorf(
 					"checkResponseType: returned type of %s "+
 						"should be kind of *ast.Ident or *ast.StarExpr",
-					quote(ApiMethodResponse))
+					quote(apiMethodResponse))
 			}
 		}
 
@@ -66,36 +65,23 @@ func genApi(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	code, err := genApiCode(inspectCtx)
-	if err != nil {
+	if err = genApiCode(inspectCtx, builder.doc, w); err != nil {
 		return fmt.Errorf("genApiCode: \n\n%#v\n\n%w", inspectCtx, err)
-	}
-
-	fmtCode, err := format.Source(code)
-	if err != nil {
-		return fmt.Errorf("format.Source: \n\n%s\n\n%w", code, err)
-	}
-
-	if output == "" {
-		output = "api.go"
-	}
-
-	if err = write(join(CurrentDir, output), fmtCode, FileMode); err != nil {
-		return fmt.Errorf("os.WriteFile(%s, %04x): %w", join(CurrentDir, output), FileMode, err)
 	}
 
 	return nil
 }
 
-type ApiContext struct {
+type apiContext struct {
 	Package  string
 	Ident    string
 	Generics map[string]ast.Expr
 	Methods  []*Method
 	Features []string
+	Doc      Doc
 }
 
-func (ctx *ApiContext) SortGenerics() []string {
+func (ctx *apiContext) SortGenerics() []string {
 	idents := make([]string, 0, len(ctx.Generics))
 	for k := range ctx.Generics {
 		idents = append(idents, k)
@@ -106,7 +92,7 @@ func (ctx *ApiContext) SortGenerics() []string {
 	return idents
 }
 
-func (ctx *ApiContext) GenericsRepr(withType bool) string {
+func (ctx *apiContext) GenericsRepr(withType bool) string {
 	if len(ctx.Generics) == 0 {
 		return ""
 	}
@@ -118,7 +104,7 @@ func (ctx *ApiContext) GenericsRepr(withType bool) string {
 		dst.WriteString(name)
 		if withType {
 			dst.WriteByte(' ')
-			dst.WriteString(getRepr(expr, FileContent))
+			dst.WriteString(ctx.Doc.Repr(expr))
 		}
 		if index < len(ctx.Generics)-1 {
 			dst.WriteString(", ")
@@ -129,7 +115,7 @@ func (ctx *ApiContext) GenericsRepr(withType bool) string {
 	return dst.String()
 }
 
-func (ctx *ApiContext) HasFeature(feature string) bool {
+func (ctx *apiContext) HasFeature(feature string) bool {
 	for _, current := range ctx.Features {
 		if current == feature {
 			return true
@@ -138,7 +124,7 @@ func (ctx *ApiContext) HasFeature(feature string) bool {
 	return false
 }
 
-func (ctx *ApiContext) HasHeader() bool {
+func (ctx *apiContext) HasHeader() bool {
 	for _, method := range ctx.Methods {
 		if method.Header != "" {
 			return true
@@ -147,23 +133,23 @@ func (ctx *ApiContext) HasHeader() bool {
 	return false
 }
 
-func (ctx *ApiContext) HasInner() bool {
+func (ctx *apiContext) HasInner() bool {
 	return hasInner(ctx.Methods)
 }
 
-func (ctx *ApiContext) InnerType() ast.Node {
+func (ctx *apiContext) InnerType() ast.Node {
 	for _, method := range ctx.Methods {
-		if method.Ident == ApiMethodInner {
+		if method.Ident == apiMethodInner {
 			return method.Out[0]
 		}
 	}
 	return nil
 }
 
-func inspectApi(file string, line int) (*ApiContext, error) {
+func inspectApi(pkg string, file string, doc Doc, line int, feats []string) (*apiContext, error) {
 	fset := token.NewFileSet()
 
-	f, err := parser.ParseFile(fset, file, FileContent, parser.ParseComments)
+	f, err := parser.ParseFile(fset, file, doc.Bytes(), parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
@@ -219,8 +205,8 @@ inspectType:
 		}
 	}
 
-	apiFeatures := make([]string, 0, len(features))
-	for _, feature := range features {
+	apiFeatures := make([]string, 0, len(feats))
+	for _, feature := range feats {
 		if hasPrefix(feature, "api") {
 			apiFeatures = append(apiFeatures, feature)
 		}
@@ -235,20 +221,19 @@ inspectType:
 		}
 	}
 
-	return &ApiContext{
-		Package:  PackageName,
+	return &apiContext{
+		Package:  pkg,
 		Ident:    typeSpec.Name.Name,
 		Generics: generics,
-		Methods: nodeMap(ifaceType.Methods.List, func(node ast.Node) *Method {
-			return inspectMethod(node, FileContent)
-		}),
+		Methods:  nodeMap(ifaceType.Methods.List, doc.InspectMethod),
 		Features: apiFeatures,
+		Doc:      doc,
 	}, nil
 }
 
 func checkResponse(methods []*Method) bool {
 	for _, method := range methods {
-		if method.Ident == ApiMethodResponse {
+		if method.Ident == apiMethodResponse {
 			return true
 		}
 	}
@@ -266,7 +251,7 @@ func checkResponseType(method *Method) bool {
 
 func hasInner(methods []*Method) bool {
 	for _, method := range methods {
-		if method.Ident == ApiMethodInner {
+		if method.Ident == apiMethodInner {
 			return true
 		}
 	}
@@ -283,9 +268,9 @@ func importContext(methods []*Method) bool {
 }
 
 //go:embed templates/api.tmpl
-var ApiTemplate string
+var apiTemplate string
 
-func genApiCode(ctx *ApiContext) ([]byte, error) {
+func genApiCode(ctx *apiContext, doc Doc, w io.Writer) error {
 	tmpl, err := template.
 		New("defc(api)").
 		Funcs(template.FuncMap{
@@ -293,29 +278,17 @@ func genApiCode(ctx *ApiContext) ([]byte, error) {
 			"isPointer":     isPointer,
 			"indirect":      indirect,
 			"importContext": importContext,
-			"sub": func(x, y int) int {
-				return x - y
-			},
-			"getRepr": func(node ast.Node) string {
-				return getRepr(node, FileContent)
-			},
-			"methodResp": func() string {
-				return ApiMethodResponse
-			},
-			"isResponse": func(ident string) bool {
-				return ident == ApiMethodResponse
-			},
-			"isInner": func(ident string) bool {
-				return ident == ApiMethodInner
-			},
-			"newType": func(expr ast.Expr) string {
-				return newType(expr, FileContent)
-			},
+			"sub":           func(x, y int) int { return x - y },
+			"getRepr":       func(node ast.Node) string { return doc.Repr(node) },
+			"methodResp":    func() string { return apiMethodResponse },
+			"isResponse":    func(ident string) bool { return ident == apiMethodResponse },
+			"isInner":       func(ident string) bool { return ident == apiMethodInner },
+			"newType":       func(expr ast.Expr) string { return doc.NewType(expr) },
 			"httpMethodHasBody": func(method string) bool {
 				switch method {
 				case http.MethodGet:
 					return false
-				case http.MethodPost, http.MethodPut:
+				case http.MethodPost, http.MethodPut, http.MethodPatch:
 					return true
 				default:
 					return false
@@ -328,16 +301,11 @@ func genApiCode(ctx *ApiContext) ([]byte, error) {
 				return false
 			},
 		}).
-		Parse(ApiTemplate)
+		Parse(apiTemplate)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var dst bytes.Buffer
-	if err = tmpl.Execute(&dst, ctx); err != nil {
-		return nil, err
-	}
-
-	return dst.Bytes(), nil
+	return tmpl.Execute(w, ctx)
 }

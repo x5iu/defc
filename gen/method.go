@@ -1,4 +1,4 @@
-package main
+package gen
 
 import (
 	"bytes"
@@ -80,12 +80,12 @@ func (method *Method) MethodHTTP() string {
 }
 
 var availableOperations = []string{
-	SqlxOpExec,
-	SqlxOpQuery,
+	sqlxOpExec,
+	sqlxOpQuery,
 }
 
-// SqlOperation should only be used with '--mode=sqlx' arg
-func (method *Method) SqlOperation() string {
+// SqlxOperation should only be used with '--mode=sqlx' arg
+func (method *Method) SqlxOperation() string {
 	args := method.MetaArgs()
 	if len(args) >= 2 {
 		for _, operation := range availableOperations {
@@ -97,15 +97,15 @@ func (method *Method) SqlOperation() string {
 	return ""
 }
 
-// SqlFeatures should only be used with '--mode=sqlx' arg
-func (method *Method) SqlFeatures() []string {
+// SqlxOptions should only be used with '--mode=sqlx' arg
+func (method *Method) SqlxOptions() []string {
 	args := method.MetaArgs()
 	if len(args) >= 3 {
-		feats := make([]string, 0, len(args[2:]))
-		for _, feat := range args[2:] {
-			feats = append(feats, toUpper(feat))
+		opts := make([]string, 0, len(args[2:]))
+		for _, opt := range args[2:] {
+			opts = append(opts, toUpper(opt))
 		}
-		return feats
+		return opts
 	}
 	return nil
 }
@@ -136,13 +136,10 @@ func inspectMethod(node ast.Node, source []byte) (method *Method) {
 	method = new(Method)
 	method.Source = source
 	if field.Doc != nil {
-		method.Meta = trimSpace(
-			trimPrefix(field.Doc.List[0].Text,
-				"//"),
-		)
+		method.Meta = trimSlash(field.Doc.List[0].Text)
 		var buffer bytes.Buffer
 		for _, header := range field.Doc.List[1:] {
-			buffer.WriteString(trimSpace(trimPrefix(header.Text, "//")))
+			buffer.WriteString(trimSlash(header.Text))
 			buffer.WriteString("\r\n")
 		}
 		method.Header = buffer.String()

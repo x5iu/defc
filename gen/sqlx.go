@@ -1,14 +1,13 @@
-package main
+package gen
 
 import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/spf13/cobra"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
+	"io"
 	"strings"
 	"text/template"
 
@@ -16,21 +15,21 @@ import (
 )
 
 const (
-	SqlxOpExec  = "EXEC"
-	SqlxOpQuery = "QUERY"
+	sqlxOpExec  = "EXEC"
+	sqlxOpQuery = "QUERY"
 
-	SqlxMethodWithTx = "WithTx"
+	sqlxMethodWithTx = "WithTx"
 
-	SqlxCmdInclude = "#INCLUDE"
+	sqlxCmdInclude = "#INCLUDE"
 
 	FeatureSqlxLog    = "sqlx/log"
 	FeatureSqlxRebind = "sqlx/rebind"
 )
 
-func genSqlx(_ *cobra.Command, _ []string) error {
-	inspectCtx, err := inspectSqlx(join(CurrentDir, CurrentFile), LineNum+1)
+func (builder *Builder) buildSqlx(w io.Writer) error {
+	inspectCtx, err := inspectSqlx(builder.pkg, join(builder.pwd, builder.file), builder.doc, builder.pos+1, builder.feats)
 	if err != nil {
-		return fmt.Errorf("inspectSqlx(%s, %d): %w", quote(join(CurrentDir, CurrentFile)), LineNum, err)
+		return fmt.Errorf("inspectSqlx(%s, %d): %w", quote(join(builder.pwd, builder.file)), builder.pos, err)
 	}
 
 	for i, method := range inspectCtx.Methods {
@@ -45,44 +44,31 @@ func genSqlx(_ *cobra.Command, _ []string) error {
 				len(method.Out))
 		}
 
-		if method.Ident == SqlxMethodWithTx {
+		if method.Ident == sqlxMethodWithTx {
 			inspectCtx.WithTx = true
 			inspectCtx.WithTxContext = method.HasContext()
 			inspectCtx.Methods = append(inspectCtx.Methods[:i], inspectCtx.Methods[i+1:]...)
 		}
 	}
 
-	code, err := genSqlxCode(inspectCtx)
-	if err != nil {
+	if err = genSqlxCode(inspectCtx, builder.pwd, builder.doc, w); err != nil {
 		return fmt.Errorf("genApiCode: \n\n%#v\n\n%w", inspectCtx, err)
-	}
-
-	fmtCode, err := format.Source(code)
-	if err != nil {
-		return fmt.Errorf("format.Source: \n\n%s\n\n%w", code, err)
-	}
-
-	if output == "" {
-		output = "sqlx.go"
-	}
-
-	if err = write(join(CurrentDir, output), fmtCode, FileMode); err != nil {
-		return fmt.Errorf("os.WriteFile(%s, %04x): %w", join(CurrentDir, output), FileMode, err)
 	}
 
 	return nil
 }
 
-type SqlxContext struct {
+type sqlxContext struct {
 	Package       string
 	Ident         string
 	Methods       []*Method
 	WithTx        bool
 	WithTxContext bool
 	Features      []string
+	Doc           Doc
 }
 
-func (ctx *SqlxContext) HasFeature(feature string) bool {
+func (ctx *sqlxContext) HasFeature(feature string) bool {
 	for _, current := range ctx.Features {
 		if current == feature {
 			return true
@@ -91,10 +77,10 @@ func (ctx *SqlxContext) HasFeature(feature string) bool {
 	return false
 }
 
-func inspectSqlx(file string, line int) (*SqlxContext, error) {
+func inspectSqlx(pkg string, file string, doc Doc, line int, feats []string) (*sqlxContext, error) {
 	fset := token.NewFileSet()
 
-	f, err := parser.ParseFile(fset, file, FileContent, parser.ParseComments)
+	f, err := parser.ParseFile(fset, file, doc.Bytes(), parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +128,7 @@ inspectType:
 	}
 
 	for _, method := range ifaceType.Methods.List {
-		if name := method.Names[0].Name; name != SqlxMethodWithTx && !checkInput(method.Type.(*ast.FuncType)) {
+		if name := method.Names[0].Name; name != sqlxMethodWithTx && !checkInput(method.Type.(*ast.FuncType)) {
 			return nil, fmt.Errorf(""+
 				"input params for method %s should "+
 				"contain 'Name' and 'Type' both",
@@ -150,33 +136,32 @@ inspectType:
 		}
 	}
 
-	sqlxFeatures := make([]string, 0, len(features))
-	for _, feature := range features {
+	sqlxFeatures := make([]string, 0, len(feats))
+	for _, feature := range feats {
 		if hasPrefix(feature, "sqlx") {
 			sqlxFeatures = append(sqlxFeatures, feature)
 		}
 	}
 
-	return &SqlxContext{
-		Package: PackageName,
-		Ident:   typeSpec.Name.Name,
-		Methods: nodeMap(ifaceType.Methods.List, func(node ast.Node) *Method {
-			return inspectMethod(node, FileContent)
-		}),
+	return &sqlxContext{
+		Package:  pkg,
+		Ident:    typeSpec.Name.Name,
+		Methods:  nodeMap(ifaceType.Methods.List, doc.InspectMethod),
 		Features: sqlxFeatures,
+		Doc:      doc,
 	}, nil
 }
 
-func readHeader(header string) (string, error) {
+func readHeader(header string, pwd string) (string, error) {
 	var buf bytes.Buffer
 	scanner := bufio.NewScanner(strings.NewReader(header))
 	for scanner.Scan() {
 		text := scanner.Text()
 		args := splitArgs(text)
-		if len(args) == 2 && toUpper(args[0]) == SqlxCmdInclude {
+		if len(args) == 2 && toUpper(args[0]) == sqlxCmdInclude {
 			path := args[1]
 			if !isAbs(path) {
-				path = join(CurrentDir, path)
+				path = join(pwd, path)
 			}
 			content, err := read(path)
 			if err != nil {
@@ -191,9 +176,9 @@ func readHeader(header string) (string, error) {
 	return buf.String(), nil
 }
 
-func hasFeature(feats []string, feat string) bool {
-	for _, f := range feats {
-		if f == toUpper(feat) {
+func hasOption(opts []string, opt string) bool {
+	for _, o := range opts {
+		if o == toUpper(opt) {
 			return true
 		}
 	}
@@ -201,34 +186,29 @@ func hasFeature(feats []string, feat string) bool {
 }
 
 //go:embed templates/sqlx.tmpl
-var SqlxTemplate string
+var sqlxTemplate string
 
-func genSqlxCode(ctx *SqlxContext) ([]byte, error) {
+func genSqlxCode(ctx *sqlxContext, pwd string, doc Doc, w io.Writer) error {
 	tmpl, err := template.
 		New("defc(sqlx)").
 		Funcs(template.FuncMap{
 			"quote":         quote,
-			"readHeader":    readHeader,
-			"hasFeature":    hasFeature,
+			"hasOption":     hasOption,
 			"isSlice":       isSlice,
 			"isPointer":     isPointer,
 			"indirect":      indirect,
-			"isContextType": func(ident string, expr ast.Expr) bool { return isContextType(ident, expr, FileContent) },
+			"readHeader":    func(header string) (string, error) { return readHeader(header, pwd) },
+			"isContextType": func(ident string, expr ast.Expr) bool { return doc.IsContextType(ident, expr) },
 			"sub":           func(x, y int) int { return x - y },
-			"getRepr":       func(node ast.Node) string { return getRepr(node, FileContent) },
-			"isQuery":       func(op string) bool { return op == SqlxOpQuery },
-			"isExec":        func(op string) bool { return op == SqlxOpExec },
+			"getRepr":       func(node ast.Node) string { return doc.Repr(node) },
+			"isQuery":       func(op string) bool { return op == sqlxOpQuery },
+			"isExec":        func(op string) bool { return op == sqlxOpExec },
 		}).
-		Parse(SqlxTemplate)
+		Parse(sqlxTemplate)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var dst bytes.Buffer
-	if err = tmpl.Execute(&dst, ctx); err != nil {
-		return nil, err
-	}
-
-	return dst.Bytes(), nil
+	return tmpl.Execute(w, ctx)
 }

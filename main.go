@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/spf13/cobra"
+	"github.com/x5iu/defc/gen"
+	"go/format"
 	"os"
+	"path"
 	"strconv"
 )
 
@@ -12,21 +16,28 @@ const (
 	EnvGoPackage = "GOPACKAGE"
 	EnvGoFile    = "GOFILE"
 	EnvGoLine    = "GOLINE"
-
-	ModeApi  = "api"
-	ModeSqlx = "sqlx"
-
-	FileMode = 0644
 )
 
 var (
-	PackageName = os.Getenv(EnvGoPackage)
-	CurrentDir  = os.Getenv(EnvPWD)
-	CurrentFile = os.Getenv(EnvGoFile)
-	LineNum, _  = strconv.Atoi(os.Getenv(EnvGoLine))
-
-	FileContent []byte
+	modeMap       map[string]gen.Mode
+	validModes    []string
+	validFeatures = []string{
+		gen.FeatureApiCache,
+		gen.FeatureApiLog,
+		gen.FeatureApiClient,
+		gen.FeatureSqlxLog,
+		gen.FeatureSqlxRebind,
+	}
 )
+
+func init() {
+	modeMap = make(map[string]gen.Mode, gen.ModeEnd-gen.ModeStart-1)
+	validModes = make([]string, 0, gen.ModeEnd-gen.ModeStart-1)
+	for m := gen.ModeStart + 1; m < gen.ModeEnd; m++ {
+		modeMap[m.String()] = m
+		validModes = append(validModes, m.String())
+	}
+}
 
 var (
 	mode     string
@@ -36,39 +47,60 @@ var (
 
 var defc = &cobra.Command{
 	Use:     "defc",
-	Version: "v1.0.4",
+	Version: "v1.1.0",
 	Args: func(cmd *cobra.Command, args []string) error {
-		switch mode {
-		case ModeApi, ModeSqlx:
+		switch modeMap[mode] {
+		case gen.ModeApi, gen.ModeSqlx:
 			return cobra.NoArgs(cmd, args)
 		default:
-			return nil
+			return fmt.Errorf("invalid mode %q", mode)
 		}
 	},
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := checkFeatures(features); err != nil {
+	RunE: func(cmd *cobra.Command, args []string) (err error) {
+		if err = checkFeatures(features); err != nil {
 			return err
 		}
 
-		switch mode {
-		case ModeApi:
-			return genApi(cmd, args)
-		case ModeSqlx:
-			return genSqlx(cmd, args)
-		default:
-			return nil
-		}
-	},
-}
+		var (
+			pwd  = os.Getenv(EnvPWD)
+			file = os.Getenv(EnvGoFile)
+			doc  []byte
+			pos  int
+		)
 
-var validFeatures = []string{
-	FeatureApiCache,
-	FeatureApiLog,
-	FeatureApiClient,
-	FeatureSqlxLog,
-	FeatureSqlxRebind,
+		if doc, err = os.ReadFile(path.Join(pwd, file)); err != nil {
+			return fmt.Errorf("$GOFILE: os.ReadFile(%q): %w", path.Join(pwd, file), err)
+		}
+
+		if pos, err = strconv.Atoi(os.Getenv(EnvGoLine)); err != nil {
+			return fmt.Errorf("$GOLINE: strconv.Atoi(%s): %w", os.Getenv(EnvGoLine), err)
+		}
+
+		builder := gen.NewBuilder(modeMap[mode]).
+			WithFeats(features).
+			WithPkg(os.Getenv(EnvGoPackage)).
+			WithPwd(pwd).
+			WithFile(file, doc).
+			WithPos(pos)
+
+		var buffer bytes.Buffer
+		if err = builder.Build(&buffer); err != nil {
+			return err
+		}
+
+		fmtCode, err := format.Source(buffer.Bytes())
+		if err != nil {
+			return fmt.Errorf("format.Source: \n\n%s\n\n%w", buffer.Bytes(), err)
+		}
+
+		if err = os.WriteFile(path.Join(pwd, output), fmtCode, 0644); err != nil {
+			return fmt.Errorf("os.WriteFile(%s, 0644): %w", path.Join(pwd, output), err)
+		}
+
+		return nil
+	},
 }
 
 func checkFeatures(features []string) error {
@@ -85,25 +117,30 @@ Check:
 		}
 
 		return fmt.Errorf("checkFeatures: invalid feature %s, available features are: \n\n%s\n\n",
-			quote(feature),
+			strconv.Quote(feature),
 			printStrings(validFeatures))
 	}
 
 	return nil
 }
 
-func init() {
-	defc.Flags().StringVarP(&mode, "mode", "m", "", "mode=[\"api\", \"sqlx\"]")
-	defc.Flags().StringSliceVarP(&features, "features", "f", nil, fmt.Sprintf("features=[%s]", printStrings(validFeatures)))
-	defc.Flags().StringVarP(&output, "output", "o", "", "output file name")
+func printStrings(strings []string) string {
+	var buf bytes.Buffer
+	for i, s := range strings {
+		buf.WriteString(strconv.Quote(s))
+		if i < len(strings)-1 {
+			buf.WriteString(", ")
+		}
+	}
+	return buf.String()
 }
 
 func init() {
-	if CurrentFile != "" {
-		var err error
-		FileContent, err = read(join(CurrentDir, CurrentFile))
-		cobra.CheckErr(err)
-	}
+	defc.Flags().StringVarP(&mode, "mode", "m", "", fmt.Sprintf("mode=[%s]", printStrings(validModes)))
+	defc.Flags().StringSliceVarP(&features, "features", "f", nil, fmt.Sprintf("features=[%s]", printStrings(validFeatures)))
+	defc.Flags().StringVarP(&output, "output", "o", "", "output file name")
+	defc.MarkFlagRequired("mode")
+	defc.MarkFlagRequired("output")
 }
 
 func main() {
