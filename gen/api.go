@@ -171,7 +171,7 @@ func (ctx apiContext) MergedImports() (imports []string) {
 
 	for _, imp := range ctx.Imports {
 		if !in(imports, imp) {
-			imports = append(imports, imp)
+			imports = append(imports, parseImport(imp))
 		}
 	}
 

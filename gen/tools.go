@@ -172,3 +172,20 @@ func in[T comparable](list []T, item T) bool {
 	}
 	return false
 }
+
+func parseImport(imp string) string {
+	elements := splitArgs(imp)
+	if len(elements) == 1 {
+		pkg := elements[0]
+		if hasPrefix(pkg, "\"") && hasSuffix(pkg, "\"") {
+			return pkg
+		}
+		return quote(pkg)
+	} else {
+		alias, pkg := elements[0], elements[1]
+		if hasPrefix(pkg, "\"") && hasSuffix(pkg, "\"") {
+			return alias + " " + pkg
+		}
+		return alias + " " + quote(pkg)
+	}
+}
