@@ -22,6 +22,11 @@ type {{ $impName }}{{ $.GenericsRepr true }} struct{
 {{ end -}}
 }
 
+var (
+{{ range $index, $method := $.Methods }} {{ if and (not $method.ReturnSlice) (ne "Inner" $method.Ident) (ne "Response" $method.Ident) }} {{ printf "addrTmpl%s" $method.Ident }} = template.Must(template.New("Address{{ $method.Ident }}").Parse({{ quote ($method.TmplURL) }}))
+{{ if ne $method.Header "" -}} {{ printf "headerTmpl%s" $method.Ident }} = template.Must(template.New("Header{{ $method.Ident }}").Parse({{ quote $method.Header }})) {{ end }} {{ end }} {{ end }}
+)
+
 {{ range $index, $method := .Methods }}
     {{ $sortIn := $method.SortIn }}
     func ({{ if not (isResponse $method.Ident) }} imp {{ end }} {{ $receiver }}) {{ $method.Ident }}(
@@ -81,30 +86,40 @@ type {{ $impName }}{{ $.GenericsRepr true }} struct{
         {{- $page := printf "page%s" $method.Ident -}}
         {{- $addrTmpl := printf "addrTmpl%s" $method.Ident -}}
         {{- $headerTmpl := printf "headerTmpl%s" $method.Ident -}}
-        var (
-        {{- if $method.ReturnSlice }}
-            {{ $type := index $method.Out 0 -}}
-            {{ $values }} = make({{ getRepr $type }}, 0, 10)
-            {{ $n }}    = 0
-            {{ $page }} = func() int {
-            current := {{ $n }}
-            {{ $n }}++
-            return current
-            }
-        {{- end }}
-        {{ $addrTmpl }} = template.New("Address{{ $method.Ident }}"){{- if $method.ReturnSlice -}}
-            .Funcs(template.FuncMap{
-            "page": {{ $page }},
-            })
-        {{- end }}
-        {{ if ne $method.Header "" -}}
-            {{ $headerTmpl }} = template.New("Header{{ $method.Ident }}"){{- if $method.ReturnSlice -}}
-                .Funcs(template.FuncMap{
-                "page": {{ $page }},
-                })
+        {{- if $method.ReturnSlice -}}
+            var (
+            {{- if $method.ReturnSlice }}
+                {{ $type := index $method.Out 0 -}}
+                {{ $values }} = make({{ getRepr $type }}, 0, 10)
+                {{ $n }}    = 0
+                {{ $page }} = func() int {
+                current := {{ $n }}
+                {{ $n }}++
+                return current
+                }
             {{- end }}
-        {{- end }}
-        )
+            {{ if $method.ReturnSlice -}}
+                {{ $addrTmpl }} = template.Must(
+                template.New("Address{{ $method.Ident }}").
+                Funcs(template.FuncMap{
+                "page": {{ $page }},
+                }).
+                Parse({{ quote ($method.TmplURL) }}),
+                )
+            {{- end }}
+            {{ if ne $method.Header "" -}}
+                {{- if $method.ReturnSlice -}}
+                    {{ $headerTmpl }} = template.Must(
+                    template.New("Header{{ $method.Ident }}").
+                    Funcs(template.FuncMap{
+                    "page": {{ $page }},
+                    }).
+                    Parse({{ quote $method.Header }}),
+                    )
+                {{- end }}
+            {{- end }}
+            )
+        {{ end }}
 
         {{ $addr := printf "addr%s" $method.Ident -}}
         {{ $addr }} := __rt.GetBuffer()
@@ -141,8 +156,7 @@ type {{ $impName }}{{ $.GenericsRepr true }} struct{
         {{ $response }} __rt.Response = imp.{{ methodResp }}()
         )
 
-        if {{ $err }} = template.Must({{ $addrTmpl }}.Parse({{ quote ($method.TmplURL) }})).
-        Execute({{ $addr }}, map[string]any{
+        if {{ $err }} = {{ $addrTmpl }}.Execute({{ $addr }}, map[string]any{
         {{ if $context.HasInner -}}
             "{{ $context.Ident }}": imp.inner,
         {{ end -}}
@@ -161,8 +175,7 @@ type {{ $impName }}{{ $.GenericsRepr true }} struct{
         {{ $bufReader := printf "bufReader%s" $method.Ident }}
         {{ $mimeHeader := printf "mimeHeader%s" $method.Ident -}}
         {{ if ne $method.Header "" -}}
-            if {{ $err }} = template.Must({{ $headerTmpl }}.Parse({{ quote $method.Header }})).
-            Execute({{ $header }}, map[string]any{
+            if {{ $err }} = {{ $headerTmpl }}.Execute({{ $header }}, map[string]any{
             {{ if $context.HasInner -}}
                 "{{ $context.Ident }}": imp.inner,
             {{ end -}}
