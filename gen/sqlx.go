@@ -27,7 +27,7 @@ const (
 )
 
 func (builder *Builder) buildSqlx(w io.Writer) error {
-	inspectCtx, err := inspectSqlx(builder.pkg, join(builder.pwd, builder.file), builder.doc, builder.pos+1, builder.feats)
+	inspectCtx, err := builder.inspectSqlx()
 	if err != nil {
 		return fmt.Errorf("inspectSqlx(%s, %d): %w", quote(join(builder.pwd, builder.file)), builder.pos, err)
 	}
@@ -65,6 +65,7 @@ type sqlxContext struct {
 	WithTx        bool
 	WithTxContext bool
 	Features      []string
+	Imports       []string
 	Doc           Doc
 }
 
@@ -77,10 +78,35 @@ func (ctx *sqlxContext) HasFeature(feature string) bool {
 	return false
 }
 
-func inspectSqlx(pkg string, file string, doc Doc, line int, feats []string) (*sqlxContext, error) {
+func (ctx *sqlxContext) MergedImports() (imports []string) {
+	imports = []string{
+		quote("fmt"),
+		quote("strconv"),
+		quote("database/sql"),
+		quote("strings"),
+		quote("context"),
+		quote("text/template"),
+		quote("github.com/jmoiron/sqlx"),
+		quote("github.com/x5iu/defc/__rt"),
+	}
+
+	if ctx.HasFeature(FeatureSqlxLog) {
+		imports = append(imports, quote("time"))
+	}
+
+	for _, imp := range ctx.Imports {
+		if !in(imports, imp) {
+			imports = append(imports, imp)
+		}
+	}
+
+	return imports
+}
+
+func (builder *Builder) inspectSqlx() (*sqlxContext, error) {
 	fset := token.NewFileSet()
 
-	f, err := parser.ParseFile(fset, file, doc.Bytes(), parser.ParseComments)
+	f, err := parser.ParseFile(fset, builder.file, builder.doc.Bytes(), parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +117,7 @@ func inspectSqlx(pkg string, file string, doc Doc, line int, feats []string) (*s
 		ifaceType *ast.InterfaceType
 	)
 
+	line := builder.pos + 1
 inspectDecl:
 	for _, declIface := range f.Decls {
 		if hit(fset, declIface, line) {
@@ -136,19 +163,20 @@ inspectType:
 		}
 	}
 
-	sqlxFeatures := make([]string, 0, len(feats))
-	for _, feature := range feats {
+	sqlxFeatures := make([]string, 0, len(builder.feats))
+	for _, feature := range builder.feats {
 		if hasPrefix(feature, "sqlx") {
 			sqlxFeatures = append(sqlxFeatures, feature)
 		}
 	}
 
 	return &sqlxContext{
-		Package:  pkg,
+		Package:  builder.pkg,
 		Ident:    typeSpec.Name.Name,
-		Methods:  nodeMap(ifaceType.Methods.List, doc.InspectMethod),
+		Methods:  nodeMap(ifaceType.Methods.List, builder.doc.InspectMethod),
 		Features: sqlxFeatures,
-		Doc:      doc,
+		Imports:  builder.imports,
+		Doc:      builder.doc,
 	}, nil
 }
 

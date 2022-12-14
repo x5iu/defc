@@ -163,3 +163,12 @@ func trimSlash(comment string) string {
 
 	return trimSpace(comment)
 }
+
+func in[T comparable](list []T, item T) bool {
+	for _, ele := range list {
+		if ele == item {
+			return true
+		}
+	}
+	return false
+}

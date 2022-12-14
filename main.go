@@ -42,6 +42,7 @@ func init() {
 var (
 	mode     string
 	features []string
+	imports  []string
 	output   string
 )
 
@@ -80,6 +81,7 @@ var defc = &cobra.Command{
 
 		builder := gen.NewBuilder(modeMap[mode]).
 			WithFeats(features).
+			WithImports(imports).
 			WithPkg(os.Getenv(EnvGoPackage)).
 			WithPwd(pwd).
 			WithFile(file, doc).
@@ -138,6 +140,7 @@ func printStrings(strings []string) string {
 func init() {
 	defc.Flags().StringVarP(&mode, "mode", "m", "", fmt.Sprintf("mode=[%s]", printStrings(validModes)))
 	defc.Flags().StringSliceVarP(&features, "features", "f", nil, fmt.Sprintf("features=[%s]", printStrings(validFeatures)))
+	defc.Flags().StringArrayVarP(&imports, "import", "i", nil, "additional imports")
 	defc.Flags().StringVarP(&output, "output", "o", "", "output file name")
 	defc.MarkFlagRequired("mode")
 	defc.MarkFlagRequired("output")

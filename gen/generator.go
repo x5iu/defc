@@ -65,6 +65,9 @@ type Builder struct {
 	// feats
 	feats []string
 
+	// imports
+	imports []string
+
 	// pkg package name
 	pkg string
 
@@ -83,6 +86,11 @@ type Builder struct {
 
 func (builder *Builder) WithFeats(feats []string) *Builder {
 	builder.feats = feats
+	return builder
+}
+
+func (builder *Builder) WithImports(imports []string) *Builder {
+	builder.imports = imports
 	return builder
 }
 

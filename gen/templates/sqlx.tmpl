@@ -4,15 +4,8 @@
 package {{ $.Package }}
 
 import (
-"fmt" {{ if $.HasFeature "sqlx/log" }}
-    "time" {{- end }}
-"strconv"
-"database/sql"
-"strings"
-"context"
-"text/template"
-"github.com/jmoiron/sqlx"
-"github.com/x5iu/defc/__rt"
+{{ range $index, $import := $.MergedImports }} {{ $import }}
+{{ end }}
 )
 
 {{ $context := $ }}

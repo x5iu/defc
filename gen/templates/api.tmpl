@@ -4,21 +4,8 @@
 package {{ .Package }}
 
 import (
-{{ if $.HasFeature "api/log" -}}
-    "time"
-{{ end -}}
-"fmt"
-"io"
-"net/http"
-{{ if $.HasHeader -}}
-    "bufio"
-    "net/textproto"
-{{ end -}}
-{{ if importContext $.Methods -}}
-    "context"
-{{ end -}}
-"text/template"
-"github.com/x5iu/defc/__rt"
+{{ range $index, $import := $.MergedImports }} {{ $import }}
+{{ end }}
 )
 
 {{ $context := . }}

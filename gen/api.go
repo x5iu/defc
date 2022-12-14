@@ -25,7 +25,7 @@ const (
 )
 
 func (builder *Builder) buildApi(w io.Writer) error {
-	inspectCtx, err := inspectApi(builder.pkg, join(builder.pwd, builder.file), builder.doc, builder.pos+1, builder.feats)
+	inspectCtx, err := builder.inspectApi()
 	if err != nil {
 		return fmt.Errorf("inspectApi(%s, %d): %w", quote(join(builder.pwd, builder.file)), builder.pos, err)
 	}
@@ -78,6 +78,7 @@ type apiContext struct {
 	Generics map[string]ast.Expr
 	Methods  []*Method
 	Features []string
+	Imports  []string
 	Doc      Doc
 }
 
@@ -146,10 +147,41 @@ func (ctx *apiContext) InnerType() ast.Node {
 	return nil
 }
 
-func inspectApi(pkg string, file string, doc Doc, line int, feats []string) (*apiContext, error) {
+func (ctx apiContext) MergedImports() (imports []string) {
+	imports = []string{
+		quote("fmt"),
+		quote("io"),
+		quote("net/http"),
+		quote("text/template"),
+		quote("github.com/x5iu/defc/__rt"),
+	}
+
+	if ctx.HasFeature(FeatureApiLog) {
+		imports = append(imports, quote("time"))
+	}
+
+	if ctx.HasHeader() {
+		imports = append(imports, quote("bufio"))
+		imports = append(imports, quote("net/textproto"))
+	}
+
+	if importContext(ctx.Methods) {
+		imports = append(imports, quote("context"))
+	}
+
+	for _, imp := range ctx.Imports {
+		if !in(imports, imp) {
+			imports = append(imports, imp)
+		}
+	}
+
+	return imports
+}
+
+func (builder *Builder) inspectApi() (*apiContext, error) {
 	fset := token.NewFileSet()
 
-	f, err := parser.ParseFile(fset, file, doc.Bytes(), parser.ParseComments)
+	f, err := parser.ParseFile(fset, builder.file, builder.doc.Bytes(), parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +192,7 @@ func inspectApi(pkg string, file string, doc Doc, line int, feats []string) (*ap
 		ifaceType *ast.InterfaceType
 	)
 
+	line := builder.pos + 1
 inspectDecl:
 	for _, declIface := range f.Decls {
 		if hit(fset, declIface, line) {
@@ -205,8 +238,8 @@ inspectType:
 		}
 	}
 
-	apiFeatures := make([]string, 0, len(feats))
-	for _, feature := range feats {
+	apiFeatures := make([]string, 0, len(builder.feats))
+	for _, feature := range builder.feats {
 		if hasPrefix(feature, "api") {
 			apiFeatures = append(apiFeatures, feature)
 		}
@@ -222,12 +255,13 @@ inspectType:
 	}
 
 	return &apiContext{
-		Package:  pkg,
+		Package:  builder.pkg,
 		Ident:    typeSpec.Name.Name,
 		Generics: generics,
-		Methods:  nodeMap(ifaceType.Methods.List, doc.InspectMethod),
+		Methods:  nodeMap(ifaceType.Methods.List, builder.doc.InspectMethod),
 		Features: apiFeatures,
-		Doc:      doc,
+		Imports:  builder.imports,
+		Doc:      builder.doc,
 	}, nil
 }
 
