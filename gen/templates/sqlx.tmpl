@@ -59,6 +59,11 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
 }
 }
 
+var (
+{{ range $index, $method := $.Methods }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": __rt.BindVars, }).Parse({{ quote (readHeader $method.Header) }}))
+{{ end }}
+)
+
 {{ range $index, $method := $.Methods }}
     {{ $sortIn := $method.SortIn }}
     func (imp *{{ $receiver }}) {{ $method.Ident }}(
@@ -85,14 +90,6 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
     )
 
     {{ $sqlTmpl := printf "sqlTmpl%s" $method.Ident }}
-    {{ $sqlTmpl }} := template.Must(
-    template.
-    New({{ quote $method.Ident }}).
-    Funcs(template.FuncMap{
-    "bindvars": __rt.BindVars,
-    }).
-    Parse({{ quote (readHeader $method.Header) }}),
-    )
 
     {{ $sql := printf "sql%s" $method.Ident }}
     {{ $sql }} := __rt.GetBuffer()
