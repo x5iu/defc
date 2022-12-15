@@ -183,7 +183,7 @@ func (ctx apiContext) MergedImports() (imports []string) {
 func (ctx *apiContext) AdditionalFuncs() (funcMap map[string]string) {
 	funcMap = make(map[string]string, len(ctx.Funcs))
 	for _, fn := range ctx.Funcs {
-		if key, value, ok := cut(fn, "="); ok {
+		if key, value, ok := cutkv(fn); ok {
 			funcMap[key] = value
 		}
 	}

@@ -190,3 +190,21 @@ func parseImport(imp string) string {
 		return alias + " " + quote(pkg)
 	}
 }
+
+var seps = []rune{
+	'=',
+	':',
+}
+
+func cutkv(kv string) (string, string, bool) {
+	for _, ch := range kv {
+		if in(seps, ch) {
+			k, v, ok := cut(kv, string(ch))
+			if !ok {
+				return kv, "", false
+			}
+			return trimSpace(k), trimSpace(v), true
+		}
+	}
+	return kv, "", false
+}
