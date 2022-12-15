@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"go/ast"
 	"net/http"
-	"sort"
 )
 
 // Method represents a method declaration in an interface
@@ -21,6 +20,7 @@ type Method struct {
 	Header string
 
 	Ident     string
+	OrderedIn []string // to make In sorted
 	In        map[string]ast.Expr
 	UnnamedIn []ast.Expr
 	Out       []ast.Expr
@@ -30,14 +30,7 @@ type Method struct {
 }
 
 func (method *Method) SortIn() []string {
-	idents := make([]string, 0, len(method.In))
-	for k := range method.In {
-		idents = append(idents, k)
-	}
-	sort.Slice(idents, func(i, j int) bool {
-		return method.In[idents[i]].Pos() < method.In[idents[j]].Pos()
-	})
-	return idents
+	return method.OrderedIn
 }
 
 func (method *Method) MetaArgs() []string {
@@ -167,6 +160,7 @@ func inspectMethod(node ast.Node, source []byte) (method *Method) {
 	for _, param := range inParams {
 		if param.Names != nil {
 			for _, name := range param.Names {
+				method.OrderedIn = append(method.OrderedIn, name.Name)
 				method.In[name.Name] = param.Type
 			}
 		} else {
