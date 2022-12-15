@@ -22,6 +22,7 @@ const (
 	FeatureApiCache  = "api/cache"
 	FeatureApiLog    = "api/log"
 	FeatureApiClient = "api/client"
+	FeatureApiPage   = "api/page"
 )
 
 func (builder *Builder) buildApi(w io.Writer) error {

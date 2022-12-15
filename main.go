@@ -25,6 +25,7 @@ var (
 		gen.FeatureApiCache,
 		gen.FeatureApiLog,
 		gen.FeatureApiClient,
+		gen.FeatureApiPage,
 		gen.FeatureSqlxLog,
 		gen.FeatureSqlxRebind,
 	}
