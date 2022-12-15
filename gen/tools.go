@@ -25,6 +25,7 @@ var (
 	hasSuffix  = strings.HasSuffix
 	concat     = strings.Join
 	toUpper    = strings.ToUpper
+	cut        = strings.Cut
 	join       = path.Join
 	isAbs      = path.IsAbs
 	read       = os.ReadFile

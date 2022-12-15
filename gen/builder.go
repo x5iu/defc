@@ -68,6 +68,9 @@ type Builder struct {
 	// imports
 	imports []string
 
+	// funcs
+	funcs []string
+
 	// pkg package name
 	pkg string
 
@@ -91,6 +94,11 @@ func (builder *Builder) WithFeats(feats []string) *Builder {
 
 func (builder *Builder) WithImports(imports []string) *Builder {
 	builder.imports = imports
+	return builder
+}
+
+func (builder *Builder) WithFuncs(funcs []string) *Builder {
+	builder.funcs = funcs
 	return builder
 }
 

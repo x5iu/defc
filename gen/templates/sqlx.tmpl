@@ -59,8 +59,9 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
 }
 }
 
+{{ $additionalFuncs := $.AdditionalFuncs }}
 var (
-{{ range $index, $method := $.Methods }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": __rt.BindVars, }).Parse({{ quote (readHeader $method.Header) }}))
+{{ range $index, $method := $.Methods }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": __rt.BindVars, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
 {{ end }}
 )
 

@@ -79,6 +79,7 @@ type apiContext struct {
 	Methods  []*Method
 	Features []string
 	Imports  []string
+	Funcs    []string
 	Doc      Doc
 }
 
@@ -178,6 +179,16 @@ func (ctx apiContext) MergedImports() (imports []string) {
 	return imports
 }
 
+func (ctx *apiContext) AdditionalFuncs() (funcMap map[string]string) {
+	funcMap = make(map[string]string, len(ctx.Funcs))
+	for _, fn := range ctx.Funcs {
+		if key, value, ok := cut(fn, "="); ok {
+			funcMap[key] = value
+		}
+	}
+	return funcMap
+}
+
 func (builder *Builder) inspectApi() (*apiContext, error) {
 	fset := token.NewFileSet()
 
@@ -261,6 +272,7 @@ inspectType:
 		Methods:  nodeMap(ifaceType.Methods.List, builder.doc.InspectMethod),
 		Features: apiFeatures,
 		Imports:  builder.imports,
+		Funcs:    builder.funcs,
 		Doc:      builder.doc,
 	}, nil
 }
