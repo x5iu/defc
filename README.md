@@ -359,6 +359,24 @@ type (
 )
 ```
 
+从 `v1.1.0` 开始，你可以使用 `--import` 命令行参数导入额外的包，以使用该包中的类型（或函数）：
+
+```shell
+go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --import "fmt" --import "gohttp net/http"
+```
+
+`--import` 参数的格式可以为包的路径地址，例如 `strings`/`fmt`/`github.com/x5iu/defc`，或是带有 alias 的包路径，例如 `gohttp net/http`/`gofmt fmt`。
+
+### 为 Schema 中的模板添加额外的函数
+
+从 `v1.1.0` 开始，你可以使用 `--func` 命令行参数为 Schema 中的 SQL 或 API 模板添加额外的函数，例如 `json.Marshal` 或 `url.QueryEscape` 等：
+
+```shell
+go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --import "encoding/json" --func "marshal=json.Marshal" --func "toUpper: strings.ToUpper"
+```
+
+`--func` 参数的格式为 `key=value` 或 `key: value`，其中 `key` 为该函数在模板中使用的名称，也可以理解为 `template.FuncMap` 中的 `key`，`value` 则为需要导入的函数。
+
 ### 关于泛型支持
 
 目前 `defc` 对泛型的支持尚未完善和稳定，实际的使用过程中，也并未发现过多必须使用泛型的场景，这也是因为 Go 语言目前对于泛型使用的限制，接口泛型参数，只能在接口的最外层定义，而无法为接口中的方法单独定义泛型参数（但是 Rust 可以）。
