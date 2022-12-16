@@ -38,16 +38,10 @@ func getRepr(node ast.Node, src []byte) string {
 
 func newType(expr ast.Expr, src []byte) string {
 	switch typ := expr.(type) {
-	case *ast.Ident:
-		return sprintf("%s{}", typ.Name)
 	case *ast.StarExpr:
 		return sprintf("new(%s)", getRepr(typ.X, src))
-	case *ast.ArrayType:
-		return sprintf("make(%s, 0)", getRepr(typ, src))
-	case *ast.MapType:
-		return sprintf("make(map[%s]%s)", getRepr(typ.Key, src), getRepr(typ.Value, src))
 	default:
-		return "_"
+		return sprintf("__rt.New[%s]()", getRepr(typ, src))
 	}
 }
 
