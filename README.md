@@ -325,7 +325,87 @@ type Client interface {
 }
 ```
 
+## ⚠️ 实验性的 `defc generate` 命令
 
+从 `v1.2.0` 开始，新增了 `defc generate` 命令用于根据 Schema 文件生成代码，**这是一项实验性的功能**，具体的使用方式为：
+
+```shell
+go run -mod=mod "github.com/x5iu/defc" generate --mode=sqlx --output=query.go schema.json
+```
+
+其中，`schema.json` 的（示例）内容为：
+
+```json
+{
+  "package": "main",
+  "ident": "Query",
+  "imports": [
+    "context",
+    "database/sql"
+  ],
+  "schemas": [
+    {
+      "meta": "GetUserNames QUERY",
+      "header": "SELECT `name` FROM `user` WHERE `id` >= ?;",
+      "in": [
+        {
+          "ident": "ctx",
+          "type": "context.Context"
+        },
+        {
+          "ident": "id",
+          "type": "int64"
+        }
+      ],
+      "out": [
+        {
+          "ident": "names",
+          "type": "[]sql.NullString"
+        },
+        {
+          "ident": "err",
+          "type": "error"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Schema 的具体格式，是根据 `github.com/x5iu/defc/gen/generate.go` 中的以下类型决定的：
+
+```go
+type (
+  Config struct {
+		Package  string    `json:"package"`
+		Ident    string    `json:"ident"`
+		Features []string  `json:"features"`
+		Imports  []string  `json:"imports"`
+		Funcs    []string  `json:"funcs"`
+		Schemas  []*Schema `json:"schemas"`
+	}
+
+	Schema struct {
+		Meta   string   `json:"meta"`
+		Header string   `json:"header"`
+		In     []*Param `json:"in"`
+		Out    []*Param `json:"out"`
+	}
+
+	Param struct {
+		Ident string `json:"ident"`
+		Type  string `json:"type"`
+	}
+)
+```
+
+`defc generate` 的工作方式为，将 Schema 文件中的内容反序列化为 `gen.Config`，随后调用 `gen.Generate` 函数生成对应的代码，目前支持的 Schema 格式为 `json` 格式，未来将支持更多 Schema 格式，例如 `toml`/`yaml` 等（看起来都非常简单，只需要引入相应的反序列化库并加上对应的 Tag 即可）。
+
+另外，你也可以在代码中直接使用 `gen.Generate` 函数，通过传入 `gen.Mode` 及 `gen.Config` 来手动生成相应模式下的代码，而无需使用命令行及 Schema 文件。
+
+你也可以将 `github.com/x5iu/defc` 编译成二进制文件后，再使用 `defc generate` 命令来生成相应模式下的代码。
+
+*注：目前 `defc generate` 仅为实验性功能，不保证功能和 API 的稳定性，文档也尚未补全，各项功能可能需要使用者自己摸索着使用（例如各类参数的格式）*
 
 ## 对一些常见问题的解答
 
