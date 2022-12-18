@@ -8,6 +8,8 @@ import (
 {{ end }}
 )
 
+{{ block "schema" $ }}{{ end }}
+
 {{ $context := $ }}
 {{ $impName := (printf "impl%s" $.Ident) }}
 {{ $receiver := $impName }}

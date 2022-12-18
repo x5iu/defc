@@ -25,17 +25,32 @@ const (
 	FeatureApiPage   = "api/page"
 )
 
-func (builder *Builder) buildApi(w io.Writer) error {
+func (builder *CliBuilder) buildApi(w io.Writer) error {
 	inspectCtx, err := builder.inspectApi()
 	if err != nil {
 		return fmt.Errorf("inspectApi(%s, %d): %w", quote(join(builder.pwd, builder.file)), builder.pos, err)
 	}
+	return inspectCtx.Build(w)
+}
 
-	if !checkResponse(inspectCtx.Methods) {
+type apiContext struct {
+	Package  string
+	Ident    string
+	Generics map[string]ast.Expr
+	Methods  []*Method
+	Features []string
+	Imports  []string
+	Funcs    []string
+	Doc      Doc
+	Schema   string
+}
+
+func (ctx *apiContext) Build(w io.Writer) error {
+	if !checkResponse(ctx.Methods) {
 		return fmt.Errorf("checkResponse: no '%s() T' method found in Interface", apiMethodResponse)
 	}
 
-	for _, method := range inspectCtx.Methods {
+	for _, method := range ctx.Methods {
 		if method.Ident != apiMethodResponse && method.Ident != apiMethodInner {
 			if l := len(method.Out); l == 0 || !checkErrorType(method.Out[l-1]) {
 				return fmt.Errorf("checkErrorType: no 'error' found in method %s returned value",
@@ -66,22 +81,11 @@ func (builder *Builder) buildApi(w io.Writer) error {
 		}
 	}
 
-	if err = genApiCode(inspectCtx, builder.doc, w); err != nil {
-		return fmt.Errorf("genApiCode: \n\n%#v\n\n%w", inspectCtx, err)
+	if err := ctx.genApiCode(w); err != nil {
+		return fmt.Errorf("genApiCode: \n\n%#v\n\n%w", ctx, err)
 	}
 
 	return nil
-}
-
-type apiContext struct {
-	Package  string
-	Ident    string
-	Generics map[string]ast.Expr
-	Methods  []*Method
-	Features []string
-	Imports  []string
-	Funcs    []string
-	Doc      Doc
 }
 
 func (ctx *apiContext) SortGenerics() []string {
@@ -190,7 +194,7 @@ func (ctx *apiContext) AdditionalFuncs() (funcMap map[string]string) {
 	return funcMap
 }
 
-func (builder *Builder) inspectApi() (*apiContext, error) {
+func (builder *CliBuilder) inspectApi() (*apiContext, error) {
 	fset := token.NewFileSet()
 
 	f, err := parser.ParseFile(fset, builder.file, builder.doc.Bytes(), parser.ParseComments)
@@ -288,7 +292,8 @@ func checkResponse(methods []*Method) bool {
 }
 
 func checkResponseType(method *Method) bool {
-	switch method.Out[0].(type) {
+	node := getNode(method.Out[0])
+	switch node.(type) {
 	case *ast.Ident, *ast.StarExpr:
 		return true
 	default:
@@ -317,7 +322,7 @@ func importContext(methods []*Method) bool {
 //go:embed templates/api.tmpl
 var apiTemplate string
 
-func genApiCode(ctx *apiContext, doc Doc, w io.Writer) error {
+func (ctx *apiContext) genApiCode(w io.Writer) error {
 	tmpl, err := template.
 		New("defc(api)").
 		Funcs(template.FuncMap{
@@ -326,11 +331,11 @@ func genApiCode(ctx *apiContext, doc Doc, w io.Writer) error {
 			"indirect":      indirect,
 			"importContext": importContext,
 			"sub":           func(x, y int) int { return x - y },
-			"getRepr":       func(node ast.Node) string { return doc.Repr(node) },
+			"getRepr":       func(node ast.Node) string { return ctx.Doc.Repr(node) },
 			"methodResp":    func() string { return apiMethodResponse },
 			"isResponse":    func(ident string) bool { return ident == apiMethodResponse },
 			"isInner":       func(ident string) bool { return ident == apiMethodInner },
-			"newType":       func(expr ast.Expr) string { return doc.NewType(expr) },
+			"newType":       func(expr ast.Expr) string { return ctx.Doc.NewType(expr) },
 			"httpMethodHasBody": func(method string) bool {
 				switch method {
 				case http.MethodGet:
@@ -352,6 +357,12 @@ func genApiCode(ctx *apiContext, doc Doc, w io.Writer) error {
 
 	if err != nil {
 		return err
+	}
+
+	if ctx.Schema != "" {
+		if tmpl, err = tmpl.Parse(sprintf(`{{ define "schema" }} %s {{ end }}`, ctx.Schema)); err != nil {
+			return err
+		}
 	}
 
 	return tmpl.Execute(w, ctx)

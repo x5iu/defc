@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/x5iu/defc/gen"
@@ -48,64 +49,105 @@ var (
 	funcs    []string
 )
 
-var defc = &cobra.Command{
-	Use:     "defc",
-	Version: "v1.1.1",
-	Args: func(cmd *cobra.Command, args []string) error {
-		switch modeMap[mode] {
-		case gen.ModeApi, gen.ModeSqlx:
-			return cobra.NoArgs(cmd, args)
-		default:
-			return fmt.Errorf("invalid mode %q", mode)
-		}
-	},
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	RunE: func(cmd *cobra.Command, args []string) (err error) {
-		if err = checkFeatures(features); err != nil {
-			return err
-		}
+var (
+	defc = &cobra.Command{
+		Use:     "defc",
+		Version: "v1.2.0",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if genMode := modeMap[mode]; !genMode.IsValid() {
+				return fmt.Errorf("invalid mode %q, available modes are: [%s]", mode, printStrings(validModes))
+			}
+			return nil
+		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			if err = checkFeatures(features); err != nil {
+				return err
+			}
 
-		var (
-			pwd  = os.Getenv(EnvPWD)
-			file = os.Getenv(EnvGoFile)
-			doc  []byte
-			pos  int
-		)
+			var (
+				pwd  = os.Getenv(EnvPWD)
+				file = os.Getenv(EnvGoFile)
+				doc  []byte
+				pos  int
+			)
 
-		if doc, err = os.ReadFile(path.Join(pwd, file)); err != nil {
-			return fmt.Errorf("$GOFILE: os.ReadFile(%q): %w", path.Join(pwd, file), err)
-		}
+			if doc, err = os.ReadFile(path.Join(pwd, file)); err != nil {
+				return fmt.Errorf("$GOFILE: os.ReadFile(%q): %w", path.Join(pwd, file), err)
+			}
 
-		if pos, err = strconv.Atoi(os.Getenv(EnvGoLine)); err != nil {
-			return fmt.Errorf("$GOLINE: strconv.Atoi(%s): %w", os.Getenv(EnvGoLine), err)
-		}
+			if pos, err = strconv.Atoi(os.Getenv(EnvGoLine)); err != nil {
+				return fmt.Errorf("$GOLINE: strconv.Atoi(%s): %w", os.Getenv(EnvGoLine), err)
+			}
 
-		builder := gen.NewBuilder(modeMap[mode]).
-			WithFeats(features).
-			WithImports(imports).
-			WithFuncs(funcs).
-			WithPkg(os.Getenv(EnvGoPackage)).
-			WithPwd(pwd).
-			WithFile(file, doc).
-			WithPos(pos)
+			builder := gen.NewCliBuilder(modeMap[mode]).
+				WithFeats(features).
+				WithImports(imports).
+				WithFuncs(funcs).
+				WithPkg(os.Getenv(EnvGoPackage)).
+				WithPwd(pwd).
+				WithFile(file, doc).
+				WithPos(pos)
 
-		var buffer bytes.Buffer
-		if err = builder.Build(&buffer); err != nil {
-			return err
-		}
+			var buffer bytes.Buffer
+			if err = builder.Build(&buffer); err != nil {
+				return err
+			}
 
-		fmtCode, err := format.Source(buffer.Bytes())
-		if err != nil {
-			return fmt.Errorf("format.Source: \n\n%s\n\n%w", buffer.Bytes(), err)
-		}
+			return save(path.Join(pwd, output), buffer.Bytes())
+		},
+	}
 
-		if err = os.WriteFile(path.Join(pwd, output), fmtCode, 0644); err != nil {
-			return fmt.Errorf("os.WriteFile(%s, 0644): %w", path.Join(pwd, output), err)
-		}
+	generate = &cobra.Command{
+		Use:           "generate",
+		Short:         "Generate code from schema file",
+		Args:          cobra.ExactArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			file := args[0]
 
-		return nil
-	},
+			schema, err := os.ReadFile(file)
+			if err != nil {
+				return fmt.Errorf("os.ReadFile(%s): %w", args[0], err)
+			}
+
+			var cfg gen.Config
+			switch ext := path.Ext(file); ext {
+			case ".json":
+				if err = json.Unmarshal(schema, &cfg); err != nil {
+					return fmt.Errorf("json.Unmarshal: %w", err)
+				}
+			default:
+				return fmt.Errorf("unsupport schema extension %q", ext)
+			}
+
+			cfg.Features = append(cfg.Features, features...)
+			cfg.Imports = append(cfg.Imports, imports...)
+			cfg.Funcs = append(cfg.Funcs, funcs...)
+
+			var buffer bytes.Buffer
+			if err = gen.Generate(&buffer, modeMap[mode], &cfg); err != nil {
+				return err
+			}
+
+			return save(output, buffer.Bytes())
+		},
+	}
+)
+
+func save(name string, code []byte) error {
+	fmtCode, err := format.Source(code)
+	if err != nil {
+		return fmt.Errorf("format.Source: \n\n%s\n\n%w", code, err)
+	}
+
+	if err = os.WriteFile(name, fmtCode, 0644); err != nil {
+		return fmt.Errorf("os.WriteFile(%q, 0644): %w", name, err)
+	}
+
+	return nil
 }
 
 func checkFeatures(features []string) error {
@@ -141,13 +183,15 @@ func printStrings(strings []string) string {
 }
 
 func init() {
-	defc.Flags().StringVarP(&mode, "mode", "m", "", fmt.Sprintf("mode=[%s]", printStrings(validModes)))
-	defc.Flags().StringVarP(&output, "output", "o", "", "output file name")
-	defc.Flags().StringSliceVarP(&features, "features", "f", nil, fmt.Sprintf("features=[%s]", printStrings(validFeatures)))
-	defc.Flags().StringArrayVar(&imports, "import", nil, "additional imports")
-	defc.Flags().StringArrayVar(&funcs, "func", nil, "additional funcs")
-	defc.MarkFlagRequired("mode")
-	defc.MarkFlagRequired("output")
+	defc.AddCommand(generate)
+
+	defc.PersistentFlags().StringVarP(&mode, "mode", "m", "", fmt.Sprintf("mode=[%s]", printStrings(validModes)))
+	defc.PersistentFlags().StringVarP(&output, "output", "o", "", "output file name")
+	defc.PersistentFlags().StringSliceVarP(&features, "features", "f", nil, fmt.Sprintf("features=[%s]", printStrings(validFeatures)))
+	defc.PersistentFlags().StringArrayVar(&imports, "import", nil, "additional imports")
+	defc.PersistentFlags().StringArrayVar(&funcs, "func", nil, "additional funcs")
+	defc.MarkPersistentFlagRequired("mode")
+	defc.MarkPersistentFlagRequired("output")
 }
 
 func main() {

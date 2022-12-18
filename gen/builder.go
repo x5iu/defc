@@ -25,7 +25,7 @@ func (mode Mode) String() string {
 	}
 }
 
-func (mode Mode) isValid() bool {
+func (mode Mode) IsValid() bool {
 	return ModeStart < mode && mode < ModeEnd
 }
 
@@ -51,14 +51,14 @@ func (doc Doc) IsContextType(ident string, expr ast.Expr) bool {
 	return isContextType(ident, expr, doc)
 }
 
-func NewBuilder(mode Mode) *Builder {
-	assert(mode.isValid(), "invalid mode")
-	return &Builder{
+func NewCliBuilder(mode Mode) *CliBuilder {
+	assert(mode.IsValid(), "invalid mode")
+	return &CliBuilder{
 		mode: mode,
 	}
 }
 
-type Builder struct {
+type CliBuilder struct {
 	// mode
 	mode Mode
 
@@ -87,43 +87,43 @@ type Builder struct {
 	pos int
 }
 
-func (builder *Builder) WithFeats(feats []string) *Builder {
+func (builder *CliBuilder) WithFeats(feats []string) *CliBuilder {
 	builder.feats = feats
 	return builder
 }
 
-func (builder *Builder) WithImports(imports []string) *Builder {
+func (builder *CliBuilder) WithImports(imports []string) *CliBuilder {
 	builder.imports = imports
 	return builder
 }
 
-func (builder *Builder) WithFuncs(funcs []string) *Builder {
+func (builder *CliBuilder) WithFuncs(funcs []string) *CliBuilder {
 	builder.funcs = funcs
 	return builder
 }
 
-func (builder *Builder) WithPkg(pkg string) *Builder {
+func (builder *CliBuilder) WithPkg(pkg string) *CliBuilder {
 	builder.pkg = pkg
 	return builder
 }
 
-func (builder *Builder) WithPwd(pwd string) *Builder {
+func (builder *CliBuilder) WithPwd(pwd string) *CliBuilder {
 	builder.pwd = pwd
 	return builder
 }
 
-func (builder *Builder) WithFile(file string, doc []byte) *Builder {
+func (builder *CliBuilder) WithFile(file string, doc []byte) *CliBuilder {
 	builder.file = file
 	builder.doc = doc
 	return builder
 }
 
-func (builder *Builder) WithPos(pos int) *Builder {
+func (builder *CliBuilder) WithPos(pos int) *CliBuilder {
 	builder.pos = pos
 	return builder
 }
 
-func (builder *Builder) Build(w io.Writer) error {
+func (builder *CliBuilder) Build(w io.Writer) error {
 	switch builder.mode {
 	case ModeApi:
 		return builder.buildApi(w)
@@ -131,10 +131,4 @@ func (builder *Builder) Build(w io.Writer) error {
 		return builder.buildSqlx(w)
 	}
 	return nil
-}
-
-func assert(expr bool, msg string) {
-	if !expr {
-		panic(msg)
-	}
 }

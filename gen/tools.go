@@ -3,12 +3,19 @@ package gen
 import (
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 )
+
+func assert(expr bool, msg string) {
+	if !expr {
+		panic(msg)
+	}
+}
 
 const (
 	ExprErrorIdent   = "error"
@@ -25,7 +32,9 @@ var (
 	hasSuffix  = strings.HasSuffix
 	concat     = strings.Join
 	toUpper    = strings.ToUpper
+	index      = strings.Index
 	cut        = strings.Cut
+	contains   = strings.Contains
 	join       = path.Join
 	isAbs      = path.IsAbs
 	read       = os.ReadFile
@@ -51,6 +60,7 @@ func hit(fset *token.FileSet, node ast.Node, line int) bool {
 }
 
 func indirect(node ast.Node) ast.Node {
+	node = getNode(node)
 	if ptr, ok := node.(*ast.StarExpr); ok {
 		return ptr.X
 	}
@@ -58,11 +68,13 @@ func indirect(node ast.Node) ast.Node {
 }
 
 func isPointer(node ast.Node) bool {
+	node = getNode(node)
 	_, ok := node.(*ast.StarExpr)
 	return ok
 }
 
 func isSlice(node ast.Node) bool {
+	node = getNode(node)
 	typ, ok := node.(*ast.ArrayType)
 	return ok && typ.Len == nil
 }
@@ -76,13 +88,14 @@ func checkInput(method *ast.FuncType) bool {
 	return true
 }
 
-func checkErrorType(expr ast.Expr) bool {
-	ident, ok := expr.(*ast.Ident)
+func checkErrorType(node ast.Node) bool {
+	node = getNode(node)
+	ident, ok := node.(*ast.Ident)
 	return ok && ident.Name == ExprErrorIdent
 }
 
 func isContextType(ident string, expr ast.Expr, src []byte) bool {
-	return ident == "ctx" || strings.Contains(getRepr(expr, src), ExprContextIdent)
+	return ident == "ctx" || contains(getRepr(expr, src), ExprContextIdent)
 }
 
 func nodeMap[T ast.Node, U any](src []T, f func(ast.Node) U) []U {
@@ -201,4 +214,27 @@ func cutkv(kv string) (string, string, bool) {
 		}
 	}
 	return kv, "", false
+}
+
+func getIdent(s string) string {
+	if i := index(s, " "); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+func parseExpr(input string) (expr ast.Expr, err error) {
+	return parser.ParseExpr(input)
+}
+
+func getNode(node ast.Node) ast.Node {
+	// NOTE: compatible with `defc generate` command
+	for {
+		if wrapper, ok := node.(interface{ Unwrap() ast.Node }); ok {
+			node = wrapper.Unwrap()
+			continue
+		}
+		break
+	}
+	return node
 }
