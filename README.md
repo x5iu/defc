@@ -377,25 +377,25 @@ Schema 的具体格式，是根据 `github.com/x5iu/defc/gen/generate.go` 中的
 ```go
 type (
   Config struct {
-		Package  string    `json:"package"`
-		Ident    string    `json:"ident"`
-		Features []string  `json:"features"`
-		Imports  []string  `json:"imports"`
-		Funcs    []string  `json:"funcs"`
-		Schemas  []*Schema `json:"schemas"`
-	}
+    Package  string    `json:"package"`
+    Ident    string    `json:"ident"`
+    Features []string  `json:"features"`
+    Imports  []string  `json:"imports"`
+    Funcs    []string  `json:"funcs"`
+    Schemas  []*Schema `json:"schemas"`
+  }
 
-	Schema struct {
-		Meta   string   `json:"meta"`
-		Header string   `json:"header"`
-		In     []*Param `json:"in"`
-		Out    []*Param `json:"out"`
-	}
+  Schema struct {
+    Meta   string   `json:"meta"`
+    Header string   `json:"header"`
+    In     []*Param `json:"in"`
+    Out    []*Param `json:"out"`
+  }
 
-	Param struct {
-		Ident string `json:"ident"`
-		Type  string `json:"type"`
-	}
+  Param struct {
+    Ident string `json:"ident"`
+    Type  string `json:"type"`
+  }
 )
 ```
 
