@@ -290,7 +290,7 @@ type Response interface {
 
 其中 `<NAME>` 为方法名；`<METHOD>` 为 http 请求的方法（例如 `GET`/`POST`）；`<URL>` 为请求的 URL 地址；`<HEADER>` 为请求 Headers，支持多行；`<BODY>` 为请求 Body，需要注意的是，同 http 报文一样，`<BODY>` 与 `<HEADER>` 之间必须包含一个 `\r\n` 分隔符（即空行）。
 
-其中，`<URL>`/`<HEADER>`/`<BODY>` 部分同样支持模板语法。而与 `sqlx` 中的模板不同的是，`api` 额外将 `Inner` 方法的返回值也作为模板参数传入模板中，访问它的方式是 `{{ $.Schema }}`，其中，`Schema` 为定义的 Schema 名称，在本例中为 `Service`，即是说，你可以在本例中使用 `{{ $.Service }}` 来访问 `Inner` 方法的返回值。额外的，对于分页查询接口，`api` 提供了一个额外的 `page` 函数（注意是函数而不是模板参数），使用 `{{ page }}` 来访问当前执行的分页计数，分页计数从 `0` 开始计数，每当调用一次 `{{ page }}` 函数，分页计数则会加一，例如，我们可以这样定义一次分页查询方法：
+其中，`<URL>`/`<HEADER>`/`<BODY>` 部分同样支持模板语法。而与 `sqlx` 中的模板不同的是，`api` 额外将 `Inner` 方法的返回值也作为模板参数传入模板中，访问它的方式是 `{{ $.Schema }}`，其中，`Schema` 为定义的 Schema 名称，在本例中为 `Service`，即是说，你可以在本例中使用 `{{ $.Service }}` 来访问 `Inner` 方法的返回值。额外的，对于分页查询接口，如果你使用了 `--features=api/page` 参数，`api` 将提供一个额外的 `page` 函数（注意是函数而不是模板参数），使用 `{{ page }}` 来访问当前执行的分页计数，分页计数从 `0` 开始计数，每当调用一次 `{{ page }}` 函数，分页计数则会加一，例如，我们可以这样定义一次分页查询方法：
 
 ```go
 //go:generate go run -mod=mod "github.com/x5iu/defc" --mode=api --output=service.go
@@ -302,6 +302,22 @@ type Service interface {
   GetUsers(ctx context.Context, name string) ([]*User, error)
 }
 ```
+
+如果你不想通过注释中的模板来构建 HTTP 请求 Body，`api` 还提供了另一种传入 Body 的方式，具体的方式为，在注释中不填入 Body 内容（仍然可以填入 Header），此时，`defc` 将会把方法最后一个参数视作 HTTP 请求的 Body，需要注意的是，如果使用这种方式来传入 Body，则方法最后一个参数必须是 `io.Reader` 类型，具体示例如下（改写上面的例子）：
+
+```go
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=api --output=service.go
+type Service interface {
+  Inner() *Inner
+  Response() *Response
+  
+  // CreateUser POST {{ $.Service.Host }}/user
+  // Content-Type: application/json
+  CreateUser(ctx context.Context, name string, age int, body io.Reader) (*User, error)
+}
+```
+
+
 
 ### 日志记录
 
@@ -399,7 +415,7 @@ type (
 )
 ```
 
-`defc generate` 的工作方式为，将 Schema 文件中的内容反序列化为 `gen.Config`，随后调用 `gen.Generate` 函数生成对应的代码，目前支持的 Schema 格式为 `json` 格式，未来将支持更多 Schema 格式，例如 `toml`/`yaml` 等（看起来都非常简单，只需要引入相应的反序列化库并加上对应的 Tag 即可）。
+`defc generate` 的工作方式为，将 Schema 文件中的内容反序列化为 `gen.Config`，随后调用 `gen.Generate` 函数生成对应的代码，目前支持的 Schema 格式为 `json`/`toml` 格式，未来将支持更多 Schema 格式，例如 `yaml` 等（看起来都非常简单，只需要引入相应的反序列化库并加上对应的 Tag 即可）。
 
 另外，你也可以在代码中直接使用 `gen.Generate` 函数，通过传入 `gen.Mode` 及 `gen.Config` 来手动生成相应模式下的代码，而无需使用命令行及 Schema 文件。
 
