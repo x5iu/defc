@@ -108,44 +108,56 @@ func toBuilder(mode Mode, cfg *Config) (Builder, error) {
 			ResponseType  = "T"
 		)
 
+		hasResponse := func(schemas []*Schema) bool {
+			for _, schema := range schemas {
+				if getIdent(schema.Meta) == ResponseIdent {
+					return true
+				}
+			}
+			return false
+		}
+
 		// hack generic decl and schema def
 		hackCfg := *cfg
-		hackCfg.Ident = sprintf("%s[%s %s]", cfg.Ident, ResponseType, ResponseExpr)
-		hackCfg.Schemas = append([]*Schema{
-			&Schema{
-				Meta: ResponseIdent,
-				Out: []*Param{
-					&Param{
-						Type: ResponseType,
+		generics := make(map[string]ast.Expr)
+		if !hasResponse(hackCfg.Schemas) {
+			hackCfg.Ident = sprintf("%s[%s %s]", cfg.Ident, ResponseType, ResponseExpr)
+			hackCfg.Schemas = append([]*Schema{
+				&Schema{
+					Meta: ResponseIdent,
+					Out: []*Param{
+						&Param{
+							Type: ResponseType,
+						},
 					},
 				},
-			},
-		}, hackCfg.Schemas...)
+			}, hackCfg.Schemas...)
 
-		// generic interface for `Response() T`
-		expr, _ := parseExpr(ResponseExpr)
-		generics := map[string]ast.Expr{
-			ResponseType: &Expr{
-				Expr:   expr,
-				Offset: len(doc),
-				Repr:   ResponseExpr,
-			},
-		}
-		doc = append(doc, ResponseExpr...)
-
-		// response type
-		expr, _ = parseExpr(ResponseType)
-		methods = append(methods, &Method{
-			Ident: ResponseIdent,
-			Out: []ast.Expr{
-				&Expr{
+			// generic interface for `Response() T`
+			expr, _ := parseExpr(ResponseExpr)
+			generics = map[string]ast.Expr{
+				ResponseType: &Expr{
 					Expr:   expr,
 					Offset: len(doc),
-					Repr:   "T",
+					Repr:   ResponseExpr,
 				},
-			},
-		})
-		doc = append(doc, ResponseType...)
+			}
+			doc = append(doc, ResponseExpr...)
+
+			// response type
+			expr, _ = parseExpr(ResponseType)
+			methods = append(methods, &Method{
+				Ident: ResponseIdent,
+				Out: []ast.Expr{
+					&Expr{
+						Expr:   expr,
+						Offset: len(doc),
+						Repr:   ResponseType,
+					},
+				},
+			})
+			doc = append(doc, ResponseType...)
+		}
 
 		return &apiContext{
 			Package:  cfg.Package,
@@ -176,28 +188,6 @@ func toBuilder(mode Mode, cfg *Config) (Builder, error) {
 
 func format(cfg *Config) string {
 	var buf bytes.Buffer
-
-	// package
-	/*
-		buf.WriteString("package" + cfg.Package)
-		buf.WriteByte('\n')
-		buf.WriteByte('\n')
-	*/
-
-	// imports
-	/*
-		buf.WriteString("import (")
-		buf.WriteByte('\n')
-		for _, imp := range cfg.Imports {
-			buf.WriteString(parseImport(imp))
-			buf.WriteByte('\n')
-		}
-		buf.WriteByte(')')
-		buf.WriteByte('\n')
-		buf.WriteByte('\n')
-	*/
-
-	// decl
 	buf.WriteString("type " + cfg.Ident + " interface {")
 	buf.WriteByte('\n')
 	for _, schema := range cfg.Schemas {
@@ -215,7 +205,6 @@ func format(cfg *Config) string {
 		buf.WriteByte('\n')
 	}
 	buf.WriteByte('}')
-
 	return buf.String()
 }
 
