@@ -14,24 +14,24 @@ type (
 	}
 
 	Config struct {
-		Package  string    `json:"package"`
-		Ident    string    `json:"ident"`
-		Features []string  `json:"features"`
-		Imports  []string  `json:"imports"`
-		Funcs    []string  `json:"funcs"`
-		Schemas  []*Schema `json:"schemas"`
+		Package  string    `json:"package" toml:"package"`
+		Ident    string    `json:"ident" toml:"ident"`
+		Features []string  `json:"features" toml:"features"`
+		Imports  []string  `json:"imports" toml:"imports"`
+		Funcs    []string  `json:"funcs" toml:"funcs"`
+		Schemas  []*Schema `json:"schemas" toml:"schemas"`
 	}
 
 	Schema struct {
-		Meta   string   `json:"meta"`
-		Header string   `json:"header"`
-		In     []*Param `json:"in"`
-		Out    []*Param `json:"out"`
+		Meta   string   `json:"meta" toml:"meta"`
+		Header string   `json:"header" toml:"header"`
+		In     []*Param `json:"in" toml:"in"`
+		Out    []*Param `json:"out" toml:"out"`
 	}
 
 	Param struct {
-		Ident string `json:"ident"`
-		Type  string `json:"type"`
+		Ident string `json:"ident" toml:"ident"`
+		Type  string `json:"type" toml:"type"`
 	}
 )
 

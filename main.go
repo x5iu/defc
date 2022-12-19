@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 	"github.com/x5iu/defc/gen"
 	"go/format"
@@ -52,7 +53,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:     "defc",
-		Version: "v1.2.1",
+		Version: "v1.2.2",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if genMode := modeMap[mode]; !genMode.IsValid() {
 				return fmt.Errorf("invalid mode %q, available modes are: [%s]", mode, printStrings(validModes))
@@ -118,6 +119,10 @@ var (
 			case ".json":
 				if err = json.Unmarshal(schema, &cfg); err != nil {
 					return fmt.Errorf("json.Unmarshal: %w", err)
+				}
+			case ".toml":
+				if err = toml.Unmarshal(schema, &cfg); err != nil {
+					return fmt.Errorf("toml.Unmarshal: %w", err)
 				}
 			default:
 				return fmt.Errorf("unsupport schema extension %q", ext)

@@ -350,6 +350,9 @@ func (ctx *apiContext) genApiCode(w io.Writer) error {
 				if index := strings.Index(header, "\r\n\r\n"); index != -1 {
 					return len(header[index+4:]) > 0
 				}
+				if index := strings.Index(header, "\n\n"); index != -1 {
+					return len(header[index+2:]) > 0
+				}
 				return false
 			},
 		}).
