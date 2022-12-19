@@ -60,7 +60,6 @@ func toBuilder(mode Mode, cfg *Config) (Builder, error) {
 		}
 		for j := 0; j < len(schema.In); j++ {
 			in := schema.In[j]
-			method.OrderedIn[j] = in.Ident
 			expr, err := parseExpr(in.Type)
 			if err != nil {
 				return nil, fmt.Errorf("invalid expr: %w", err)
@@ -73,6 +72,7 @@ func toBuilder(mode Mode, cfg *Config) (Builder, error) {
 			if in.Ident == "" {
 				method.UnnamedIn = append(method.UnnamedIn, wrapped)
 			} else {
+				method.OrderedIn[j] = in.Ident
 				method.In[in.Ident] = wrapped
 			}
 			doc = append(doc, in.Type...)
