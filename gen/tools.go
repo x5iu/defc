@@ -41,14 +41,19 @@ var (
 	list       = os.ReadDir
 )
 
+func getPosRepr(src []byte, pos, end token.Pos) string {
+	return string(src[pos-1 : end-1])
+}
+
 func getRepr(node ast.Node, src []byte) string {
-	return string(src[node.Pos()-1 : node.End()-1])
+	return getPosRepr(src, node.Pos(), node.End())
 }
 
 func newType(expr ast.Expr, src []byte) string {
-	switch typ := expr.(type) {
+	node := getNode(expr)
+	switch typ := node.(type) {
 	case *ast.StarExpr:
-		return sprintf("new(%s)", getRepr(typ.X, src))
+		return sprintf("new(%s)", getPosRepr(src, expr.Pos()+(typ.X.Pos()-typ.Pos()), expr.Pos()+(typ.X.Pos()-typ.Pos())+(typ.X.End()-typ.X.Pos())))
 	default:
 		return sprintf("__rt.New[%s]()", getRepr(typ, src))
 	}

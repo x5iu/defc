@@ -20,6 +20,7 @@ type (
 		Imports  []string  `json:"imports" toml:"imports"`
 		Funcs    []string  `json:"funcs" toml:"funcs"`
 		Schemas  []*Schema `json:"schemas" toml:"schemas"`
+		Include  string    `json:"include" toml:"include"`
 	}
 
 	Schema struct {
@@ -205,6 +206,9 @@ func format(cfg *Config) string {
 		buf.WriteByte('\n')
 	}
 	buf.WriteByte('}')
+	buf.WriteByte('\n')
+	buf.WriteByte('\n')
+	buf.WriteString(cfg.Include)
 	return buf.String()
 }
 
