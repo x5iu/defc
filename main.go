@@ -53,7 +53,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:     "defc",
-		Version: "v1.2.3",
+		Version: "v1.2.4",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if genMode := modeMap[mode]; !genMode.IsValid() {
 				return fmt.Errorf("invalid mode %q, available modes are: [%s]", mode, printStrings(validModes))

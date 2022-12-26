@@ -55,7 +55,7 @@ func newType(expr ast.Expr, src []byte) string {
 	case *ast.StarExpr:
 		return sprintf("new(%s)", getPosRepr(src, expr.Pos()+(typ.X.Pos()-typ.Pos()), expr.Pos()+(typ.X.Pos()-typ.Pos())+(typ.X.End()-typ.X.Pos())))
 	default:
-		return sprintf("__rt.New[%s]()", getRepr(typ, src))
+		return sprintf("__rt.New[%s]()", getPosRepr(src, expr.Pos(), expr.End()))
 	}
 }
 

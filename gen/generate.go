@@ -14,13 +14,14 @@ type (
 	}
 
 	Config struct {
-		Package  string    `json:"package" toml:"package"`
-		Ident    string    `json:"ident" toml:"ident"`
-		Features []string  `json:"features" toml:"features"`
-		Imports  []string  `json:"imports" toml:"imports"`
-		Funcs    []string  `json:"funcs" toml:"funcs"`
-		Schemas  []*Schema `json:"schemas" toml:"schemas"`
-		Include  string    `json:"include" toml:"include"`
+		Package  string     `json:"package" toml:"package"`
+		Ident    string     `json:"ident" toml:"ident"`
+		Features []string   `json:"features" toml:"features"`
+		Imports  []string   `json:"imports" toml:"imports"`
+		Funcs    []string   `json:"funcs" toml:"funcs"`
+		Schemas  []*Schema  `json:"schemas" toml:"schemas"`
+		Include  string     `json:"include" toml:"include"`
+		Declare  []*Declare `json:"declare" toml:"declare"`
 	}
 
 	Schema struct {
@@ -33,6 +34,17 @@ type (
 	Param struct {
 		Ident string `json:"ident" toml:"ident"`
 		Type  string `json:"type" toml:"type"`
+	}
+
+	Declare struct {
+		Ident  string   `json:"ident" toml:"ident"`
+		Fields []*Field `json:"fields" toml:"fields"`
+	}
+
+	Field struct {
+		Ident string `json:"ident" toml:"ident"`
+		Type  string `json:"type" toml:"type"`
+		Tag   string `json:"tag" toml:"tag"`
 	}
 )
 
@@ -124,10 +136,10 @@ func toBuilder(mode Mode, cfg *Config) (Builder, error) {
 		if !hasResponse(hackCfg.Schemas) {
 			hackCfg.Ident = sprintf("%s[%s %s]", cfg.Ident, ResponseType, ResponseExpr)
 			hackCfg.Schemas = append([]*Schema{
-				&Schema{
+				{
 					Meta: ResponseIdent,
 					Out: []*Param{
-						&Param{
+						{
 							Type: ResponseType,
 						},
 					},
@@ -209,6 +221,23 @@ func format(cfg *Config) string {
 	buf.WriteByte('\n')
 	buf.WriteByte('\n')
 	buf.WriteString(cfg.Include)
+	buf.WriteByte('\n')
+	buf.WriteByte('\n')
+	for _, declare := range cfg.Declare {
+		buf.WriteString("type " + declare.Ident + " struct {")
+		buf.WriteByte('\n')
+		for _, field := range declare.Fields {
+			buf.WriteString(field.Ident)
+			buf.WriteByte(' ')
+			buf.WriteString(field.Type)
+			buf.WriteByte(' ')
+			buf.WriteString("`" + field.Tag + "`")
+			buf.WriteByte('\n')
+		}
+		buf.WriteByte('}')
+		buf.WriteByte('\n')
+		buf.WriteByte('\n')
+	}
 	return buf.String()
 }
 

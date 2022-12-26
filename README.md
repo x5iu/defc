@@ -388,29 +388,81 @@ go run -mod=mod "github.com/x5iu/defc" generate --mode=sqlx --output=query.go sc
 }
 ```
 
+你也可以使用这样的（示例） `.toml` Schema 文件：
+
+```toml
+package = "main"
+ident = "Service"
+
+imports = [
+    "context",
+]
+
+[[declare]]
+ident = "ResponseOfBaidu"
+fields = [
+    { ident = "Body", type = "string", tag = "json:\"body\"" },
+    { ident = "Javascript", type = "string", tag = "json:\"javascript\"" },
+]
+
+[[schemas]]
+meta = "PostBaidu POST https://baidu.com?t={{ $.timestamp }}"
+header = """
+Content-Type: application/json
+
+{{ $.message }}
+"""
+
+in = [
+    { ident = "ctx", type = "context.Context" },
+    { ident = "message", type = "string" },
+    { ident = "timestamp", type = "int64" },
+]
+
+out = [
+    { type = "ResponseOfBaidu" },
+    { type = "error" },
+]
+```
+
+
+
 Schema 的具体格式，是根据 `github.com/x5iu/defc/gen/generate.go` 中的以下类型决定的：
 
 ```go
 type (
   Config struct {
-    Package  string    `json:"package"`
-    Ident    string    `json:"ident"`
-    Features []string  `json:"features"`
-    Imports  []string  `json:"imports"`
-    Funcs    []string  `json:"funcs"`
-    Schemas  []*Schema `json:"schemas"`
+    Package  string     `json:"package" toml:"package"`
+    Ident    string     `json:"ident" toml:"ident"`
+    Features []string   `json:"features" toml:"features"`
+    Imports  []string   `json:"imports" toml:"imports"`
+    Funcs    []string   `json:"funcs" toml:"funcs"`
+    Schemas  []*Schema  `json:"schemas" toml:"schemas"`
+    Include  string     `json:"include" toml:"include"`
+    Declare  []*Declare `json:"declare" toml:"declare"`
   }
 
   Schema struct {
-    Meta   string   `json:"meta"`
-    Header string   `json:"header"`
-    In     []*Param `json:"in"`
-    Out    []*Param `json:"out"`
+    Meta   string   `json:"meta" toml:"meta"`
+    Header string   `json:"header" toml:"header"`
+    In     []*Param `json:"in" toml:"in"`
+    Out    []*Param `json:"out" toml:"out"`
   }
 
   Param struct {
-    Ident string `json:"ident"`
-    Type  string `json:"type"`
+    Ident string `json:"ident" toml:"ident"`
+    Type  string `json:"type" toml:"type"`
+  }
+
+  Declare struct {
+    Ident  string   `json:"ident" toml:"ident"`
+    Fields []*Field `json:"fields" toml:"fields"`
+  }
+
+  Field struct {
+    Ident string `json:"ident" toml:"ident"`
+    Type string `json:"type" toml:"type"`
+    Tag  string `json:"tag" toml:"tag"`
   }
 )
 ```
