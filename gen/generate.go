@@ -14,37 +14,37 @@ type (
 	}
 
 	Config struct {
-		Package  string     `json:"package" toml:"package"`
-		Ident    string     `json:"ident" toml:"ident"`
-		Features []string   `json:"features" toml:"features"`
-		Imports  []string   `json:"imports" toml:"imports"`
-		Funcs    []string   `json:"funcs" toml:"funcs"`
-		Schemas  []*Schema  `json:"schemas" toml:"schemas"`
-		Include  string     `json:"include" toml:"include"`
-		Declare  []*Declare `json:"declare" toml:"declare"`
+		Package  string     `json:"package" toml:"package" yaml:"package"`
+		Ident    string     `json:"ident" toml:"ident" yaml:"ident"`
+		Features []string   `json:"features" toml:"features" yaml:"features"`
+		Imports  []string   `json:"imports" toml:"imports" yaml:"imports"`
+		Funcs    []string   `json:"funcs" toml:"funcs" yaml:"funcs"`
+		Schemas  []*Schema  `json:"schemas" toml:"schemas" yaml:"schemas"`
+		Include  string     `json:"include" toml:"include" yaml:"include"`
+		Declare  []*Declare `json:"declare" toml:"declare" yaml:"declare"`
 	}
 
 	Schema struct {
-		Meta   string   `json:"meta" toml:"meta"`
-		Header string   `json:"header" toml:"header"`
-		In     []*Param `json:"in" toml:"in"`
-		Out    []*Param `json:"out" toml:"out"`
+		Meta   string   `json:"meta" toml:"meta" yaml:"meta"`
+		Header string   `json:"header" toml:"header" yaml:"header"`
+		In     []*Param `json:"in" toml:"in" yaml:"in"`
+		Out    []*Param `json:"out" toml:"out" yaml:"out"`
 	}
 
 	Param struct {
-		Ident string `json:"ident" toml:"ident"`
-		Type  string `json:"type" toml:"type"`
+		Ident string `json:"ident" toml:"ident" yaml:"ident"`
+		Type  string `json:"type" toml:"type" yaml:"type"`
 	}
 
 	Declare struct {
-		Ident  string   `json:"ident" toml:"ident"`
-		Fields []*Field `json:"fields" toml:"fields"`
+		Ident  string   `json:"ident" toml:"ident" yaml:"ident"`
+		Fields []*Field `json:"fields" toml:"fields" yaml:"fields"`
 	}
 
 	Field struct {
-		Ident string `json:"ident" toml:"ident"`
-		Type  string `json:"type" toml:"type"`
-		Tag   string `json:"tag" toml:"tag"`
+		Ident string `json:"ident" toml:"ident" yaml:"ident"`
+		Type  string `json:"type" toml:"type" yaml:"type"`
+		Tag   string `json:"tag" toml:"tag" yaml:"tag"`
 	}
 )
 

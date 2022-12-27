@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/x5iu/defc/gen"
 	"go/format"
+	"gopkg.in/yaml.v3"
 	"os"
 	"path"
 	"strconv"
@@ -123,6 +124,10 @@ var (
 			case ".toml":
 				if err = toml.Unmarshal(schema, &cfg); err != nil {
 					return fmt.Errorf("toml.Unmarshal: %w", err)
+				}
+			case ".yaml":
+				if err = yaml.Unmarshal(schema, &cfg); err != nil {
+					return fmt.Errorf("yaml.Unmarshal: %w", err)
 				}
 			default:
 				return fmt.Errorf("unsupport schema extension %q", ext)

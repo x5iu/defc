@@ -432,42 +432,42 @@ Schema 的具体格式，是根据 `github.com/x5iu/defc/gen/generate.go` 中的
 ```go
 type (
   Config struct {
-    Package  string     `json:"package" toml:"package"`
-    Ident    string     `json:"ident" toml:"ident"`
-    Features []string   `json:"features" toml:"features"`
-    Imports  []string   `json:"imports" toml:"imports"`
-    Funcs    []string   `json:"funcs" toml:"funcs"`
-    Schemas  []*Schema  `json:"schemas" toml:"schemas"`
-    Include  string     `json:"include" toml:"include"`
-    Declare  []*Declare `json:"declare" toml:"declare"`
+    Package  string     `json:"package" toml:"package" yaml:"package"`
+    Ident    string     `json:"ident" toml:"ident" yaml:"ident"`
+    Features []string   `json:"features" toml:"features" yaml:"features"`
+    Imports  []string   `json:"imports" toml:"imports" yaml:"imports"`
+    Funcs    []string   `json:"funcs" toml:"funcs" yaml:"funcs"`
+    Schemas  []*Schema  `json:"schemas" toml:"schemas" yaml:"schemas"`
+    Include  string     `json:"include" toml:"include" yaml:"include"`
+    Declare  []*Declare `json:"declare" toml:"declare" yaml:"declare"`
   }
 
   Schema struct {
-    Meta   string   `json:"meta" toml:"meta"`
-    Header string   `json:"header" toml:"header"`
-    In     []*Param `json:"in" toml:"in"`
-    Out    []*Param `json:"out" toml:"out"`
+    Meta   string   `json:"meta" toml:"meta" yaml:"meta"`
+    Header string   `json:"header" toml:"header" yaml:"header"`
+    In     []*Param `json:"in" toml:"in" yaml:"in"`
+    Out    []*Param `json:"out" toml:"out" yaml:"out"`
   }
 
   Param struct {
-    Ident string `json:"ident" toml:"ident"`
-    Type  string `json:"type" toml:"type"`
+    Ident string `json:"ident" toml:"ident" yaml:"ident"`
+    Type  string `json:"type" toml:"type" yaml:"type"`
   }
 
   Declare struct {
-    Ident  string   `json:"ident" toml:"ident"`
-    Fields []*Field `json:"fields" toml:"fields"`
+    Ident  string   `json:"ident" toml:"ident" yaml:"ident"`
+    Fields []*Field `json:"fields" toml:"fields" yaml:"fields"`
   }
 
   Field struct {
-    Ident string `json:"ident" toml:"ident"`
-    Type string `json:"type" toml:"type"`
-    Tag  string `json:"tag" toml:"tag"`
+    Ident string `json:"ident" toml:"ident" yaml:"ident"`
+    Type  string `json:"type" toml:"type" yaml:"type"`
+    Tag   string `json:"tag" toml:"tag" yaml:"tag"`
   }
 )
 ```
 
-`defc generate` 的工作方式为，将 Schema 文件中的内容反序列化为 `gen.Config`，随后调用 `gen.Generate` 函数生成对应的代码，目前支持的 Schema 格式为 `json`/`toml` 格式，未来将支持更多 Schema 格式，例如 `yaml` 等（看起来都非常简单，只需要引入相应的反序列化库并加上对应的 Tag 即可）。
+`defc generate` 的工作方式为，将 Schema 文件中的内容反序列化为 `gen.Config`，随后调用 `gen.Generate` 函数生成对应的代码，目前支持的 Schema 格式为 `json`/`toml`/`yaml`。
 
 另外，你也可以在代码中直接使用 `gen.Generate` 函数，通过传入 `gen.Mode` 及 `gen.Config` 来手动生成相应模式下的代码，而无需使用命令行及 Schema 文件。
 
