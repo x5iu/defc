@@ -53,9 +53,9 @@ var (
         return {{ if gt (len $method.Out) 0 -}}
             {{ range $index, $type := $method.Out -}}
                 {{ if isPointer $type -}}
-                    new({{ indirect $type }})
+                    new({{ getRepr (indirect $type) }})
                 {{ else -}}
-                    {{ if $.HasFeature "api/nort" }}{{ $newFunc }}{{ else }}__rt.New{{ end }}[{{ $type }}]()
+                    {{ if $.HasFeature "api/nort" }}{{ $newFunc }}{{ else }}__rt.New{{ end }}[{{ getRepr $type }}]()
                 {{ end -}}
                 {{- if gt $index 0 }} , {{ end -}}
             {{ end -}}

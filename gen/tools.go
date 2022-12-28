@@ -55,9 +55,12 @@ func hit(fset *token.FileSet, node ast.Node, line int) bool {
 }
 
 func indirect(node ast.Node) ast.Node {
-	node = getNode(node)
-	if ptr, ok := node.(*ast.StarExpr); ok {
-		return ptr.X
+	if ptr, ok := getNode(node).(*ast.StarExpr); ok {
+		// hack for compatibility
+		return &Expr{
+			Expr:   ptr.X,
+			Offset: int(node.Pos()),
+		}
 	}
 	return node
 }
