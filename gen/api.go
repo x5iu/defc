@@ -23,6 +23,7 @@ const (
 	FeatureApiLog    = "api/log"
 	FeatureApiClient = "api/client"
 	FeatureApiPage   = "api/page"
+	FeatureApiNoRt   = "api/nort"
 )
 
 func (builder *CliBuilder) buildApi(w io.Writer) error {
@@ -159,11 +160,19 @@ func (ctx apiContext) MergedImports() (imports []string) {
 		quote("io"),
 		quote("net/http"),
 		quote("text/template"),
-		quote("github.com/x5iu/defc/__rt"),
 	}
 
 	if ctx.HasFeature(FeatureApiLog) {
 		imports = append(imports, quote("time"))
+	}
+
+	if ctx.HasFeature(FeatureApiNoRt) {
+		imports = append(imports,
+			quote("bytes"),
+			quote("sync"),
+			quote("reflect"))
+	} else {
+		imports = append(imports, quote("github.com/x5iu/defc/__rt"))
 	}
 
 	if ctx.HasHeader() {
@@ -335,7 +344,6 @@ func (ctx *apiContext) genApiCode(w io.Writer) error {
 			"methodResp":    func() string { return apiMethodResponse },
 			"isResponse":    func(ident string) bool { return ident == apiMethodResponse },
 			"isInner":       func(ident string) bool { return ident == apiMethodInner },
-			"newType":       func(expr ast.Expr) string { return ctx.Doc.NewType(expr) },
 			"httpMethodHasBody": func(method string) bool {
 				switch method {
 				case http.MethodGet:

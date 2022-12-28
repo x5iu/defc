@@ -49,16 +49,6 @@ func getRepr(node ast.Node, src []byte) string {
 	return getPosRepr(src, node.Pos(), node.End())
 }
 
-func newType(expr ast.Expr, src []byte) string {
-	node := getNode(expr)
-	switch typ := node.(type) {
-	case *ast.StarExpr:
-		return sprintf("new(%s)", getPosRepr(src, expr.Pos()+(typ.X.Pos()-typ.Pos()), expr.Pos()+(typ.X.Pos()-typ.Pos())+(typ.X.End()-typ.X.Pos())))
-	default:
-		return sprintf("__rt.New[%s]()", getPosRepr(src, expr.Pos(), expr.End()))
-	}
-}
-
 func hit(fset *token.FileSet, node ast.Node, line int) bool {
 	pos, end := fset.Position(node.Pos()), fset.Position(node.End())
 	return pos.Line <= line && end.Line >= line

@@ -26,19 +26,8 @@ Core: core,
 }
 }
 
-func  New{{ $.Ident }}FromCore(core interface{
-{{ if $.HasFeature "sqlx/rebind" }} Rebind(query string) string {{ end }}
-Beginx() (*sqlx.Tx, error)
-BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error)
-PrepareNamed(query string) (*sqlx.NamedStmt, error)
-PrepareNamedContext(ctx context.Context, query string) (*sqlx.NamedStmt, error)
-Exec(query string, args ...interface{}) (sql.Result, error)
-ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-Get(dest interface{}, query string, args ...interface{}) error
-GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
-Select(dest interface{}, query string, args ...interface{}) error
-SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
-}) {{ $.Ident }} {
+{{ $coreInterface := (printf "%sCoreInterface" $.Ident) }}
+func New{{ $.Ident }}FromCore(core {{ $coreInterface }}) {{ $.Ident }} {
 return &{{ $impName }}{
 Core: core,
 }
@@ -46,27 +35,20 @@ Core: core,
 
 type {{ $impName }} struct {
 withTx bool
-Core interface{
-{{ if $.HasFeature "sqlx/rebind" }} Rebind(query string) string {{ end }}
-Beginx() (*sqlx.Tx, error)
-BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error)
-PrepareNamed(query string) (*sqlx.NamedStmt, error)
-PrepareNamedContext(ctx context.Context, query string) (*sqlx.NamedStmt, error)
-Exec(query string, args ...interface{}) (sql.Result, error)
-ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-Get(dest interface{}, query string, args ...interface{}) error
-GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
-Select(dest interface{}, query string, args ...interface{}) error
-SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
-}
+Core {{ $coreInterface }}
 }
 
+{{ $bindVarsFunc := (printf "__%sBindVarsFunc" $.Ident) }}
 {{ $additionalFuncs := $.AdditionalFuncs }}
 var (
-{{ range $index, $method := $.Methods }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": __rt.BindVars, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
+{{ range $index, $method := $.Methods }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
 {{ end }}
 )
 
+{{ $getBufferFunc := (printf "__%sGetBuffer" $.Ident) }}
+{{ $putBufferFunc := (printf "__%sPutBuffer" $.Ident) }}
+{{ $mergeArgsFunc := (printf "__%sMergeArgs" $.Ident) }}
+{{ $mergeNamedArgsFunc := (printf "__%sMergeNamedArgs" $.Ident) }}
 {{ range $index, $method := $.Methods }}
     {{ $sortIn := $method.SortIn }}
     func (imp *{{ $receiver }}) {{ $method.Ident }}(
@@ -95,9 +77,15 @@ var (
     {{ $sqlTmpl := printf "sqlTmpl%s" $method.Ident }}
 
     {{ $sql := printf "sql%s" $method.Ident }}
-    {{ $sql }} := __rt.GetBuffer()
-    defer __rt.PutBuffer({{ $sql }})
-    defer {{ $sql }}.Reset()
+    {{ if $.HasFeature "sqlx/nort" }}
+        {{ $sql }} := {{ $getBufferFunc }}()
+        defer {{ $putBufferFunc }}({{ $sql }})
+        defer {{ $sql }}.Reset()
+    {{ else }}
+        {{ $sql }} := __rt.GetBuffer()
+        defer __rt.PutBuffer({{ $sql }})
+        defer {{ $sql }}.Reset()
+    {{ end }}
 
     if {{ $err }} = {{ $sqlTmpl }}.Execute({{ $sql }}, map[string]any{
     {{ range $index, $ident := $sortIn -}}
@@ -132,7 +120,7 @@ var (
         {{ $offset := printf "offset%s" $method.Ident }}
         {{ $args := printf "args%s" $method.Ident -}}
         {{ if hasOption ($method.SqlxOptions) "NAMED" }}
-            {{ $args }} := __rt.MergeNamedArgs(map[string]any{
+            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeNamedArgsFunc }}{{ else }}__rt.MergeNamedArgs{{ end }}(map[string]any{
             {{ range $index, $ident := $sortIn -}}
                 {{ if not (isContextType $ident (index $method.In $ident)) -}}
                     {{- quote $ident }}: {{ $ident -}},
@@ -141,7 +129,7 @@ var (
             })
         {{ else }}
             {{ $offset }} := 0
-            {{ $args }} := __rt.MergeArgs(
+            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}(
             {{ range $index, $ident := $sortIn -}}
                 {{ if not (isContextType $ident (index $method.In $ident)) -}}
                     {{- $ident -}},
@@ -225,7 +213,7 @@ var (
         {{ end -}}
         {{- $args := printf "args%s" $method.Ident -}}
         {{ if hasOption ($method.SqlxOptions) "NAMED" }}
-            {{ $args }} := __rt.MergeNamedArgs(map[string]any{
+            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeNamedArgsFunc }}{{ else }}__rt.MergeNamedArgs{{ end }}(map[string]any{
             {{ range $index, $ident := $sortIn -}}
                 {{ if not (isContextType $ident (index $method.In $ident)) -}}
                     {{- quote $ident }}: {{ $ident -}},
@@ -233,7 +221,7 @@ var (
             {{ end }}
             })
         {{ else }}
-            {{ $args }} := __rt.MergeArgs(
+            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}(
             {{ range $index, $ident := $sortIn -}}
                 {{ if not (isContextType $ident (index $method.In $ident)) -}}
                     {{- $ident -}},
@@ -393,4 +381,134 @@ var (
         return nil
         }
     {{ end }}
+{{ end }}
+
+type {{ $coreInterface }} interface {
+{{ if $.HasFeature "sqlx/rebind" }} Rebind(query string) string {{ end }}
+Beginx() (*sqlx.Tx, error)
+BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error)
+PrepareNamed(query string) (*sqlx.NamedStmt, error)
+PrepareNamedContext(ctx context.Context, query string) (*sqlx.NamedStmt, error)
+Exec(query string, args ...interface{}) (sql.Result, error)
+ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+Get(dest interface{}, query string, args ...interface{}) error
+GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+Select(dest interface{}, query string, args ...interface{}) error
+SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+}
+
+{{ if $.HasFeature "sqlx/nort" }}
+    {{ $bufferPool := (printf "__%sBufferPool" $.Ident) }}
+    var {{ $bufferPool }} = sync.Pool{
+    New: func() any {
+    return new(bytes.Buffer)
+    },
+    }
+
+    func {{ $getBufferFunc }}() *bytes.Buffer {
+    return {{ $bufferPool }}.Get().(*bytes.Buffer)
+    }
+
+    func {{ $putBufferFunc }}(buffer *bytes.Buffer) {
+    {{ $bufferPool }}.Put(buffer)
+    }
+
+    {{ $notAnArg := (printf "__%sNotAnArg" $.Ident) }}
+    {{ $toArgs := (printf "__%sToArgs" $.Ident) }}
+    {{ $toNamedArgs := (printf "__%sToNamedArgs" $.Ident) }}
+    type (
+    {{ $notAnArg }} interface {
+    NotAnArg()
+    }
+
+    {{ $toArgs }} interface {
+    ToArgs() []any
+    }
+
+    {{ $toNamedArgs }} interface {
+    ToNamedArgs() map[string]any
+    }
+    )
+
+    {{ $bytesType := (printf "__%sBytesType" $.Ident) }}
+    var {{ $bytesType }} = reflect.TypeOf([]byte{})
+
+    func {{ $mergeArgsFunc }}(args ...any) []any {
+    dst := make([]any, 0, len(args))
+    for _, arg := range args {
+    rv := reflect.ValueOf(arg)
+    if _, notAnArg := arg.({{ $notAnArg }}); notAnArg {
+    continue
+    } else if toArgs, ok := arg.({{ $toArgs }}); ok {
+    dst = append(dst, {{ $mergeArgsFunc }}(toArgs.ToArgs()...)...)
+    } else if rv.Kind() == reflect.Slice && rv.Type() != {{ $bytesType }} {
+    for i := 0; i < rv.Len(); i++ {
+    dst = append(dst, rv.Index(i).Interface())
+    }
+    } else {
+    dst = append(dst, arg)
+    }
+    }
+    return dst
+    }
+
+    func {{ $mergeNamedArgsFunc }}(argsMap map[string]any) map[string]any {
+    namedMap := make(map[string]any, len(argsMap))
+    for name, arg := range argsMap {
+    rv := reflect.ValueOf(arg)
+    if _, notAnArg := arg.({{ $notAnArg }}); notAnArg {
+    continue
+    } else if toNamedArgs, ok := arg.({{ $toNamedArgs }}); ok {
+    for k, v := range toNamedArgs.ToNamedArgs() {
+    namedMap[k] = v
+    }
+    } else if _, ok = arg.(driver.Valuer); ok {
+    namedMap[name] = arg
+    } else if rv.Kind() == reflect.Map {
+    iter := rv.MapRange()
+    for iter.Next() {
+    k, v := iter.Key(), iter.Value()
+    if k.Kind() == reflect.String {
+    namedMap[k.String()] = v.Interface()
+    }
+    }
+    } else if rv.Kind() == reflect.Struct ||
+    (rv.Kind() == reflect.Pointer && rv.Elem().Kind() == reflect.Struct) {
+    rt := reflect.Indirect(rv).Type()
+    for i := 0; i < rt.NumField(); i++ {
+    if tag, ok := rt.Field(i).Tag.Lookup("db"); ok {
+    namedMap[tag] = rv.Field(i).Interface()
+    }
+    }
+    } else {
+    namedMap[name] = arg
+    }
+    }
+    return namedMap
+    }
+
+    func {{ $bindVarsFunc }}(data any) string {
+    var n int
+    switch rv := reflect.ValueOf(data); rv.Kind() {
+    case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+    n = int(rv.Int())
+    case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+    n = int(rv.Uint())
+    case reflect.Slice:
+    if rv.Type() == {{ $bytesType }} {
+    n = 1
+    } else {
+    n = rv.Len()
+    }
+    default:
+    n = 1
+    }
+
+    bindVars := make([]string, n)
+    for i := 0; i < n; i++ {
+    bindVars[i] = "?"
+    }
+
+    return strings.Join(bindVars, ", ")
+    }
 {{ end }}

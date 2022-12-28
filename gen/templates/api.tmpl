@@ -14,7 +14,7 @@ import (
 {{ $receiver := (printf "%s%s" $impName ($.GenericsRepr false) ) }}
 
 func New{{- $.Ident }}{{ $.GenericsRepr true }}({{ if $.HasInner }} inner {{ getRepr $.InnerType }} {{ end }}) {{ $.Ident }}{{ $.GenericsRepr false }} {
-return {{ $receiver }}{ {{ if $.HasInner }} inner {{ end }} }
+return &{{ $receiver }}{ {{ if $.HasInner }} inner {{ end }} }
 }
 
 type {{ $impName }}{{ $.GenericsRepr true }} struct{
@@ -30,9 +30,13 @@ var (
     {{ if ne $method.Header "" -}} {{ printf "headerTmpl%s" $method.Ident }} = template.Must(template.New("Header{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote $method.Header }})) {{ end }} {{ end }} {{ end }}
 )
 
+{{ $getBufferFunc := (printf "__%sGetBuffer" $.Ident) }}
+{{ $putBufferFunc := (printf "__%sPutBuffer" $.Ident) }}
+{{ $newFunc := (printf "__%sNew" $.Ident) }}
+{{ $responseInterface := (printf "%sResponseInterface" $.Ident) }}
 {{ range $index, $method := $.Methods }}
     {{ $sortIn := $method.SortIn }}
-    func ({{ if not (isResponse $method.Ident) }} imp {{ end }} {{ $receiver }}) {{ $method.Ident }}(
+    func ({{ if not (isResponse $method.Ident) }} imp {{ end }} *{{ $receiver }}) {{ $method.Ident }}(
     {{- range $index, $ident := $sortIn -}}
         {{- $ident }} {{ getRepr (index $method.In $ident) }},
     {{- end -}}
@@ -48,7 +52,12 @@ var (
     {{- if isResponse $method.Ident }}
         return {{ if gt (len $method.Out) 0 -}}
             {{ range $index, $type := $method.Out -}}
-                {{- newType $type }} {{ if gt $index 0 }} , {{ end -}}
+                {{ if isPointer $type -}}
+                    new({{ indirect $type }})
+                {{ else -}}
+                    {{ if $.HasFeature "api/nort" }}{{ $newFunc }}{{ else }}__rt.New{{ end }}[{{ $type }}]()
+                {{ end -}}
+                {{- if gt $index 0 }} , {{ end -}}
             {{ end -}}
         {{ end -}}
     {{ else if isInner $method.Ident }}
@@ -62,9 +71,9 @@ var (
             {{- if or ($.HasFeature "api/cache") ($.HasFeature "api/log") ($.HasFeature "api/client") -}}
                 var {{ $inner }} any = imp.inner
             {{- end -}}
-        {{ end }}
+        {{ end -}}
 
-        {{ if $.HasFeature "api/cache" -}}
+        {{ if $.HasFeature "api/cache" }}
 
             if {{ $cache }}, {{ $ok }} := {{ $inner }}.(interface{
             GetCache(string, ...any) []any
@@ -125,21 +134,39 @@ var (
         {{ end }}
 
         {{ $addr := printf "addr%s" $method.Ident -}}
-        {{ $addr }} := __rt.GetBuffer()
-        defer __rt.PutBuffer({{ $addr }})
-        defer {{ $addr }}.Reset()
+        {{ if $.HasFeature "api/nort" }}
+            {{ $addr }} := {{ $getBufferFunc }}()
+            defer {{ $putBufferFunc }}({{ $addr }})
+            defer {{ $addr }}.Reset()
+        {{ else }}
+            {{ $addr }} := __rt.GetBuffer()
+            defer __rt.PutBuffer({{ $addr }})
+            defer {{ $addr }}.Reset()
+        {{ end }}
 
         {{ $header := printf "header%s" $method.Ident -}}
         {{ if ne $method.Header "" -}}
-            {{ $header }} := __rt.GetBuffer()
-            defer __rt.PutBuffer({{ $header }})
-            defer {{ $header }}.Reset()
+            {{ if $.HasFeature "api/nort" }}
+                {{ $header }} := {{ $getBufferFunc }}()
+                defer {{ $putBufferFunc }}({{ $header }})
+                defer {{ $header }}.Reset()
+            {{ else }}
+                {{ $header }} := __rt.GetBuffer()
+                defer __rt.PutBuffer({{ $header }})
+                defer {{ $header }}.Reset()
+            {{ end }}
         {{- end }}
 
         {{ $responseBody := printf "responseBody%s" $method.Ident -}}
-        {{ $responseBody }} := __rt.GetBuffer()
-        defer __rt.PutBuffer({{ $responseBody }})
-        defer {{ $responseBody }}.Reset()
+        {{ if $.HasFeature "api/nort" }}
+            {{ $responseBody }} := {{ $getBufferFunc }}()
+            defer {{ $putBufferFunc }}({{ $responseBody }})
+            defer {{ $responseBody }}.Reset()
+        {{ else }}
+            {{ $responseBody }} := __rt.GetBuffer()
+            defer __rt.PutBuffer({{ $responseBody }})
+            defer {{ $responseBody }}.Reset()
+        {{ end }}
 
         {{ if $method.ReturnSlice -}}
             loop:
@@ -156,7 +183,7 @@ var (
         {{ $httpResponse := printf "httpResponse%s" $method.Ident -}}
         {{ $httpResponse }} *http.Response
         {{ $response := printf "response%s" $method.Ident -}}
-        {{ $response }} __rt.Response = imp.{{ methodResp }}()
+        {{ $response }} {{ if $.HasFeature "api/nort" }}{{ $responseInterface }}{{ else }}__rt.Response{{ end }} = imp.{{ methodResp }}()
         )
 
         if {{ $err }} = {{ $addrTmpl }}.Execute({{ $addr }}, map[string]any{
@@ -403,5 +430,62 @@ var (
         // TODO
         panic("unimplemented")
     {{- end -}}
+    }
+{{ end }}
+
+{{ if $.HasFeature "api/nort" }}
+    {{ $bufferPool := (printf "__%sBufferPool" $.Ident) }}
+    var {{ $bufferPool }} = sync.Pool{
+    New: func() any {
+    return new(bytes.Buffer)
+    },
+    }
+
+    func {{ $getBufferFunc }}() *bytes.Buffer {
+    return {{ $bufferPool }}.Get().(*bytes.Buffer)
+    }
+
+    func {{ $putBufferFunc }}(buffer *bytes.Buffer) {
+    {{ $bufferPool }}.Put(buffer)
+    }
+
+    type {{ $responseInterface }} interface {
+    Err() error
+    ScanValues(...any) error
+    FromBytes(string, []byte) error
+    Break() bool
+    }
+
+    {{ $newTypeFunc := (printf "__%sNewType" $.Ident) }}
+    func {{ $newTypeFunc }}(typ reflect.Type) reflect.Value {
+    switch typ.Kind() {
+    case reflect.Slice:
+    return reflect.MakeSlice(typ, 0, 0)
+    case reflect.Map:
+    return reflect.MakeMap(typ)
+    case reflect.Chan:
+    return reflect.MakeChan(typ, 0)
+    case reflect.Func:
+    return reflect.MakeFunc(typ, func(_ []reflect.Value) (results []reflect.Value) {
+    results = make([]reflect.Value, typ.NumOut())
+    for i := 0; i < typ.NumOut(); i++ {
+    results[i] = {{ $newTypeFunc }}(typ.Out(i))
+    }
+    return results
+    })
+    case reflect.Pointer:
+    return reflect.New(typ.Elem())
+    default:
+    return reflect.Zero(typ)
+    }
+    }
+
+    func {{ $newFunc }}[T any]() (v T) {
+    val := reflect.ValueOf(&v).Elem()
+    switch val.Kind() {
+    case reflect.Slice, reflect.Map, reflect.Chan, reflect.Func, reflect.Pointer:
+    val.Set({{ $newTypeFunc }}(val.Type()))
+    }
+    return v
     }
 {{ end }}

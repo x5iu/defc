@@ -117,9 +117,16 @@ func toBuilder(mode Mode, cfg *Config) (Builder, error) {
 	case ModeApi:
 		const (
 			ResponseIdent = "Response"
-			ResponseExpr  = "__rt.Response"
 			ResponseType  = "T"
 		)
+
+		var (
+			ResponseExpr = "__rt.Response"
+		)
+
+		if in(cfg.Features, FeatureApiNoRt) {
+			ResponseExpr = sprintf("%sResponseInterface", cfg.Ident)
+		}
 
 		hasResponse := func(schemas []*Schema) bool {
 			for _, schema := range schemas {

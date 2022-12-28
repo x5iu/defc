@@ -39,10 +39,6 @@ func (doc Doc) Repr(node ast.Node) string {
 	return getRepr(node, doc)
 }
 
-func (doc Doc) NewType(expr ast.Expr) string {
-	return newType(expr, doc)
-}
-
 func (doc Doc) InspectMethod(node ast.Node) *Method {
 	return inspectMethod(node, doc)
 }

@@ -29,8 +29,10 @@ var (
 		gen.FeatureApiLog,
 		gen.FeatureApiClient,
 		gen.FeatureApiPage,
+		gen.FeatureApiNoRt,
 		gen.FeatureSqlxLog,
 		gen.FeatureSqlxRebind,
+		gen.FeatureSqlxNoRt,
 	}
 )
 
@@ -54,7 +56,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:     "defc",
-		Version: "v1.2.5",
+		Version: "v1.3.0",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if genMode := modeMap[mode]; !genMode.IsValid() {
 				return fmt.Errorf("invalid mode %q, available modes are: [%s]", mode, printStrings(validModes))
@@ -107,7 +109,11 @@ var (
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			if err = checkFeatures(features); err != nil {
+				return err
+			}
+
 			file := args[0]
 
 			schema, err := os.ReadFile(file)
