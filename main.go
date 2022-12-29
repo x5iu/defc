@@ -29,6 +29,7 @@ var (
 		gen.FeatureApiLog,
 		gen.FeatureApiClient,
 		gen.FeatureApiPage,
+		gen.FeatureApiError,
 		gen.FeatureApiNoRt,
 		gen.FeatureSqlxLog,
 		gen.FeatureSqlxRebind,
@@ -56,7 +57,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:     "defc",
-		Version: "v1.3.1",
+		Version: "v1.4.0",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if genMode := modeMap[mode]; !genMode.IsValid() {
 				return fmt.Errorf("invalid mode %q, available modes are: [%s]", mode, printStrings(validModes))

@@ -34,6 +34,7 @@ var (
 {{ $putBufferFunc := (printf "__%sPutBuffer" $.Ident) }}
 {{ $newFunc := (printf "__%sNew" $.Ident) }}
 {{ $responseInterface := (printf "%sResponseInterface" $.Ident) }}
+{{ $newResponseErrorFunc := (printf "__%sNewResponseError" $.Ident) }}
 {{ range $index, $method := $.Methods }}
     {{ $sortIn := $method.SortIn }}
     func ({{ if not (isResponse $method.Ident) }} imp {{ end }} *{{ $receiver }}) {{ $method.Ident }}(
@@ -319,7 +320,15 @@ var (
                 v{{- $index -}}{{- $method.Ident }},
             {{- end -}}
         {{- end -}}
-        fmt.Errorf("response status code %d for '{{ $method.Ident }}' with body: \n\n%s\n\n", {{ $httpResponse }}.StatusCode, {{ $responseBody }}.String())
+        {{ if $.HasFeature "api/error" -}}
+            {{ if $.HasFeature "api/nort" -}}
+                {{ $newResponseErrorFunc }}({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+            {{ else -}}
+                __rt.NewResponseError({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+            {{ end -}}
+        {{ else -}}
+            fmt.Errorf("response status code %d for '{{ $method.Ident }}' with body: \n\n%s\n\n", {{ $httpResponse }}.StatusCode, {{ $responseBody }}.String())
+        {{ end -}}
         }
 
         if {{ $err }} = {{ $response }}.FromBytes({{ quote $method.Ident }}, {{ $responseBody }}.Bytes()); {{ $err }} != nil {
@@ -487,5 +496,39 @@ var (
     val.Set({{ $newTypeFunc }}(val.Type()))
     }
     return v
+    }
+
+    {{ $responseErrorInterface := (printf "%sResponseErrorInterface" $.Ident) }}
+    type {{ $responseErrorInterface }} interface {
+    error
+    Status() int
+    Body() []byte
+    }
+
+    {{ $implResponseError := (printf "__%sImplResponseError" $.Ident) }}
+    func {{ $newResponseErrorFunc }}(caller string, status int, body []byte) {{ $responseErrorInterface }} {
+    return &{{ $implResponseError }}{
+    caller: caller,
+    status: status,
+    body:   body,
+    }
+    }
+
+    type {{ $implResponseError }} struct {
+    caller string
+    status int
+    body   []byte
+    }
+
+    func (e *{{ $implResponseError }}) Error() string {
+    return fmt.Sprintf("response status code %d for '%s' with body: \n\n%s\n\n", e.status, e.caller, string(e.body))
+    }
+
+    func (e *{{ $implResponseError }}) Status() int {
+    return e.status
+    }
+
+    func (e *{{ $implResponseError }}) Body() []byte {
+    return e.body
     }
 {{ end }}

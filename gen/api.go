@@ -23,6 +23,7 @@ const (
 	FeatureApiLog    = "api/log"
 	FeatureApiClient = "api/client"
 	FeatureApiPage   = "api/page"
+	FeatureApiError  = "api/error"
 	FeatureApiNoRt   = "api/nort"
 )
 
