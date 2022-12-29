@@ -475,6 +475,48 @@ type (
 
 *注：目前 `defc generate` 仅为实验性功能，不保证功能和 API 的稳定性，文档也尚未补全，各项功能可能需要使用者自己摸索着使用（例如各类参数的格式）*
 
+## 额外的特性（`--features`）说明
+
+### `sqlx/nort` 和 `api/nort`
+
+使用 `nort` 特性将告知 `defc` 不要引入额外的 `github.com/x5iu/defc/__rt` 包，所有的辅助接口、类型、函数都将在生成的文件中定义；生成的文件将仅包含标准库（`sqlx` 模式下将额外包含 `github.com/jmoiron/sqlx`）。
+
+### `api/cache`
+
+使用 `api/cache` 特性将为接口提供缓存功能，该特性必须配合 `Inner` 方法使用，`Inner` 方法的返回值类型必须实现以下接口：
+
+```go
+type Cache interface {
+  GetCache(string, ...any) []any
+  SetCache(string, []any, ...any)
+}
+```
+
+其中，`GetCache` 方法的第一个 `string` 参数为调用者信息，即当前执行的方法名，而变长 `..any` 参数则为当前方法的入参，`Inner` 方法的返回值类型必须自己处理缓存的存储，以及方法入参与缓存的映射关系；`SetCache` 方法的第一个 `string` 参数同样为调用者信息，即当前执行的方法名，第二个 `[]any` 参数则为当前方法的入参，第三个变长 `...any` 参数则为当前方法的返回值（该返回值不包含 `error`），`Inner` 方法的返回值类型必须自己完成缓存的存储及方法入参与缓存的映射关系。
+
+### `api/error`
+
+使用 `api/error` 特性将在 HTTP 响应码不为 2xx 时，返回一个 `ResponseError` 错误，`ResponseError` 的定义如下：
+
+```go
+type ResponseError interface {
+  error
+  Status() int
+  Body() []byte
+}
+```
+
+可以使用如下的方式来判断是否为 HTTP 层（而非业务层）出现错误：
+
+```go
+if e, ok := err.(__rt.ResponseError); ok {
+  status, body := e.Status(), e.Body()
+  // error handling
+}
+```
+
+*注：当且仅当 HTTP 响应码不为 2xx 时才会返回 `ResponseError` 错误，其他场景返回的错误将不会实现 `ResponseError` 接口。*
+
 ## 对一些常见问题的解答
 
 ### `--features` 参数如何实现传递多个值
