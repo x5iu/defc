@@ -498,37 +498,39 @@ var (
     return v
     }
 
-    {{ $responseErrorInterface := (printf "%sResponseErrorInterface" $.Ident) }}
-    type {{ $responseErrorInterface }} interface {
-    error
-    Status() int
-    Body() []byte
-    }
+    {{ if $.HasFeature "api/error" }}
+        {{ $responseErrorInterface := (printf "%sResponseErrorInterface" $.Ident) }}
+        type {{ $responseErrorInterface }} interface {
+        error
+        Status() int
+        Body() []byte
+        }
 
-    {{ $implResponseError := (printf "__%sImplResponseError" $.Ident) }}
-    func {{ $newResponseErrorFunc }}(caller string, status int, body []byte) {{ $responseErrorInterface }} {
-    return &{{ $implResponseError }}{
-    caller: caller,
-    status: status,
-    body:   body,
-    }
-    }
+        {{ $implResponseError := (printf "__%sImplResponseError" $.Ident) }}
+        func {{ $newResponseErrorFunc }}(caller string, status int, body []byte) {{ $responseErrorInterface }} {
+        return &{{ $implResponseError }}{
+        caller: caller,
+        status: status,
+        body:   body,
+        }
+        }
 
-    type {{ $implResponseError }} struct {
-    caller string
-    status int
-    body   []byte
-    }
+        type {{ $implResponseError }} struct {
+        caller string
+        status int
+        body   []byte
+        }
 
-    func (e *{{ $implResponseError }}) Error() string {
-    return fmt.Sprintf("response status code %d for '%s' with body: \n\n%s\n\n", e.status, e.caller, string(e.body))
-    }
+        func (e *{{ $implResponseError }}) Error() string {
+        return fmt.Sprintf("response status code %d for '%s' with body: \n\n%s\n\n", e.status, e.caller, string(e.body))
+        }
 
-    func (e *{{ $implResponseError }}) Status() int {
-    return e.status
-    }
+        func (e *{{ $implResponseError }}) Status() int {
+        return e.status
+        }
 
-    func (e *{{ $implResponseError }}) Body() []byte {
-    return e.body
-    }
+        func (e *{{ $implResponseError }}) Body() []byte {
+        return e.body
+        }
+    {{ end }}
 {{ end }}
