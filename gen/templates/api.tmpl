@@ -176,7 +176,7 @@ var (
         var (
         {{ range $index, $type := $method.Out -}}
             {{ if lt $index (sub (len $method.Out) 1) -}}
-                v{{- $index -}}{{- $method.Ident }} {{ if isPointer $type }}=new({{ getRepr (indirect $type) }}){{ else }}{{ getRepr $type }}{{ end }}
+                v{{- $index -}}{{- $method.Ident }}={{ if isPointer $type }}new({{ getRepr (indirect $type) }}){{ else }}{{ if $.HasFeature "api/nort" }}{{ $newFunc }}{{ else }}__rt.New{{ end }}[{{ getRepr $type }}](){{ end }}
             {{ end -}}
         {{- end -}}
         {{- $err := printf "err%s" $method.Ident }}
