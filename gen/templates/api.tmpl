@@ -99,7 +99,7 @@ var (
         {{- $page := printf "page%s" $method.Ident -}}
         {{- $addrTmpl := printf "addrTmpl%s" $method.Ident -}}
         {{- $headerTmpl := printf "headerTmpl%s" $method.Ident -}}
-        {{- if $method.ReturnSlice -}}
+        {{- if $method.ReturnSlice }}
             var (
             {{ $type := index $method.Out 0 -}}
             {{ $values }} = make({{ getRepr $type }}, 0, 10)
