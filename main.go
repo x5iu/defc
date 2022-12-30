@@ -57,20 +57,19 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:     "defc",
-		Version: "v1.4.3",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		Version: "v1.4.4",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 			if genMode := modeMap[mode]; !genMode.IsValid() {
 				return fmt.Errorf("invalid mode %q, available modes are: [%s]", mode, printStrings(validModes))
+			}
+			if err = checkFeatures(features); err != nil {
+				return err
 			}
 			return nil
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err = checkFeatures(features); err != nil {
-				return err
-			}
-
 			var (
 				pwd  = os.Getenv(EnvPWD)
 				file = os.Getenv(EnvGoFile)
@@ -111,10 +110,6 @@ var (
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err = checkFeatures(features); err != nil {
-				return err
-			}
-
 			file := args[0]
 
 			schema, err := os.ReadFile(file)
