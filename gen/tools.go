@@ -244,6 +244,9 @@ const (
 	goBuild  = "go:build"
 )
 
+// parseBuildTags uses source []byte instead of ast.CommentGroup to parse build tags,
+// since parser.ParseFile removes commands like "//go:build" or "//go:generate", we
+// can't get build tags from ast.CommentGroup.
 func parseBuildTags(src []byte) (tags []string) {
 	scanner := bufio.NewScanner(bytes.NewReader(src))
 	for scanner.Scan() {
