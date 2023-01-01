@@ -37,6 +37,7 @@ func (builder *CliBuilder) buildSqlx(w io.Writer) error {
 
 type sqlxContext struct {
 	Package       string
+	BuildTags     []string
 	Ident         string
 	Methods       []*Method
 	WithTx        bool
@@ -197,13 +198,14 @@ inspectType:
 	}
 
 	return &sqlxContext{
-		Package:  builder.pkg,
-		Ident:    typeSpec.Name.Name,
-		Methods:  nodeMap(ifaceType.Methods.List, builder.doc.InspectMethod),
-		Features: sqlxFeatures,
-		Imports:  builder.imports,
-		Funcs:    builder.funcs,
-		Doc:      builder.doc,
+		Package:   builder.pkg,
+		BuildTags: parseBuildTags(builder.doc),
+		Ident:     typeSpec.Name.Name,
+		Methods:   nodeMap(ifaceType.Methods.List, builder.doc.InspectMethod),
+		Features:  sqlxFeatures,
+		Imports:   builder.imports,
+		Funcs:     builder.funcs,
+		Doc:       builder.doc,
 	}, nil
 }
 

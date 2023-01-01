@@ -36,15 +36,16 @@ func (builder *CliBuilder) buildApi(w io.Writer) error {
 }
 
 type apiContext struct {
-	Package  string
-	Ident    string
-	Generics map[string]ast.Expr
-	Methods  []*Method
-	Features []string
-	Imports  []string
-	Funcs    []string
-	Doc      Doc
-	Schema   string
+	Package   string
+	BuildTags []string
+	Ident     string
+	Generics  map[string]ast.Expr
+	Methods   []*Method
+	Features  []string
+	Imports   []string
+	Funcs     []string
+	Doc       Doc
+	Schema    string
 }
 
 func (ctx *apiContext) Build(w io.Writer) error {
@@ -281,14 +282,15 @@ inspectType:
 	}
 
 	return &apiContext{
-		Package:  builder.pkg,
-		Ident:    typeSpec.Name.Name,
-		Generics: generics,
-		Methods:  nodeMap(ifaceType.Methods.List, builder.doc.InspectMethod),
-		Features: apiFeatures,
-		Imports:  builder.imports,
-		Funcs:    builder.funcs,
-		Doc:      builder.doc,
+		Package:   builder.pkg,
+		BuildTags: parseBuildTags(builder.doc),
+		Ident:     typeSpec.Name.Name,
+		Generics:  generics,
+		Methods:   nodeMap(ifaceType.Methods.List, builder.doc.InspectMethod),
+		Features:  apiFeatures,
+		Imports:   builder.imports,
+		Funcs:     builder.funcs,
+		Doc:       builder.doc,
 	}, nil
 }
 

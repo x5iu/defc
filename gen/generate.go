@@ -15,6 +15,7 @@ type (
 
 	Config struct {
 		Package  string     `json:"package" toml:"package" yaml:"package"`
+		Tags     []string   `json:"tags" toml:"tags" yaml:"tags"`
 		Ident    string     `json:"ident" toml:"ident" yaml:"ident"`
 		Features []string   `json:"features" toml:"features" yaml:"features"`
 		Imports  []string   `json:"imports" toml:"imports" yaml:"imports"`
@@ -180,26 +181,28 @@ func toBuilder(mode Mode, cfg *Config) (Builder, error) {
 		}
 
 		return &apiContext{
-			Package:  cfg.Package,
-			Ident:    cfg.Ident,
-			Generics: generics,
-			Methods:  methods,
-			Features: cfg.Features,
-			Imports:  cfg.Imports,
-			Funcs:    cfg.Funcs,
-			Doc:      doc,
-			Schema:   format(&hackCfg),
+			Package:   cfg.Package,
+			BuildTags: cfg.Tags,
+			Ident:     cfg.Ident,
+			Generics:  generics,
+			Methods:   methods,
+			Features:  cfg.Features,
+			Imports:   cfg.Imports,
+			Funcs:     cfg.Funcs,
+			Doc:       doc,
+			Schema:    format(&hackCfg),
 		}, nil
 	case ModeSqlx:
 		return &sqlxContext{
-			Package:  cfg.Package,
-			Ident:    cfg.Ident,
-			Methods:  methods,
-			Features: cfg.Features,
-			Imports:  cfg.Imports,
-			Funcs:    cfg.Funcs,
-			Doc:      doc,
-			Schema:   format(cfg),
+			Package:   cfg.Package,
+			BuildTags: cfg.Tags,
+			Ident:     cfg.Ident,
+			Methods:   methods,
+			Features:  cfg.Features,
+			Imports:   cfg.Imports,
+			Funcs:     cfg.Funcs,
+			Doc:       doc,
+			Schema:    format(cfg),
 		}, nil
 	}
 

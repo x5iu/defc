@@ -1,6 +1,8 @@
 package gen
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -235,4 +237,20 @@ func getNode(node ast.Node) ast.Node {
 		break
 	}
 	return node
+}
+
+const (
+	addBuild = "+build"
+	goBuild  = "go:build"
+)
+
+func parseBuildTags(src []byte) (tags []string) {
+	scanner := bufio.NewScanner(bytes.NewReader(src))
+	for scanner.Scan() {
+		text := trimSlash(scanner.Text())
+		if hasPrefix(text, addBuild) || hasPrefix(text, goBuild) {
+			tags = append(tags, text)
+		}
+	}
+	return tags
 }
