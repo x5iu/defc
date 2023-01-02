@@ -18,19 +18,20 @@ import (
 {{ $impName := (printf "impl%s" $.Ident) }}
 {{ $receiver := (printf "%s%s" $impName ($.GenericsRepr false) ) }}
 
-func New{{- $.Ident }}{{ $.GenericsRepr true }}({{ if $.HasInner }} inner {{ getRepr $.InnerType }} {{ end }}) {{ $.Ident }}{{ $.GenericsRepr false }} {
-return &{{ $receiver }}{ {{ if $.HasInner }} inner {{ end }} }
+{{ $innerField := (printf "__%s" $.Ident) }}
+func New{{- $.Ident }}{{ $.GenericsRepr true }}({{ if $.HasInner }} {{ $.Ident }} {{ getRepr $.InnerType }} {{ end }}) {{ $.Ident }}{{ $.GenericsRepr false }} {
+return &{{ $receiver }}{ {{ if $.HasInner }} {{ $innerField }}: {{ $.Ident }} {{ end }} }
 }
 
 type {{ $impName }}{{ $.GenericsRepr true }} struct{
 {{- if $.HasInner }}
-    inner {{ getRepr $.InnerType }}
+    {{ $innerField }} {{ getRepr $.InnerType }}
 {{ end -}}
 }
 
 {{ $additionalFuncs := $.AdditionalFuncs }}
 var (
-{{ range $index, $method := $.Methods }} {{ if and (not (and $method.ReturnSlice ($.HasFeature "api/page"))) (ne "Inner" $method.Ident) (ne "Response" $method.Ident) }}
+{{ range $index, $method := $.Methods }} {{ if and (not (and $method.ReturnSlice ($.HasFeature "api/page"))) (not (isInner $method.Ident)) (not (isResponse $method.Ident)) }}
     {{ printf "addrTmpl%s" $method.Ident }} = template.Must(template.New("Address{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote ($method.TmplURL) }}))
     {{ if ne $method.Header "" -}} {{ printf "headerTmpl%s" $method.Ident }} = template.Must(template.New("Header{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote $method.Header }})) {{ end }} {{ end }} {{ end }}
 )
@@ -67,7 +68,7 @@ var (
             {{ end -}}
         {{ end -}}
     {{ else if isInner $method.Ident }}
-        return imp.inner
+        return imp.{{ $innerField }}
     {{ else if gt (len ($method.MetaArgs)) 1 }}
         {{ $inner := printf "inner%s" $method.Ident }}
         {{- $cache := printf "cache%s" $method.Ident -}}
@@ -75,7 +76,7 @@ var (
 
         {{- if $.HasInner -}}
             {{- if or ($.HasFeature "api/cache") ($.HasFeature "api/log") ($.HasFeature "api/client") -}}
-                var {{ $inner }} any = imp.inner
+                var {{ $inner }} any = imp.{{ methodInner }}()
             {{- end -}}
         {{ end -}}
 
@@ -194,7 +195,7 @@ var (
 
         if {{ $err }} = {{ $addrTmpl }}.Execute({{ $addr }}, map[string]any{
         {{ if $.HasInner -}}
-            "{{ $.Ident }}": imp.inner,
+            "{{ $.Ident }}": imp.{{ methodInner }}(),
         {{ end -}}
         {{ range $index, $ident := $sortIn -}}
             "{{- $ident }}": {{ $ident -}},
@@ -213,7 +214,7 @@ var (
         {{ if ne $method.Header "" -}}
             if {{ $err }} = {{ $headerTmpl }}.Execute({{ $header }}, map[string]any{
             {{ if $.HasInner -}}
-                "{{ $.Ident }}": imp.inner,
+                "{{ $.Ident }}": imp.{{ methodInner }}(),
             {{ end -}}
             {{ range $index, $ident := $sortIn -}}
                 "{{- $ident }}": {{ $ident -}},

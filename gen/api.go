@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	apiMethodInner    = "Inner"
-	apiMethodResponse = "Response"
+	apiMethodInner    = "INNER"
+	apiMethodResponse = "RESPONSE"
 
 	FeatureApiCache  = "api/cache"
 	FeatureApiLog    = "api/log"
@@ -54,21 +54,21 @@ func (ctx *apiContext) Build(w io.Writer) error {
 	}
 
 	for _, method := range ctx.Methods {
-		if method.Ident != apiMethodResponse && method.Ident != apiMethodInner {
+		if isResponse(method.Ident) && isInner(method.Ident) {
 			if l := len(method.Out); l == 0 || !checkErrorType(method.Out[l-1]) {
 				return fmt.Errorf("checkErrorType: no 'error' found in method %s returned value",
 					quote(method.Ident))
 			}
 		}
 
-		if (method.Ident == apiMethodResponse || method.Ident == apiMethodInner) &&
+		if (isResponse(method.Ident) || isInner(method.Ident)) &&
 			(len(method.In) != 0 || len(method.Out) != 1) {
 			return fmt.Errorf(
 				"%s method can only have no income params "+
 					"and 1 returned value", quote(method.Ident))
 		}
 
-		if method.Ident == apiMethodResponse {
+		if isResponse(method.Ident) {
 			if !checkResponseType(method) {
 				return fmt.Errorf(
 					"checkResponseType: returned type of %s "+
@@ -149,11 +149,29 @@ func (ctx *apiContext) HasInner() bool {
 
 func (ctx *apiContext) InnerType() ast.Node {
 	for _, method := range ctx.Methods {
-		if method.Ident == apiMethodInner {
+		if isInner(method.Ident) {
 			return method.Out[0]
 		}
 	}
 	return nil
+}
+
+func (ctx *apiContext) MethodResponse() string {
+	for _, method := range ctx.Methods {
+		if isResponse(method.Ident) {
+			return method.Ident
+		}
+	}
+	return apiMethodResponse
+}
+
+func (ctx *apiContext) MethodInner() string {
+	for _, method := range ctx.Methods {
+		if isInner(method.Ident) {
+			return method.Ident
+		}
+	}
+	return apiMethodInner
 }
 
 func (ctx apiContext) MergedImports() (imports []string) {
@@ -296,7 +314,7 @@ inspectType:
 
 func checkResponse(methods []*Method) bool {
 	for _, method := range methods {
-		if method.Ident == apiMethodResponse {
+		if isResponse(method.Ident) {
 			return true
 		}
 	}
@@ -315,7 +333,7 @@ func checkResponseType(method *Method) bool {
 
 func hasInner(methods []*Method) bool {
 	for _, method := range methods {
-		if method.Ident == apiMethodInner {
+		if isInner(method.Ident) {
 			return true
 		}
 	}
@@ -331,6 +349,14 @@ func importContext(methods []*Method) bool {
 	return false
 }
 
+func isResponse(ident string) bool {
+	return toUpper(ident) == apiMethodResponse
+}
+
+func isInner(ident string) bool {
+	return toUpper(ident) == apiMethodInner
+}
+
 //go:embed templates/api.tmpl
 var apiTemplate string
 
@@ -344,9 +370,10 @@ func (ctx *apiContext) genApiCode(w io.Writer) error {
 			"importContext": importContext,
 			"sub":           func(x, y int) int { return x - y },
 			"getRepr":       func(node ast.Node) string { return ctx.Doc.Repr(node) },
-			"methodResp":    func() string { return apiMethodResponse },
-			"isResponse":    func(ident string) bool { return ident == apiMethodResponse },
-			"isInner":       func(ident string) bool { return ident == apiMethodInner },
+			"methodResp":    ctx.MethodResponse,
+			"methodInner":   ctx.MethodInner,
+			"isResponse":    isResponse,
+			"isInner":       isInner,
 			"httpMethodHasBody": func(method string) bool {
 				switch method {
 				case http.MethodGet:
