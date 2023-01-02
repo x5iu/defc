@@ -43,7 +43,7 @@ var (
 {{ $newResponseErrorFunc := (printf "__%sNewResponseError" $.Ident) }}
 {{ range $index, $method := $.Methods }}
     {{ $sortIn := $method.SortIn }}
-    func ({{ if not (isResponse $method.Ident) }} imp {{ end }} *{{ $receiver }}) {{ $method.Ident }}(
+    func ({{ if not (isResponse $method.Ident) }} __imp {{ end }} *{{ $receiver }}) {{ $method.Ident }}(
     {{- range $index, $ident := $sortIn -}}
         {{- $ident }} {{ getRepr (index $method.In $ident) }},
     {{- end -}}
@@ -68,7 +68,7 @@ var (
             {{ end -}}
         {{ end -}}
     {{ else if isInner $method.Ident }}
-        return imp.{{ $innerField }}
+        return __imp.{{ $innerField }}
     {{ else if gt (len ($method.MetaArgs)) 1 }}
         {{ $inner := printf "inner%s" $method.Ident }}
         {{- $cache := printf "cache%s" $method.Ident -}}
@@ -76,7 +76,7 @@ var (
 
         {{- if $.HasInner -}}
             {{- if or ($.HasFeature "api/cache") ($.HasFeature "api/log") ($.HasFeature "api/client") -}}
-                var {{ $inner }} any = imp.{{ methodInner }}()
+                var {{ $inner }} any = __imp.{{ methodInner }}()
             {{- end -}}
         {{ end -}}
 
@@ -190,12 +190,12 @@ var (
         {{ $httpResponse := printf "httpResponse%s" $method.Ident -}}
         {{ $httpResponse }} *http.Response
         {{ $response := printf "response%s" $method.Ident -}}
-        {{ $response }} {{ if $.HasFeature "api/nort" }}{{ $responseInterface }}{{ else }}__rt.Response{{ end }} = imp.{{ methodResp }}()
+        {{ $response }} {{ if $.HasFeature "api/nort" }}{{ $responseInterface }}{{ else }}__rt.Response{{ end }} = __imp.{{ methodResp }}()
         )
 
         if {{ $err }} = {{ $addrTmpl }}.Execute({{ $addr }}, map[string]any{
         {{ if $.HasInner -}}
-            "{{ $.Ident }}": imp.{{ methodInner }}(),
+            "{{ $.Ident }}": __imp.{{ methodInner }}(),
         {{ end -}}
         {{ range $index, $ident := $sortIn -}}
             "{{- $ident }}": {{ $ident -}},
@@ -214,7 +214,7 @@ var (
         {{ if ne $method.Header "" -}}
             if {{ $err }} = {{ $headerTmpl }}.Execute({{ $header }}, map[string]any{
             {{ if $.HasInner -}}
-                "{{ $.Ident }}": imp.{{ methodInner }}(),
+                "{{ $.Ident }}": __imp.{{ methodInner }}(),
             {{ end -}}
             {{ range $index, $ident := $sortIn -}}
                 "{{- $ident }}": {{ $ident -}},

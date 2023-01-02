@@ -21,26 +21,26 @@ import (
 
 func New{{ $.Ident }}(drv string, dsn string) {{ $.Ident }} {
 return &{{ $impName }}{
-Core: sqlx.MustOpen(drv, dsn),
+__core: sqlx.MustOpen(drv, dsn),
 }
 }
 
 func New{{ $.Ident }}FromDB(core *sqlx.DB) {{ $.Ident }} {
 return &{{ $impName }}{
-Core: core,
+__core: core,
 }
 }
 
 {{ $coreInterface := (printf "%sCoreInterface" $.Ident) }}
 func New{{ $.Ident }}FromCore(core {{ $coreInterface }}) {{ $.Ident }} {
 return &{{ $impName }}{
-Core: core,
+__core: core,
 }
 }
 
 type {{ $impName }} struct {
-withTx bool
-Core {{ $coreInterface }}
+__withTx bool
+__core {{ $coreInterface }}
 }
 
 {{ $bindVarsFunc := (printf "__%sBindVarsFunc" $.Ident) }}
@@ -56,7 +56,7 @@ var (
 {{ $mergeNamedArgsFunc := (printf "__%sMergeNamedArgs" $.Ident) }}
 {{ range $index, $method := $.Methods }}
     {{ $sortIn := $method.SortIn }}
-    func (imp *{{ $receiver }}) {{ $method.Ident }}(
+    func (__imp *{{ $receiver }}) {{ $method.Ident }}(
     {{- range $index, $ident := $sortIn -}}
         {{- $ident }} {{ getRepr (index $method.In $ident) }},
     {{- end -}}
@@ -110,7 +110,7 @@ var (
 
     {{ if isExec $method.SqlxOperation }}
         {{- $tx := printf "tx%s" $method.Ident -}}
-        {{ $tx }}, {{ $err }} := imp.Core.Begin{{ if $method.HasContext }}Tx{{ end }}x({{ if $method.HasContext }}ctx, nil{{ end }})
+        {{ $tx }}, {{ $err }} := __imp.__core.Begin{{ if $method.HasContext }}Tx{{ end }}x({{ if $method.HasContext }}ctx, nil{{ end }})
         if {{ $err }} != nil {
         return {{ range $index, $type := $method.Out -}}
             {{- if lt $index (sub (len $method.Out) 1) -}}
@@ -118,7 +118,7 @@ var (
             {{- end -}}
         {{- end -}} fmt.Errorf("error creating %s transaction: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
         }
-        if !imp.withTx{
+        if !__imp.__withTx{
         defer {{ $tx }}.Rollback()
         }
 
@@ -156,7 +156,7 @@ var (
 
         {{- if $.HasFeature "sqlx/rebind" }}
             {{- /* Rebind must be executed after Count */ -}}
-            {{- $splitSql }} = imp.Core.Rebind({{ $splitSql }})
+            {{- $splitSql }} = __imp.__core.Rebind({{ $splitSql }})
         {{ end }}
 
         {{ if $.HasFeature "sqlx/log" -}}
@@ -181,7 +181,7 @@ var (
         {{ end }}
 
         {{ if $.HasFeature "sqlx/log" -}}
-            if {{ $log }}, {{ $ok }} := imp.Core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); {{ $ok }} {
+            if {{ $log }}, {{ $ok }} := __imp.__core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); {{ $ok }} {
             {{ $log }}.Log({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ quote $method.Ident }}, {{ $splitSql }}, {{ $args }}, time.Since({{ $start }}))
             }
         {{- end }}
@@ -199,7 +199,7 @@ var (
         {{ end -}}
         }
 
-        if !imp.withTx{
+        if !__imp.__withTx{
         if {{ $err }} := {{ $tx }}.Commit(); {{ $err }} != nil {
         return {{ range $index, $type := $method.Out -}}
             {{- if lt $index (sub (len $method.Out) 1) -}}
@@ -214,7 +214,7 @@ var (
         {{ $sqlQuery := printf "sqlQuery%s" $method.Ident -}}
         {{ $sqlQuery }} := strings.TrimSpace({{ $sql }}.String())
         {{- if $.HasFeature "sqlx/rebind" }}
-            {{ $sqlQuery }} = imp.Core.Rebind({{ $sqlQuery }})
+            {{ $sqlQuery }} = __imp.__core.Rebind({{ $sqlQuery }})
         {{ end -}}
         {{- $args := printf "args%s" $method.Ident -}}
         {{ if hasOption ($method.SqlxOptions) "NAMED" }}
@@ -241,7 +241,7 @@ var (
 
         {{ if hasOption ($method.SqlxOptions) "NAMED" }}
             {{ $stmt := printf "stmt%s" $method.Ident }}
-            {{ $stmt }}, {{ $err }} := imp.Core.PrepareNamed{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $sqlQuery }})
+            {{ $stmt }}, {{ $err }} := __imp.__core.PrepareNamed{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $sqlQuery }})
             if {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}
                 {{- if lt $index (sub (len $method.Out) 1) -}}
@@ -251,11 +251,11 @@ var (
             }
             {{ $err }} = {{ $stmt }}.{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}, {{ $args }})
         {{ else }}
-            {{ $err }} = imp.Core.{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}, {{ $sqlQuery }}, {{ $args }}...)
+            {{ $err }} = __imp.__core.{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}, {{ $sqlQuery }}, {{ $args }}...)
         {{ end }}
 
         {{ if $.HasFeature "sqlx/log" -}}
-            if {{ $log }}, {{ $ok }} := imp.Core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); {{ $ok }} {
+            if {{ $log }}, {{ $ok }} := __imp.__core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); {{ $ok }} {
             {{ $log }}.Log({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ quote $method.Ident }}, {{ $sqlQuery }}, {{ $args }}, time.Since({{ $start }}))
             }
         {{- end }}
@@ -282,8 +282,8 @@ var (
 
     func New{{ $.Ident }}FromTx{{ if $.HasFeature "sqlx/log" }}AndLog{{ end }}(core *sqlx.Tx{{ if $.HasFeature "sqlx/log" }}, log interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) } {{ end }}) {{ $.Ident }} {
     return &{{ $impName }}{
-    withTx: true,
-    Core: &{{ $tx }}{
+    __withTx: true,
+    __core: &{{ $tx }}{
     Tx: core,
     {{ if $.HasFeature "sqlx/log" -}}
         log: log,
@@ -318,8 +318,8 @@ var (
     {{- end }}
 
     {{ if $.WithTxContext }}
-        func (imp *{{ $receiver }}) WithTx(ctx context.Context, f func({{ $.Ident }}) error) error {
-        inner, err := imp.Core.BeginTxx(ctx, nil)
+        func (__imp *{{ $receiver }}) WithTx(ctx context.Context, f func({{ $.Ident }}) error) error {
+        inner, err := __imp.__core.BeginTxx(ctx, nil)
         if err != nil {
         return fmt.Errorf("error creating transaction in %s: %w", strconv.Quote("WithTx"), err)
         }
@@ -331,14 +331,14 @@ var (
         }
 
         {{ if $.HasFeature "sqlx/log" -}}
-            if log, ok := imp.Core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); ok {
+            if log, ok := __imp.__core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); ok {
             core.log = log
             }
         {{ end }}
 
         tx := &{{ $impName }}{
-        withTx: true,
-        Core: core,
+        __withTx: true,
+        __core: core,
         }
 
         if err = f(tx); err != nil {
@@ -352,8 +352,8 @@ var (
         return nil
         }
     {{ else }}
-        func (imp *{{ $receiver }}) WithTx(f func({{ $.Ident }}) error) error {
-        inner, err := imp.Core.Beginx()
+        func (__imp *{{ $receiver }}) WithTx(f func({{ $.Ident }}) error) error {
+        inner, err := __imp.__core.Beginx()
         if err != nil {
         return fmt.Errorf("error creating transaction in %s: %w", strconv.Quote("WithTx"), err)
         }
@@ -365,14 +365,14 @@ var (
         }
 
         {{ if $.HasFeature "sqlx/log" -}}
-            if log, ok := imp.Core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); ok {
+            if log, ok := __imp.__core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); ok {
             core.log = log
             }
         {{ end }}
 
         tx := &{{ $impName }}{
-        withTx: true,
-        Core: core,
+        __withTx: true,
+        __core: core,
         }
 
         if err = f(tx); err != nil {
