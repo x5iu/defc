@@ -91,7 +91,6 @@ func (ctx *sqlxContext) MergedImports() (imports []string) {
 		quote("fmt"),
 		quote("strconv"),
 		quote("database/sql"),
-		quote("strings"),
 		quote("context"),
 		quote("text/template"),
 		quote("github.com/jmoiron/sqlx"),
@@ -103,6 +102,7 @@ func (ctx *sqlxContext) MergedImports() (imports []string) {
 
 	if ctx.HasFeature(FeatureSqlxNoRt) {
 		imports = append(imports,
+			quote("strings"),
 			quote("reflect"),
 			quote("sync"),
 			quote("bytes"),

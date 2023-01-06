@@ -109,166 +109,131 @@ var (
     {{- $ok := printf "ok%s" $method.Ident }}
     {{- $start := printf "start%s" $method.Ident }}
 
-    {{ if isExec $method.SqlxOperation }}
-        {{- $tx := printf "tx%s" $method.Ident -}}
-        {{ $tx }}, {{ $err }} := __imp.__core.Begin{{ if $method.HasContext }}Tx{{ end }}x({{ if $method.HasContext }}ctx, nil{{ end }})
-        if {{ $err }} != nil {
-        return {{ range $index, $type := $method.Out -}}
-            {{- if lt $index (sub (len $method.Out) 1) -}}
-                v{{- $index -}}{{- $method.Ident }},
-            {{- end -}}
-        {{- end -}} fmt.Errorf("error creating %s transaction: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
-        }
-        if !__imp.__withTx{
-        defer {{ $tx }}.Rollback()
-        }
+    {{- $tx := printf "tx%s" $method.Ident }}
+    {{ $tx }}, {{ $err }} := __imp.__core.Begin{{ if $method.HasContext }}Tx{{ end }}x({{ if $method.HasContext }}ctx, nil{{ end }})
+    if {{ $err }} != nil {
+    return {{ range $index, $type := $method.Out -}}
+        {{- if lt $index (sub (len $method.Out) 1) -}}
+            v{{- $index -}}{{- $method.Ident }},
+        {{- end -}}
+    {{- end -}} fmt.Errorf("error creating %s transaction: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+    }
+    if !__imp.__withTx{
+    defer {{ $tx }}.Rollback()
+    }
 
-        {{ $offset := printf "offset%s" $method.Ident }}
-        {{ $args := printf "args%s" $method.Ident -}}
-        {{ if hasOption ($method.SqlxOptions) "NAMED" }}
-            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeNamedArgsFunc }}{{ else }}__rt.MergeNamedArgs{{ end }}(map[string]any{
-            {{ range $index, $ident := $sortIn -}}
-                {{ if not (isContextType $ident (index $method.In $ident)) -}}
-                    {{- quote $ident }}: {{ $ident -}},
-                {{ end -}}
-            {{ end }}
-            })
-        {{ else }}
-            {{ $offset }} := 0
-            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}(
-            {{ range $index, $ident := $sortIn -}}
-                {{ if not (isContextType $ident (index $method.In $ident)) -}}
-                    {{- $ident -}},
-                {{ end -}}
-            {{ end }}
-            )
+    {{ $offset := printf "offset%s" $method.Ident }}
+    {{ $args := printf "args%s" $method.Ident -}}
+    {{ if hasOption ($method.SqlxOptions) "NAMED" }}
+        {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeNamedArgsFunc }}{{ else }}__rt.MergeNamedArgs{{ end }}(map[string]any{
+        {{ range $index, $ident := $sortIn -}}
+            {{ if not (isContextType $ident (index $method.In $ident)) -}}
+                {{- quote $ident }}: {{ $ident -}},
+            {{ end -}}
         {{ end }}
+        })
+    {{ else }}
+        {{ $offset }} := 0
+        {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}(
+        {{ range $index, $ident := $sortIn -}}
+            {{ if not (isContextType $ident (index $method.In $ident)) -}}
+                {{- $ident -}},
+            {{ end -}}
+        {{ end }}
+        )
+    {{ end }}
 
-        {{ $splitSql := printf "splitSql%s" $method.Ident }}
-        for _, {{ $splitSql }} := range {{ if $.HasFeature "sqlx/nort" }}{{ $splitFunc }}{{ else }}__rt.Split{{ end }}({{ $sql }}.String(), ";") {
-        {{ $splitSql }} = strings.TrimSpace({{ $splitSql }})
-        if {{ $splitSql }} == "" {
-        continue
-        }
-        {{ $count := printf "count%s" $method.Ident -}}
-        {{ if not (hasOption ($method.SqlxOptions) "NAMED") }}
-            {{ $count }} := {{ if $.HasFeature "sqlx/nort" }}{{ $countFunc }}{{ else }}__rt.Count{{ end }}({{ $splitSql }}, "?")
-        {{ end }}
+    {{ $i := printf "index%s" $method.Ident }}
+    {{ $count := printf "count%s" $method.Ident }}
+    {{ $splitSql := printf "splitSql%s" $method.Ident }}
+    {{ $sqlSlice := printf "sqlSlice%s" $method.Ident }}
+    {{ $sqlSlice }} := {{ if $.HasFeature "sqlx/nort" }}{{ $splitFunc }}{{ else }}__rt.Split{{ end }}({{ $sql }}.String(), ";")
+    for {{ $i }}, {{ $splitSql }} := range {{ $sqlSlice }} {
+    _ = {{ $i }}
+
+    {{ if not (hasOption ($method.SqlxOptions) "NAMED") -}}
+        {{ $count }} := {{ if $.HasFeature "sqlx/nort" }}{{ $countFunc }}{{ else }}__rt.Count{{ end }}({{ $splitSql }}, "?")
+    {{- end }}
+
+    {{- $execResult := printf "v0%s" $method.Ident }}
+    {{ if hasOption ($method.SqlxOptions) "NAMED" -}}
+        {{ $argList := printf "listArgs%s" $method.Ident }}
+        var {{ $argList }} []interface{}
+        {{ $splitSql }}, {{ $argList }}, {{ $err }} = sqlx.Named({{ $splitSql }}, {{ $args }})
+        {{ $splitSql }}, {{ $argList }}, {{ $err }} = sqlx.In({{ $splitSql }}, {{ $argList }}...)
 
         {{- if $.HasFeature "sqlx/rebind" }}
-            {{- /* Rebind must be executed after Count */ -}}
-            {{- $splitSql }} = __imp.__core.Rebind({{ $splitSql }})
+            {{ $splitSql }} = __imp.__core.Rebind({{ $splitSql }})
+        {{ end }}
+
+        {{ if $.HasFeature "sqlx/log" }}
+            {{ $start }} := time.Now()
+        {{- end -}}
+
+        {{ if isExec $method.SqlxOperation }}
+            {{ if gt (len $method.Out) 1 }}{{ $execResult }}{{ else }}_{{ end }}, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $argList }}...)
+        {{ else if isQuery $method.SqlxOperation }}
+            if {{ $i }} < len({{ $sqlSlice }})-1 {
+            _, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $argList }}...)
+            } else {
+            {{ $err }} = {{ $tx }}.{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}, {{ $splitSql }}, {{ $argList }}...)
+            }
         {{ end }}
 
         {{ if $.HasFeature "sqlx/log" -}}
-            {{ $start }} := time.Now()
-        {{- end }}
-
-        {{- $execResult := printf "v0%s" $method.Ident }}
-        {{ if hasOption ($method.SqlxOptions) "NAMED" }}
-            {{ $stmt := printf "stmt%s" $method.Ident }}
-            {{ $stmt }}, {{ $err }} := {{ $tx }}.PrepareNamed{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }})
-            if {{ $err }} != nil {
-            return {{ range $index, $type := $method.Out -}}
-                {{- if lt $index (sub (len $method.Out) 1) -}}
-                    v{{- $index -}}{{- $method.Ident }},
-                {{- end -}}
-            {{- end -}} fmt.Errorf("error creating %s prepare statement: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+            if {{ $log }}, {{ $ok }} := __imp.__core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); {{ $ok }} {
+            {{ $log }}.Log({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ quote $method.Ident }}, {{ $splitSql }}, {{ $argList }}, time.Since({{ $start }}))
             }
+        {{- end }}
+    {{ else }}
+        {{- if $.HasFeature "sqlx/rebind" -}}
+            {{ $splitSql }} = __imp.__core.Rebind({{ $splitSql }})
+        {{ end }}
 
-            {{ if gt (len $method.Out) 1 }}{{ $execResult }}{{ else }}_{{ end }}, {{ $err }} = {{ $stmt }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $args }})
-        {{ else }}
+        {{- if $.HasFeature "sqlx/log" }}
+            {{ $start }} := time.Now()
+        {{- end -}}
+
+        {{ if isExec $method.SqlxOperation }}
             {{ if gt (len $method.Out) 1 }}{{ $execResult }}{{ else }}_{{ end }}, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
+        {{ else if isQuery $method.SqlxOperation }}
+            if {{ $i }} < len({{ $sqlSlice }})-1 {
+            _, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
+            } else {
+            {{ $err }} = {{ $tx }}.{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}, {{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
+            }
         {{ end }}
 
         {{ if $.HasFeature "sqlx/log" -}}
             if {{ $log }}, {{ $ok }} := __imp.__core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); {{ $ok }} {
-            {{ $log }}.Log({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ quote $method.Ident }}, {{ $splitSql }}, {{ $args }}, time.Since({{ $start }}))
+            {{ $log }}.Log({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ quote $method.Ident }}, {{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}], time.Since({{ $start }}))
             }
         {{- end }}
-
-        if {{ $err }} != nil {
-        return {{ range $index, $type := $method.Out -}}
-            {{- if lt $index (sub (len $method.Out) 1) -}}
-                v{{- $index -}}{{- $method.Ident }},
-            {{- end -}}
-        {{- end -}} fmt.Errorf("error executing %s sql: \n\n%s\n\n%w", strconv.Quote({{ quote $method.Ident }}), {{ $splitSql }}, {{ $err }})
-        }
-
-        {{ if not (hasOption ($method.SqlxOptions) "NAMED") }}
-            {{ $offset }} += {{ $count }}
-        {{ end -}}
-        }
-
-        if !__imp.__withTx{
-        if {{ $err }} := {{ $tx }}.Commit(); {{ $err }} != nil {
-        return {{ range $index, $type := $method.Out -}}
-            {{- if lt $index (sub (len $method.Out) 1) -}}
-                v{{- $index -}}{{- $method.Ident }},
-            {{- end -}}
-        {{- end -}} fmt.Errorf("error committing %s transaction: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
-        }
-        }
     {{ end }}
 
-    {{ if isQuery $method.SqlxOperation }}
-        {{ $sqlQuery := printf "sqlQuery%s" $method.Ident -}}
-        {{ $sqlQuery }} := strings.TrimSpace({{ $sql }}.String())
-        {{- if $.HasFeature "sqlx/rebind" }}
-            {{ $sqlQuery }} = __imp.__core.Rebind({{ $sqlQuery }})
-        {{ end -}}
-        {{- $args := printf "args%s" $method.Ident -}}
-        {{ if hasOption ($method.SqlxOptions) "NAMED" }}
-            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeNamedArgsFunc }}{{ else }}__rt.MergeNamedArgs{{ end }}(map[string]any{
-            {{ range $index, $ident := $sortIn -}}
-                {{ if not (isContextType $ident (index $method.In $ident)) -}}
-                    {{- quote $ident }}: {{ $ident -}},
-                {{ end -}}
-            {{ end }}
-            })
-        {{ else }}
-            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}(
-            {{ range $index, $ident := $sortIn -}}
-                {{ if not (isContextType $ident (index $method.In $ident)) -}}
-                    {{- $ident -}},
-                {{ end -}}
-            {{ end }}
-            )
-        {{ end }}
+    if {{ $err }} != nil {
+    return {{ range $index, $type := $method.Out -}}
+        {{- if lt $index (sub (len $method.Out) 1) -}}
+            v{{- $index -}}{{- $method.Ident }},
+        {{- end -}}
+    {{- end -}} fmt.Errorf("error executing %s sql: \n\n%s\n\n%w", strconv.Quote({{ quote $method.Ident }}), {{ $splitSql }}, {{ $err }})
+    }
 
-        {{ if $.HasFeature "sqlx/log" -}}
-            {{ $start }} := time.Now()
-        {{- end }}
+    {{- if not (hasOption ($method.SqlxOptions) "NAMED") }}
 
-        {{ if hasOption ($method.SqlxOptions) "NAMED" }}
-            {{ $stmt := printf "stmt%s" $method.Ident }}
-            {{ $stmt }}, {{ $err }} := __imp.__core.PrepareNamed{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $sqlQuery }})
-            if {{ $err }} != nil {
-            return {{ range $index, $type := $method.Out -}}
-                {{- if lt $index (sub (len $method.Out) 1) -}}
-                    v{{- $index -}}{{- $method.Ident }},
-                {{- end -}}
-            {{- end -}} fmt.Errorf("error creating %s prepare statement: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
-            }
-            {{ $err }} = {{ $stmt }}.{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}, {{ $args }})
-        {{ else }}
-            {{ $err }} = __imp.__core.{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}, {{ $sqlQuery }}, {{ $args }}...)
-        {{ end }}
+        {{ $offset }} += {{ $count }}
+    {{ end -}}
+    }
 
-        {{ if $.HasFeature "sqlx/log" -}}
-            if {{ $log }}, {{ $ok }} := __imp.__core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); {{ $ok }} {
-            {{ $log }}.Log({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ quote $method.Ident }}, {{ $sqlQuery }}, {{ $args }}, time.Since({{ $start }}))
-            }
-        {{- end }}
-
-        if  {{ $err }} != nil {
-        return {{ range $index, $type := $method.Out -}}
-            {{- if lt $index (sub (len $method.Out) 1) -}}
-                v{{- $index -}}{{- $method.Ident }},
-            {{- end -}}
-        {{- end -}} fmt.Errorf("error executing %s sql: \n\n%s\n\n%w", strconv.Quote({{ quote $method.Ident }}), {{ $sqlQuery }}, {{ $err }})
-        }
-    {{ end }}
+    if !__imp.__withTx{
+    if {{ $err }} := {{ $tx }}.Commit(); {{ $err }} != nil {
+    return {{ range $index, $type := $method.Out -}}
+        {{- if lt $index (sub (len $method.Out) 1) -}}
+            v{{- $index -}}{{- $method.Ident }},
+        {{- end -}}
+    {{- end -}} fmt.Errorf("error committing %s transaction: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+    }
+    }
 
     return {{ range $index, $type := $method.Out -}}
         {{- if lt $index (sub (len $method.Out) 1) -}}
