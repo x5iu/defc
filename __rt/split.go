@@ -36,8 +36,10 @@ func splitTokens(line string) (tokens []string) {
 
 	for i := 0; i < len(line); i++ {
 		switch ch := line[i]; ch {
-		case '*', ';', '+', '-', '/', '=':
-			if !(doubleQuoted || singleQuoted) {
+		case ';', '?':
+			if doubleQuoted || singleQuoted {
+				arg = append(arg, ch)
+			} else {
 				if len(arg) > 0 {
 					tokens = append(tokens, string(arg))
 				}
