@@ -57,7 +57,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:           "defc",
-		Version:       "v1.6.0",
+		Version:       "v1.6.1",
 		SilenceUsage:  false,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{

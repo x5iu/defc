@@ -36,7 +36,15 @@ func splitTokens(line string) (tokens []string) {
 
 	for i := 0; i < len(line); i++ {
 		switch ch := line[i]; ch {
-		case '*', ';', '+', '-', '/', '=', '\t', '\n', '\r':
+		case '\r':
+			// \r and \n should stay together
+			if i < len(line)-1 && line[i+1] == '\n' {
+				tokens = append(tokens, "\r\n")
+				i++
+			} else {
+				tokens = append(tokens, "\r")
+			}
+		case '*', ';', '+', '-', '/', '=', '\t', '\n':
 			if !(doubleQuoted || singleQuoted) {
 				if len(arg) > 0 {
 					tokens = append(tokens, string(arg))
