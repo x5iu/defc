@@ -56,20 +56,28 @@ var (
 
 var (
 	defc = &cobra.Command{
-		Use:     "defc",
-		Version: "v1.5.4",
+		Use:           "defc",
+		Version:       "v1.5.5",
+		SilenceUsage:  false,
+		SilenceErrors: true,
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDefaultCmd:   true,
+			DisableNoDescFlag:   true,
+			DisableDescriptions: true,
+			HiddenDefaultCmd:    true,
+		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-			if genMode := modeMap[mode]; !genMode.IsValid() {
-				return fmt.Errorf("invalid mode %q, available modes are: [%s]", mode, printStrings(validModes))
-			}
-			if err = checkFeatures(features); err != nil {
-				return err
+			if cmd.Flags().NFlag() == 0 && len(args) == 0 {
+				defer os.Exit(0)
+				return cmd.Usage()
 			}
 			return nil
 		},
-		SilenceUsage:  true,
-		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			if err = checkFlags(); err != nil {
+				return err
+			}
+
 			var (
 				pwd  = os.Getenv(EnvPWD)
 				file = os.Getenv(EnvGoFile)
@@ -110,6 +118,10 @@ var (
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			if err = checkFlags(); err != nil {
+				return err
+			}
+
 			file := args[0]
 
 			schema, err := os.ReadFile(file)
@@ -162,6 +174,22 @@ func save(name string, code []byte) error {
 	return nil
 }
 
+func checkFlags() (err error) {
+	if len(mode) == 0 {
+		return fmt.Errorf("`-m/--mode` required, available modes are: [%s]", printStrings(validModes))
+	}
+	if len(output) == 0 {
+		return fmt.Errorf("`-o/--output` required")
+	}
+	if genMode := modeMap[mode]; !genMode.IsValid() {
+		return fmt.Errorf("invalid mode %q, available modes are: [%s]", mode, printStrings(validModes))
+	}
+	if err = checkFeatures(features); err != nil {
+		return err
+	}
+	return nil
+}
+
 func checkFeatures(features []string) error {
 	if len(features) == 0 {
 		return nil
@@ -196,6 +224,7 @@ func printStrings(strings []string) string {
 
 func init() {
 	defc.AddCommand(generate)
+	defc.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	defc.PersistentFlags().StringVarP(&mode, "mode", "m", "", fmt.Sprintf("mode=[%s]", printStrings(validModes)))
 	defc.PersistentFlags().StringVarP(&output, "output", "o", "", "output file name")
