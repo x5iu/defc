@@ -42,6 +42,13 @@ __withTx bool
 __core {{ $coreInterface }}
 }
 
+func (__imp *{{ $receiver }}) Close() error {
+if closer, ok := __imp.__core.( interface{ Close() error } ); ok {
+return closer.Close()
+}
+return nil
+}
+
 {{ $bindVarsFunc := (printf "__%sBindVarsFunc" $.Ident) }}
 {{ $additionalFuncs := $.AdditionalFuncs }}
 var (
