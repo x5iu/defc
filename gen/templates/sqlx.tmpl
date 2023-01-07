@@ -358,8 +358,6 @@ type {{ $coreInterface }} interface {
 {{ if $.HasFeature "sqlx/rebind" }} Rebind(query string) string {{ end }}
 Beginx() (*sqlx.Tx, error)
 BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error)
-PrepareNamed(query string) (*sqlx.NamedStmt, error)
-PrepareNamedContext(ctx context.Context, query string) (*sqlx.NamedStmt, error)
 Exec(query string, args ...interface{}) (sql.Result, error)
 ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 Get(dest interface{}, query string, args ...interface{}) error
