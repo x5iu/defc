@@ -21,6 +21,7 @@ const (
 	sqlxMethodWithTx = "WithTx"
 
 	sqlxCmdInclude = "#INCLUDE"
+	sqlxCmdScript  = "#SCRIPT"
 
 	FeatureSqlxLog    = "sqlx/log"
 	FeatureSqlxRebind = "sqlx/rebind"
@@ -71,7 +72,7 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 	}
 
 	if err := ctx.genSqlxCode(w); err != nil {
-		return fmt.Errorf("genApiCode: \n\n%#v\n\n%w", ctx, err)
+		return fmt.Errorf("genSqlxCode: %w", err)
 	}
 
 	return nil
@@ -215,16 +216,35 @@ func readHeader(header string, pwd string) (string, error) {
 	for scanner.Scan() {
 		text := scanner.Text()
 		args := splitArgs(text)
+		// parse #include command which should be placed in a new line
 		if len(args) == 2 && toUpper(args[0]) == sqlxCmdInclude {
-			path := args[1]
+			// unquote path pattern if it is quoted
+			path := unquote(args[1])
 			if !isAbs(path) {
 				path = join(pwd, path)
 			}
-			content, err := read(path)
+			// get filenames that match the pattern
+			matches, err := glob(path)
 			if err != nil {
-				return "", fmt.Errorf("os.ReadFile(%s): %w", quote(path), err)
+				return "", err
 			}
-			buf.WriteString(string(content))
+			// read each file into buffer
+			for _, path = range matches {
+				if !isAbs(path) {
+					path = join(pwd, path)
+				}
+				content, err := read(path)
+				if err != nil {
+					return "", fmt.Errorf("os.ReadFile(%s): %w", quote(path), err)
+				}
+				buf.WriteString(string(content))
+			}
+		} else if len(args) > 1 && toUpper(args[0]) == sqlxCmdScript {
+			output, err := runCommand(args[1:])
+			if err != nil {
+				return "", err
+			}
+			buf.WriteString(output)
 		} else {
 			buf.WriteString(text)
 		}

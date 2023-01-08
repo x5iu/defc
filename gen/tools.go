@@ -8,7 +8,9 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -39,6 +41,7 @@ var (
 	contains   = strings.Contains
 	join       = path.Join
 	isAbs      = path.IsAbs
+	glob       = filepath.Glob
 	read       = os.ReadFile
 	list       = os.ReadDir
 )
@@ -114,45 +117,78 @@ func fmtNode(node ast.Node) string {
 }
 
 func splitArgs(line string) (args []string) {
+	line = trimSpace(line)
+	if len(line) == 0 {
+		return nil
+	}
+
 	var (
-		CurlyBraceStack int
-		Quoted          bool
-		Arg             []byte
+		parenthesisStack int
+		curlyBraceStack  int
+		doubleQuoted     bool
+		singleQuoted     bool
+		backQuoted       bool
+		arg              []byte
 	)
 
 	for i := 0; i < len(line); i++ {
 		switch ch := line[i]; ch {
 		case ' ':
-			if Quoted || CurlyBraceStack > 0 {
-				Arg = append(Arg, ch)
-			} else if len(Arg) > 0 {
-				args = append(args, string(Arg))
-				Arg = Arg[:0]
+			if doubleQuoted || singleQuoted || backQuoted ||
+				parenthesisStack > 0 || curlyBraceStack > 0 {
+				arg = append(arg, ch)
+			} else if len(arg) > 0 {
+				args = append(args, string(arg))
+				arg = arg[:0]
 			}
 		case '"':
-			if i > 0 && line[i-1] == '\\' {
-				Arg = append(Arg, ch)
+			if (i > 0 && line[i-1] == '\\') || singleQuoted || backQuoted {
+				arg = append(arg, ch)
 			} else {
-				Quoted = !Quoted
-				Arg = append(Arg, ch)
+				doubleQuoted = !doubleQuoted
+				arg = append(arg, ch)
 			}
+		case '\'':
+			if (i > 0 && line[i-1] == '\\') || doubleQuoted || backQuoted {
+				arg = append(arg, ch)
+			} else {
+				singleQuoted = !singleQuoted
+				arg = append(arg, ch)
+			}
+		case '`':
+			if (i > 0 && line[i-1] == '\\') || doubleQuoted || singleQuoted {
+				arg = append(arg, ch)
+			} else {
+				backQuoted = !backQuoted
+				arg = append(arg, ch)
+			}
+		case '(':
+			if !(doubleQuoted || singleQuoted || backQuoted) {
+				parenthesisStack++
+			}
+			arg = append(arg, ch)
+		case ')':
+			if !(doubleQuoted || singleQuoted || backQuoted) {
+				parenthesisStack--
+			}
+			arg = append(arg, ch)
 		case '{':
-			if !Quoted {
-				CurlyBraceStack++
+			if !(doubleQuoted || singleQuoted || backQuoted) {
+				curlyBraceStack++
 			}
-			Arg = append(Arg, ch)
+			arg = append(arg, ch)
 		case '}':
-			if !Quoted {
-				CurlyBraceStack--
+			if !(doubleQuoted || singleQuoted || backQuoted) {
+				curlyBraceStack--
 			}
-			Arg = append(Arg, ch)
+			arg = append(arg, ch)
 		default:
-			Arg = append(Arg, ch)
+			arg = append(arg, ch)
 		}
 	}
 
-	if len(Arg) > 0 {
-		args = append(args, string(Arg))
+	if len(arg) > 0 {
+		args = append(args, string(arg))
 	}
 
 	return args
@@ -256,4 +292,59 @@ func parseBuildTags(src []byte) (tags []string) {
 		}
 	}
 	return tags
+}
+
+func unquote(quoted string) (unquoted string) {
+	if len(quoted) == 0 {
+		return ""
+	}
+	if (hasPrefix(quoted, "\"") && hasSuffix(quoted, "\"")) ||
+		(hasPrefix(quoted, "'") && hasSuffix(quoted, "'")) ||
+		isBackQuoted(quoted) {
+		return quoted[1 : len(quoted)-1]
+	}
+	return quoted
+}
+
+func isBackQuoted(s string) bool {
+	return hasPrefix(s, "`") && hasSuffix(s, "`")
+}
+
+func runCommand(args []string) (string, error) {
+	assert(len(args) > 0, "empty command")
+	repl := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if isBackQuoted(arg) {
+			if innerArgs := splitArgs(unquote(arg)); len(innerArgs) > 0 {
+				innerOutput, err := runCommand(innerArgs)
+				if err != nil {
+					return "", err
+				}
+				repl = append(repl, innerOutput)
+			}
+		} else if (hasPrefix(arg, "$(") && hasSuffix(arg, ")")) ||
+			(hasPrefix(arg, "${") && hasSuffix(arg, "}")) {
+			if innerArgs := splitArgs(arg[2 : len(arg)-1]); len(innerArgs) > 0 {
+				innerOutput, err := runCommand(innerArgs)
+				if err != nil {
+					return "", err
+				}
+				repl = append(repl, innerOutput)
+			}
+		} else {
+			repl = append(repl, unquote(arg))
+		}
+	}
+	if len(repl) == 0 {
+		return "", nil
+	}
+	var output bytes.Buffer
+	command := exec.Command(repl[0], repl[1:]...)
+	command.Stdout = &output
+	command.Stderr = os.Stderr
+	if err := command.Run(); err != nil {
+		return "", err
+	}
+	return trimSpace(output.String()), nil
 }

@@ -85,7 +85,7 @@ func (ctx *apiContext) Build(w io.Writer) error {
 	}
 
 	if err := ctx.genApiCode(w); err != nil {
-		return fmt.Errorf("genApiCode: \n\n%#v\n\n%w", ctx, err)
+		return fmt.Errorf("genApiCode: %w", err)
 	}
 
 	return nil
