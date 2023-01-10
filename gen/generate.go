@@ -117,7 +117,7 @@ func toBuilder(mode Mode, cfg *Config) (Builder, error) {
 	switch mode {
 	case ModeApi:
 		const (
-			ResponseIdent = "Response"
+			ResponseIdent = "response"
 			ResponseType  = "T"
 		)
 
@@ -131,7 +131,7 @@ func toBuilder(mode Mode, cfg *Config) (Builder, error) {
 
 		hasResponse := func(schemas []*Schema) bool {
 			for _, schema := range schemas {
-				if getIdent(schema.Meta) == ResponseIdent {
+				if isResponse(getIdent(schema.Meta)) {
 					return true
 				}
 			}
