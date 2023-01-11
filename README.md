@@ -229,6 +229,19 @@ type Query interface {
 
 `#include` 的另一个最佳实践为，如果你的 SQL 总是包含一些共用的查询条件，或是查询字段，你可以将他们写在一个单独的 `.sql` 文件中，并使用 `#include` 在不同方法中引入，这样你就不用重复编写这些通用的查询语句，并且只需要更新 `.sql` 文件即可更新所有引入了该 `.sql` 文件的方法 Schema。
 
+从 `v1.9.0` 开始，`defc` 添加了 `#script` 指令，其使用方式类似于 `#include`，但支持调用外部命令来生成 SQL 语句。例如，你可以像这样在编译期调用一个 Python 脚本来生成对应的 SQL：
+
+```go
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=query.go
+type Query interface {
+  // CreateUser EXEC
+  // #script python gen_sql.py
+  CreateUser(ctx context.Context, user *User) (sql.Result, error)
+}
+```
+
+`#script` 指令会把命令的标准输出 `stdout` 作为模板内容编译进生成的文件中（这也意味着生成的是模板代码，支持模板语法）。
+
 ## api mode
 
 `api` 模式下，Schema 的定义与 `sqlx` 模式大体相同，一个基本的 Schema 定义如下所示：
@@ -257,6 +270,8 @@ type Service interface {
 与 `sqlx` 的 Schema 的第一个不同点在于，`api` 的 Schema 需要定义两个辅助方法，分别是 `Inner` 和 `Response`。
 
 `Inner` 方法返回的类型，将作为 Schema 的依赖，并且 Schema 的构造方法 `New*` 将会把 `Inner` 方法返回值的类型作为入参来完成依赖注入；通常而言，我们会把接口调用中使用的 host、key、secret、token 等信息放置在 `Inner` 方法的返回值中。
+
+*注：从 `v1.5.1` 开始，`Response` 和 `Inner` 方法不再有大小写格式要求，也可以写成 `response` 和 `inner` 的形式以避免被调用方错误地使用，通常情况下，建议将其写成小写形式以避免暴露这两个内部使用的方法给调用方。*
 
 `Response` 方法返回的类型，将用于构造 HTTP 请求的返回值，`Response` 方法的返回值必须实现以下接口：
 
