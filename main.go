@@ -57,7 +57,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:           "defc",
-		Version:       "v1.9.2",
+		Version:       "v1.9.3",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{
@@ -139,12 +139,12 @@ var (
 				if err = toml.Unmarshal(schema, &cfg); err != nil {
 					return fmt.Errorf("toml.Unmarshal: %w", err)
 				}
-			case ".yaml":
+			case ".yaml", ".yml":
 				if err = yaml.Unmarshal(schema, &cfg); err != nil {
 					return fmt.Errorf("yaml.Unmarshal: %w", err)
 				}
 			default:
-				return fmt.Errorf("unsupport schema extension %q", ext)
+				return fmt.Errorf("%s currently does not support schema extension %q", cmd.Root().Name(), ext)
 			}
 
 			cfg.Features = append(cfg.Features, features...)
