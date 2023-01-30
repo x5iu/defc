@@ -79,7 +79,17 @@ func isPointer(node ast.Node) bool {
 func isSlice(node ast.Node) bool {
 	node = getNode(node)
 	typ, ok := node.(*ast.ArrayType)
-	return ok && typ.Len == nil
+	if !ok {
+		return false
+	}
+
+	// []byte is a special slice, equivalent to type string
+	eltIsByte := false
+	if elt, ok := typ.Elt.(*ast.Ident); ok {
+		eltIsByte = elt.Name == "byte"
+	}
+
+	return typ.Len == nil && !eltIsByte
 }
 
 func checkInput(method *ast.FuncType) bool {
