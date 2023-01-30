@@ -85,7 +85,7 @@ type Query interface {
 这是注释的第一行内容，固定为注释的第一行，格式为：方法名、查询方式、及可选的查询参数：
 
 ```
-// <NAME> <CMD> <ARG>
+// <NAME> <CMD> <ARG>...
 ```
 
 其中 `<NAME>` 为方法名，请与当前接口名称保持一致（这是一种约定，并没有做强制要求，意味着对于 `<NAME>`，你随便打一个单词都没有问题，但一定要有，不能为空；
@@ -96,6 +96,8 @@ type Query interface {
 - `QUERY`：对应 `sqlx` 中的 `Query`/`Get` 函数/方法
 
 `<ARG>` 为可选参数，仅支持一个值 `NAMED`（同样大小写无关），如果未提供该参数，则使用 `sqlx` 的普通查询方式，即 `Exec`/`Query`/`Get` 函数/方法；若提供 `NAMED` 参数，则使用 `sqlx` 中的 `PrepareNamed` 函数/方法构建 `sqlx.NamedStmt`，再调用 `sqlx.NamedStmt` 中的 `Exec`/`Query`/`Get` 函数/方法。
+
+从 `v1.9.4` 开始，`<ARG>` 额外支持两个值 `MANY`/`ONE`，仅支持 `<CMD>` 值为 `QUERY` 时使用。`MANY` 代表使用 `sqlx.Select` 方法完成查询，查询结果应被储存至切片（slice）中；`ONE` 代表使用 `sqlx.Get` 方法完成查询，查询结果应被储存至结构体、基本类型或实现了 `sql.Scanner` 接口的类型中。另外，从 `v1.9.4` 开始，`[]byte` 类型将被视作和 `string` 一样的单独类型，而非切片类型，使用 `[]byte` 类型作为返回值而不指定 `MANY`/`ONE` 参数时，`defc` 将默认选择 `sqlx.Get` 方法进行查询。
 
 ### SQL 语句定义
 
