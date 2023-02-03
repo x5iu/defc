@@ -346,6 +346,8 @@ var (
         fmt.Errorf("error converting '{{ $method.Ident }}' response: %w", {{ $err }})
         }
 
+        {{ $addr }}.Reset() {{ if ne $method.Header "" }}
+            {{ $header }}.Reset(){{ end }}
         {{ $responseBody }}.Reset()
 
         if {{ $err }} = {{ $response }}.Err(); {{ $err }} != nil {
