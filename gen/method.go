@@ -64,7 +64,7 @@ func (method *Method) MethodHTTP() string {
 	args := method.MetaArgs()
 	if len(args) >= 2 {
 		for _, httpMethod := range availableMethods {
-			if toUpper(args[len(args)-2]) == httpMethod {
+			if toUpper(args[1]) == httpMethod {
 				return httpMethod
 			}
 		}
@@ -120,8 +120,18 @@ func (method *Method) HasContext() bool {
 	return false
 }
 
+// ReturnSlice should only be used with '--mode=api' arg
 func (method *Method) ReturnSlice() bool {
-	return len(method.Out) > 1 && isSlice(method.Out[0])
+	var many bool
+	if args := method.MetaArgs(); len(args) >= 3 {
+		for _, arg := range args[2:] {
+			if toUpper(arg) == "MANY" {
+				many = true
+				break
+			}
+		}
+	}
+	return many || (len(method.Out) > 1 && isSlice(method.Out[0]))
 }
 
 func inspectMethod(node ast.Node, source []byte) (method *Method) {

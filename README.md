@@ -334,6 +334,21 @@ type Service interface {
 }
 ```
 
+从 `v1.9.6` 开始，你可以在 `<MEHOTD>` 和 `<URL>` 之间添加一个可选参数 `MANY`（类似于 `sqlx` 模式中的 `MANY`），用于告知 `defc` 该方法返回值为切片类型，这会让 `defc` 为该方法生成分页查询代码：
+
+```go
+type Users []*User
+
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=api --output=service.go
+type Service interface {
+  Inner() *Inner
+  Response() *Response
+  
+  // GetUsers GET MANY {{ $.Service.Host }}/users?name={{ $.name }}&page={{ page }}
+  GetUsers(ctx context.Context, name string) (Users, error)
+}
+```
+
 
 
 ### 日志记录
