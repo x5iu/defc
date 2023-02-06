@@ -374,6 +374,10 @@ var (
 
         {{ if $method.ReturnSlice }}
             {{ $values }} = append({{ $values }}, v0{{- $method.Ident }}...)
+            {{ $setTotalCount := (printf "setTotalCount%s" $method.Ident) -}}
+            if {{ $setTotalCount }}, {{ $ok }} := {{ $response }}.(interface{ SetTotalCount(total int) }); {{ $ok }} {
+            {{ $setTotalCount }}.SetTotalCount(len({{ $values }}))
+            }
             if {{ $response }}.Break() {
             break loop
             }
