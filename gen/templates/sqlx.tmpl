@@ -49,7 +49,7 @@ return closer.Close()
 return nil
 }
 
-{{ $bindVarsFunc := (printf "__%sBindVarsFunc" $.Ident) }}
+{{ $bindVarsFunc := (printf "__%sBindVars" $.Ident) }}
 {{ $additionalFuncs := $.AdditionalFuncs }}
 var (
 {{ range $index, $method := $.Methods }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
@@ -60,6 +60,7 @@ var (
 {{ $putBufferFunc := (printf "__%sPutBuffer" $.Ident) }}
 {{ $mergeArgsFunc := (printf "__%sMergeArgs" $.Ident) }}
 {{ $mergeNamedArgsFunc := (printf "__%sMergeNamedArgs" $.Ident) }}
+{{ $inFunc := (printf "__%sIn" $.Ident) }}
 {{ $countFunc := (printf "__%sCount" $.Ident) }}
 {{ $splitFunc := (printf "__%sSplit" $.Ident) }}
 {{ range $index, $method := $.Methods }}
@@ -129,9 +130,11 @@ var (
     defer {{ $tx }}.Rollback()
     }
 
-    {{ $offset := printf "offset%s" $method.Ident }}
+    {{ $query := printf "query%s" $method.Ident }}
+    {{ $query }} := {{ $sql }}.String()
+    {{- $offset := printf "offset%s" $method.Ident -}}
     {{ $args := printf "args%s" $method.Ident -}}
-    {{ if hasOption ($method.SqlxOptions) "NAMED" }}
+    {{- if hasOption ($method.SqlxOptions) "NAMED" }}
         {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeNamedArgsFunc }}{{ else }}__rt.MergeNamedArgs{{ end }}(map[string]any{
         {{ range $index, $ident := $sortIn -}}
             {{ if not (isContextType $ident (index $method.In $ident)) -}}
@@ -139,37 +142,71 @@ var (
             {{ end -}}
         {{ end }}
         })
-    {{ else }}
+    {{- else }}
         {{ $offset }} := 0
-        {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}(
-        {{ range $index, $ident := $sortIn -}}
-            {{ if not (isContextType $ident (index $method.In $ident)) -}}
-                {{- $ident -}},
-            {{ end -}}
+        {{- if $.HasFeature "sqlx/in" }}
+            {{ $query }}, {{ $args }}, {{ $err }} := {{ if $.HasFeature "sqlx/nort" }}{{ $inFunc }}{{ else }}__rt.In{{ end }}({{ $query }}, []any{
+            {{ range $index, $ident := $sortIn -}}
+                {{ if not (isContextType $ident (index $method.In $ident)) -}}
+                    {{- $ident -}},
+                {{ end -}}
+            {{ end }}
+            })
+            if {{ $err }} != nil {
+            return {{ range $index, $type := $method.Out -}}
+                {{- if lt $index (sub (len $method.Out) 1) -}}
+                    v{{- $index -}}{{- $method.Ident }},
+                {{- end -}}
+            {{- end -}} fmt.Errorf("error building %s query: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+            }
+        {{- else }}
+            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}(
+            {{ range $index, $ident := $sortIn -}}
+                {{ if not (isContextType $ident (index $method.In $ident)) -}}
+                    {{- $ident -}},
+                {{ end -}}
+            {{ end }}
+            )
         {{ end }}
-        )
     {{ end }}
 
     {{ $i := printf "index%s" $method.Ident }}
     {{ $count := printf "count%s" $method.Ident }}
     {{ $splitSql := printf "splitSql%s" $method.Ident }}
     {{ $sqlSlice := printf "sqlSlice%s" $method.Ident }}
-    {{ $sqlSlice }} := {{ if $.HasFeature "sqlx/nort" }}{{ $splitFunc }}{{ else }}__rt.Split{{ end }}({{ $sql }}.String(), ";")
+    {{ $sqlSlice }} := {{ if $.HasFeature "sqlx/nort" }}{{ $splitFunc }}{{ else }}__rt.Split{{ end }}({{ $query }}, ";")
     for {{ $i }}, {{ $splitSql }} := range {{ $sqlSlice }} {
     _ = {{ $i }}
-
-    {{ if not (hasOption ($method.SqlxOptions) "NAMED") -}}
-        {{ $count }} := {{ if $.HasFeature "sqlx/nort" }}{{ $countFunc }}{{ else }}__rt.Count{{ end }}({{ $splitSql }}, "?")
-    {{- end }}
 
     {{- $execResult := printf "v0%s" $method.Ident }}
     {{ if hasOption ($method.SqlxOptions) "NAMED" -}}
         {{ $argList := printf "listArgs%s" $method.Ident }}
         var {{ $argList }} []interface{}
+
         {{ $splitSql }}, {{ $argList }}, {{ $err }} = sqlx.Named({{ $splitSql }}, {{ $args }})
-        {{ $splitSql }}, {{ $argList }}, {{ $err }} = sqlx.In({{ $splitSql }}, {{ $argList }}...)
+        if {{ $err }} != nil {
+        return {{ range $index, $type := $method.Out -}}
+            {{- if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }},
+            {{- end -}}
+        {{- end -}} fmt.Errorf("error building %s query: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+        }
+
+        {{ if $.HasFeature "sqlx/in" }}
+            {{ $splitSql }}, {{ $argList }}, {{ $err }} = {{ if $.HasFeature "sqlx/nort" }}{{ $inFunc }}{{ else }}__rt.In{{ end }}({{ $splitSql }}, {{ $argList }})
+        {{ else -}}
+            {{ $splitSql }}, {{ $argList }}, {{ $err }} = sqlx.In({{ $splitSql }}, {{ $argList }}...)
+        {{ end -}}
+        if {{ $err }} != nil {
+        return {{ range $index, $type := $method.Out -}}
+            {{- if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }},
+            {{- end -}}
+        {{- end -}} fmt.Errorf("error building %s query: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+        }
 
         {{- if $.HasFeature "sqlx/rebind" }}
+
             {{ $splitSql }} = __imp.__core.Rebind({{ $splitSql }})
         {{ end }}
 
@@ -193,7 +230,8 @@ var (
             }
         {{- end }}
     {{ else }}
-        {{- if $.HasFeature "sqlx/rebind" -}}
+        {{ $count }} := {{ if $.HasFeature "sqlx/nort" }}{{ $countFunc }}{{ else }}__rt.Count{{ end }}({{ $splitSql }}, "?")
+        {{ if $.HasFeature "sqlx/rebind" -}}
             {{ $splitSql }} = __imp.__core.Rebind({{ $splitSql }})
         {{ end }}
 
@@ -494,6 +532,34 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
     }
 
     {{ $splitTokensFunc := (printf "__%sSplitTokens" $.Ident) }}
+    func {{ $inFunc }}(query string, args []any) (string, []any, error) {
+    tokens := {{ $splitTokensFunc }}(query)
+    targetArgs := make([]any, 0, len(args))
+    targetQuery := make([]string, 0, len(tokens))
+    n := 0
+    for _, token := range tokens {
+    if n >= len(args) {
+    return "", nil, errors.New("number of BindVars exceeds arguments")
+    }
+    switch token {
+    case "?":
+    nested := {{ $mergeArgsFunc }}(args[n])
+    if len(nested) == 0 {
+    return "", nil, errors.New("empty slice passed to 'in' query")
+    }
+    targetArgs = append(targetArgs, nested...)
+    targetQuery = append(targetQuery, {{ $bindVarsFunc }}(len(nested)))
+    n++
+    default:
+    targetQuery = append(targetQuery, token)
+    }
+    }
+    if n < len(args) {
+    return "", nil, errors.New("number of bindVars less than number arguments")
+    }
+    return strings.Join(targetQuery, " "), targetArgs, nil
+    }
+
     func {{ $countFunc }}(sql string, ch string) (n int) {
     tokens := {{ $splitTokensFunc }}(sql)
     for _, token := range tokens {

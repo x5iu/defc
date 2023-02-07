@@ -549,6 +549,30 @@ if e, ok := err.(__rt.ResponseError); ok {
 
 *注：当且仅当 HTTP 响应码不为 2xx 时才会返回 `ResponseError` 错误，其他场景返回的错误将不会实现 `ResponseError` 接口。*
 
+### `sqlx/in` 
+
+使用 `sqlx/in` 特性将产生以下两项变动：
+
+1. 使用 `defc` 实现的 `In` 函数替代 `sqlx.In` 函数（`sqlx.In` 函数应用于 `NAMED` 选项被启用时，重新计算占位符、生成 SQL 语句并绑定查询参数），与 `sqlx.In` 函数不同的点在于，`defc` 实现的 `In` 函数除了会解构切片类型参数外，还会额外地解构实现了 `ToArgs` 接口的参数，其应用场景在于，当使用 `NAMED` 查询时，当参数类型为切片或 `ToArgs` 类型时，`defc` 会重新计算占位符数量并将其与解构的参数绑定，常用于 `IN` 查询；例如，下面的例子中，仅使用 `:ids` 占位符即可完成一次 `IN` 查询：
+
+	```sql
+	SELECT * FROM `user` WHERE `id` IN (:ids);
+	```
+
+2. 对于未启用 `NAMED` 选项的方法，将会在 SQL 执行前使用 `defc` 实现的 `In` 函数重新计算占位符、生成 SQL 并绑定查询参数，这意味着使用者可以无需借助 `bindvars` 函数即可完成多个参数占位符绑定，通过以下例子感受具体差异：
+
+	```sql
+	-- 不启用 sqlx/in 特性
+	SELECT * FROM `user` WHERE `id` IN ({{ bindvars $.ids }});
+	
+	-- 启用 sqlx/in 特性
+	SELECT * FROM `user` WHERE `id` IN (?); -- ? 占位符绑定参数 ids
+	```
+
+	
+
+**注：请谨慎地组合使用 `sqlx/in` 特性和 `bindvars` 函数（在模板中），错误地在 `sqlx/in` 特性下使用 `bindvars` 函数将会导致不可预期的后果；但由于 `bindvars` 仍然有其特定使用场景（例如快速生成 N 个占位符），因此并未强制在 `sqlx/in` 特性下禁用 `bindvars` 函数**
+
 ## 对一些常见问题的解答
 
 ### `--features` 参数如何实现传递多个值

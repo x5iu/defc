@@ -2,6 +2,7 @@ package __rt
 
 import (
 	"database/sql/driver"
+	"errors"
 	"reflect"
 	"strings"
 )
@@ -102,4 +103,32 @@ func BindVars(data any) string {
 	}
 
 	return strings.Join(bindVars, ", ")
+}
+
+func In(query string, args []any) (string, []any, error) {
+	tokens := splitTokens(query)
+	targetArgs := make([]any, 0, len(args))
+	targetQuery := make([]string, 0, len(tokens))
+	n := 0
+	for _, token := range tokens {
+		if n >= len(args) {
+			return "", nil, errors.New("number of BindVars exceeds arguments")
+		}
+		switch token {
+		case "?":
+			nested := MergeArgs(args[n])
+			if len(nested) == 0 {
+				return "", nil, errors.New("empty slice passed to 'in' query")
+			}
+			targetArgs = append(targetArgs, nested...)
+			targetQuery = append(targetQuery, BindVars(len(nested)))
+			n++
+		default:
+			targetQuery = append(targetQuery, token)
+		}
+	}
+	if n < len(args) {
+		return "", nil, errors.New("number of bindVars less than number arguments")
+	}
+	return strings.Join(targetQuery, " "), targetArgs, nil
 }

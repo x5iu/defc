@@ -31,6 +31,7 @@ var (
 		gen.FeatureApiPage,
 		gen.FeatureApiError,
 		gen.FeatureApiNoRt,
+		gen.FeatureSqlxIn,
 		gen.FeatureSqlxLog,
 		gen.FeatureSqlxRebind,
 		gen.FeatureSqlxNoRt,
@@ -57,7 +58,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:           "defc",
-		Version:       "v1.10.0",
+		Version:       "v1.11.0",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{

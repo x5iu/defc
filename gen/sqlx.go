@@ -23,6 +23,7 @@ const (
 	sqlxCmdInclude = "#INCLUDE"
 	sqlxCmdScript  = "#SCRIPT"
 
+	FeatureSqlxIn     = "sqlx/in"
 	FeatureSqlxLog    = "sqlx/log"
 	FeatureSqlxRebind = "sqlx/rebind"
 	FeatureSqlxNoRt   = "sqlx/nort"
@@ -103,6 +104,7 @@ func (ctx *sqlxContext) MergedImports() (imports []string) {
 
 	if ctx.HasFeature(FeatureSqlxNoRt) {
 		imports = append(imports,
+			quote("errors"),
 			quote("strings"),
 			quote("reflect"),
 			quote("sync"),
