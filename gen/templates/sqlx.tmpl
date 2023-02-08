@@ -483,6 +483,8 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
     }
     } else if _, ok = arg.(driver.Valuer); ok {
     namedMap[name] = arg
+    } else if _, ok = arg.({{ $toArgs }}); ok {
+    namedMap[name] = arg
     } else if rv.Kind() == reflect.Map {
     iter := rv.MapRange()
     for iter.Next() {

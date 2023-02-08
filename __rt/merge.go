@@ -57,6 +57,8 @@ func MergeNamedArgs(argsMap map[string]any) map[string]any {
 			}
 		} else if _, ok = arg.(driver.Valuer); ok {
 			namedMap[name] = arg
+		} else if _, ok = arg.(ToArgs); ok {
+			namedMap[name] = arg
 		} else if rv.Kind() == reflect.Map {
 			iter := rv.MapRange()
 			for iter.Next() {
