@@ -111,11 +111,11 @@ func In(query string, args []any) (string, []any, error) {
 	targetQuery := make([]string, 0, len(tokens))
 	n := 0
 	for _, token := range tokens {
-		if n >= len(args) {
-			return "", nil, errors.New("number of BindVars exceeds arguments")
-		}
 		switch token {
 		case "?":
+			if n >= len(args) {
+				return "", nil, errors.New("number of BindVars exceeds arguments")
+			}
 			nested := MergeArgs(args[n])
 			if len(nested) == 0 {
 				return "", nil, errors.New("empty slice passed to 'in' query")

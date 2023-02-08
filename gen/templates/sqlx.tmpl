@@ -538,11 +538,11 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
     targetQuery := make([]string, 0, len(tokens))
     n := 0
     for _, token := range tokens {
+    switch token {
+    case "?":
     if n >= len(args) {
     return "", nil, errors.New("number of BindVars exceeds arguments")
     }
-    switch token {
-    case "?":
     nested := {{ $mergeArgsFunc }}(args[n])
     if len(nested) == 0 {
     return "", nil, errors.New("empty slice passed to 'in' query")
