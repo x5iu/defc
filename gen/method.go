@@ -122,16 +122,17 @@ func (method *Method) HasContext() bool {
 
 // ReturnSlice should only be used with '--mode=api' arg
 func (method *Method) ReturnSlice() bool {
-	var many bool
 	if args := method.MetaArgs(); len(args) >= 3 {
 		for _, arg := range args[2:] {
-			if toUpper(arg) == "MANY" {
-				many = true
-				break
+			switch toUpper(arg) {
+			case "ONE":
+				return false
+			case "MANY":
+				return true
 			}
 		}
 	}
-	return many || (len(method.Out) > 1 && isSlice(method.Out[0]))
+	return len(method.Out) > 1 && isSlice(method.Out[0])
 }
 
 func inspectMethod(node ast.Node, source []byte) (method *Method) {
