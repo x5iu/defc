@@ -244,6 +244,28 @@ type Query interface {
 
 `#script` 指令会把命令的标准输出 `stdout` 作为模板内容编译进生成的文件中（这也意味着生成的是模板代码，支持模板语法）。
 
+从 `v1.11.5` 开始，为了增加 `#script` 指令的可读性和便利性，新增如下规则：
+
+- 若当前行以空白字符或 `\t` 开头，则将该行视作上一行的续接内容，`defc` 会将该行拼接至上一行行尾，与上一行使用空格分隔；
+- 行与行之间的空白行将会被舍弃，例如 `\n\n` 将会被替换成 `\n`；
+
+若想应用该规则，可以使用 `/* */` 类型的注释方式，例如：
+
+```go
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=query.go
+type Query interface {
+  // CreateUser EXEC
+  /*
+    #script
+      python3
+        -c "print(open('sql/sql.tmpl').read())"
+  */
+  CreateUser(ctx context.Context, user *User) (sql.Result, error)
+}
+```
+
+
+
 ## api mode
 
 `api` 模式下，Schema 的定义与 `sqlx` 模式大体相同，一个基本的 Schema 定义如下所示：
