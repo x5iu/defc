@@ -231,14 +231,16 @@ func readHeader(header string, pwd string) (string, error) {
 			}
 			next = scanner.Text()
 			if len(next) > 0 && (next[0] == ' ' || next[0] == '\t') {
-				text += " " + strings.TrimSpace(next)
+				text += " " + trimSpace(next)
 				next = "" // next is consumed here
 			} else {
 				break
 			}
 		}
 
+		text = trimSpace(text)
 		args := splitArgs(text)
+
 		// parse #include/#script command which should be placed in a new line
 		if len(args) == 2 && toUpper(args[0]) == sqlxCmdInclude {
 			// unquote path pattern if it is quoted
