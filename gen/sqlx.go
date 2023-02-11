@@ -215,10 +215,31 @@ inspectType:
 func readHeader(header string, pwd string) (string, error) {
 	var buf bytes.Buffer
 	scanner := bufio.NewScanner(strings.NewReader(header))
-	for scanner.Scan() {
-		text := scanner.Text()
+	var text string
+	for {
+		if text == "" {
+			if !scanner.Scan() {
+				break
+			}
+			text = scanner.Text()
+		}
+
+		var next string
+		for {
+			if !scanner.Scan() {
+				break
+			}
+			next = scanner.Text()
+			if len(next) > 0 && (next[0] == ' ' || next[0] == '\t') {
+				text += " " + strings.TrimSpace(next)
+				next = "" // next is consumed here
+			} else {
+				break
+			}
+		}
+
 		args := splitArgs(text)
-		// parse #include command which should be placed in a new line
+		// parse #include/#script command which should be placed in a new line
 		if len(args) == 2 && toUpper(args[0]) == sqlxCmdInclude {
 			// unquote path pattern if it is quoted
 			path := unquote(args[1])
@@ -251,6 +272,9 @@ func readHeader(header string, pwd string) (string, error) {
 			buf.WriteString(text)
 		}
 		buf.WriteString("\r\n")
+
+		// now next becomes the current line
+		text = next
 	}
 	return buf.String(), nil
 }

@@ -143,7 +143,7 @@ func splitArgs(line string) (args []string) {
 
 	for i := 0; i < len(line); i++ {
 		switch ch := line[i]; ch {
-		case ' ':
+		case ' ', '\t', '\n', '\r':
 			if doubleQuoted || singleQuoted || backQuoted ||
 				parenthesisStack > 0 || curlyBraceStack > 0 {
 				arg = append(arg, ch)
