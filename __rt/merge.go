@@ -31,7 +31,7 @@ func MergeArgs(args ...any) []any {
 			dst = append(dst, MergeArgs(toArgs.ToArgs()...)...)
 		} else if _, ok = arg.(driver.Valuer); ok {
 			dst = append(dst, arg)
-		} else if (rv.Kind() == reflect.Slice && rv.Type().AssignableTo(bytesType)) ||
+		} else if (rv.Kind() == reflect.Slice && !rv.Type().AssignableTo(bytesType)) ||
 			rv.Kind() == reflect.Array {
 			for i := 0; i < rv.Len(); i++ {
 				dst = append(dst, MergeArgs(rv.Index(i).Interface())...)

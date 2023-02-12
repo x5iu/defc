@@ -457,7 +457,7 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
     dst = append(dst, {{ $mergeArgsFunc }}(toArgs.ToArgs()...)...)
     } else if _, ok = arg.(driver.Valuer); ok {
     dst = append(dst, arg)
-    } else if (rv.Kind() == reflect.Slice && rv.Type().AssignableTo({{ $bytesType }})) ||
+    } else if (rv.Kind() == reflect.Slice && !rv.Type().AssignableTo({{ $bytesType }})) ||
     rv.Kind() == reflect.Array{
     for i := 0; i < rv.Len(); i++ {
     dst = append(dst, {{ $mergeArgsFunc }}(rv.Index(i).Interface())...)
