@@ -31,7 +31,7 @@ func MergeArgs(args ...any) []any {
 			dst = append(dst, MergeArgs(toArgs.ToArgs()...)...)
 		} else if _, ok = arg.(driver.Valuer); ok {
 			dst = append(dst, arg)
-		} else if (rv.Kind() == reflect.Slice && rv.Type() != bytesType) ||
+		} else if (rv.Kind() == reflect.Slice && rv.Type().AssignableTo(bytesType)) ||
 			rv.Kind() == reflect.Array {
 			for i := 0; i < rv.Len(); i++ {
 				dst = append(dst, MergeArgs(rv.Index(i).Interface())...)
@@ -88,7 +88,7 @@ func BindVars(data any) string {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		n = int(rv.Uint())
 	case reflect.Slice:
-		if rv.Type() == bytesType {
+		if rv.Type().AssignableTo(bytesType) {
 			n = 1
 		} else {
 			n = rv.Len()
