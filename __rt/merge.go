@@ -28,15 +28,13 @@ func MergeArgs(args ...any) []any {
 		if _, notAnArg := arg.(NotAnArg); notAnArg {
 			continue
 		} else if toArgs, ok := arg.(ToArgs); ok {
-			for _, v := range toArgs.ToArgs() {
-				dst = append(dst, v)
-			}
+			dst = append(dst, MergeArgs(toArgs.ToArgs()...)...)
 		} else if _, ok = arg.(driver.Valuer); ok {
 			dst = append(dst, arg)
 		} else if (rv.Kind() == reflect.Slice && rv.Type() != bytesType) ||
 			rv.Kind() == reflect.Array {
 			for i := 0; i < rv.Len(); i++ {
-				dst = append(dst, rv.Index(i).Interface())
+				dst = append(dst, MergeArgs(rv.Index(i).Interface())...)
 			}
 		} else {
 			dst = append(dst, arg)

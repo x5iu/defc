@@ -454,15 +454,13 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
     if _, notAnArg := arg.({{ $notAnArg }}); notAnArg {
     continue
     } else if toArgs, ok := arg.({{ $toArgs }}); ok {
-    for _, v := range toArgs.ToArgs() {
-    dst = append(dst, v)
-    }
+    dst = append(dst, {{ $mergeArgsFunc }}(toArgs.ToArgs()...)...)
     } else if _, ok = arg.(driver.Valuer); ok {
     dst = append(dst, arg)
     } else if (rv.Kind() == reflect.Slice && rv.Type() != {{ $bytesType }}) ||
     rv.Kind() == reflect.Array{
     for i := 0; i < rv.Len(); i++ {
-    dst = append(dst, rv.Index(i).Interface())
+    dst = append(dst, {{ $mergeArgsFunc }}(rv.Index(i).Interface())...)
     }
     } else {
     dst = append(dst, arg)
