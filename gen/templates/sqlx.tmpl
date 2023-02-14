@@ -52,7 +52,9 @@ return nil
 {{ $bindVarsFunc := (printf "__%sBindVars" $.Ident) }}
 {{ $additionalFuncs := $.AdditionalFuncs }}
 var (
-{{ range $index, $method := $.Methods }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
+_ = (*template.Template)(nil)
+
+{{ range $index, $method := $.Methods }} {{ if not (hasOption ($method.SqlxOptions) "CONST") }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }})) {{ end }}
 {{ end }}
 )
 
@@ -88,32 +90,39 @@ var (
     {{- $err }} error
     )
 
-    {{ $sqlTmpl := printf "sqlTmpl%s" $method.Ident }}
+    {{ $query := printf "query%s" $method.Ident }}
+    {{ if not (hasOption ($method.SqlxOptions) "CONST") }}
+        {{ $sqlTmpl := printf "sqlTmpl%s" $method.Ident }}
 
-    {{ $sql := printf "sql%s" $method.Ident }}
-    {{ if $.HasFeature "sqlx/nort" }}
-        {{ $sql }} := {{ $getBufferFunc }}()
-        defer {{ $putBufferFunc }}({{ $sql }})
-        defer {{ $sql }}.Reset()
+        {{ $sql := printf "sql%s" $method.Ident }}
+        {{ if $.HasFeature "sqlx/nort" }}
+            {{ $sql }} := {{ $getBufferFunc }}()
+            defer {{ $putBufferFunc }}({{ $sql }})
+            defer {{ $sql }}.Reset()
+        {{ else }}
+            {{ $sql }} := __rt.GetBuffer()
+            defer __rt.PutBuffer({{ $sql }})
+            defer {{ $sql }}.Reset()
+        {{ end }}
+
+        if {{ $err }} = {{ $sqlTmpl }}.Execute({{ $sql }}, map[string]any{
+        {{ range $index, $ident := $sortIn -}}
+            {{- quote $ident }}: {{ $ident -}},
+        {{ end }}
+        }); {{ $err }} != nil {
+        return {{ range $index, $type := $method.Out -}}
+            {{- if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }},
+            {{- end -}}
+        {{- end -}} fmt.Errorf("error executing %s template: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+        }
+
+        {{ $query }} := {{ $sql }}.String()
     {{ else }}
-        {{ $sql }} := __rt.GetBuffer()
-        defer __rt.PutBuffer({{ $sql }})
-        defer {{ $sql }}.Reset()
+        {{ $query }} := {{ quote (readHeader $method.Header) }}
     {{ end }}
 
-    if {{ $err }} = {{ $sqlTmpl }}.Execute({{ $sql }}, map[string]any{
-    {{ range $index, $ident := $sortIn -}}
-        {{- quote $ident }}: {{ $ident -}},
-    {{ end }}
-    }); {{ $err }} != nil {
-    return {{ range $index, $type := $method.Out -}}
-        {{- if lt $index (sub (len $method.Out) 1) -}}
-            v{{- $index -}}{{- $method.Ident }},
-        {{- end -}}
-    {{- end -}} fmt.Errorf("error executing %s template: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
-    }
-
-    {{- $log := printf "log%s" $method.Ident }}
+    {{ $log := printf "log%s" $method.Ident }}
     {{- $ok := printf "ok%s" $method.Ident }}
     {{- $start := printf "start%s" $method.Ident }}
 
@@ -130,11 +139,9 @@ var (
     defer {{ $tx }}.Rollback()
     }
 
-    {{ $query := printf "query%s" $method.Ident }}
-    {{ $query }} := {{ $sql }}.String()
-    {{- $offset := printf "offset%s" $method.Ident -}}
+    {{ $offset := printf "offset%s" $method.Ident -}}
     {{ $args := printf "args%s" $method.Ident -}}
-    {{- if hasOption ($method.SqlxOptions) "NAMED" }}
+    {{ if hasOption ($method.SqlxOptions) "NAMED" }}
         {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeNamedArgsFunc }}{{ else }}__rt.MergeNamedArgs{{ end }}(map[string]any{
         {{ range $index, $ident := $sortIn -}}
             {{ if not (isContextType $ident (index $method.In $ident)) -}}
