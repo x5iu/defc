@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"sort"
-	"strings"
 	"text/template"
 
 	_ "embed"
@@ -385,11 +384,11 @@ func (ctx *apiContext) genApiCode(w io.Writer) error {
 				}
 			},
 			"headerHasBody": func(header string) bool {
-				if index := strings.Index(header, "\r\n\r\n"); index != -1 {
-					return len(trimSpace(header[index+4:])) > 0
+				if idx := index(header, "\r\n\r\n"); idx != -1 {
+					return len(trimSpace(header[idx+4:])) > 0
 				}
-				if index := strings.Index(header, "\n\n"); index != -1 {
-					return len(trimSpace(header[index+2:])) > 0
+				if idx := index(header, "\n\n"); idx != -1 {
+					return len(trimSpace(header[idx+2:])) > 0
 				}
 				return false
 			},

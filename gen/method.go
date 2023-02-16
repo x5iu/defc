@@ -56,10 +56,39 @@ func (method *Method) TmplURL() string {
 	return ""
 }
 
+var minusRe = regexp.MustCompile(`[ \t]*?-[ \t]*`)
+
+// TmplHeader should only be used with '--mode=api' arg
+func (method *Method) TmplHeader() string {
+	var (
+		header = method.Header
+		body   string
+	)
+	if idx := index(header, "\r\n\r\n"); idx != -1 {
+		body = trimSpace(header[idx+4:])
+		header = trimSpace(header[:idx])
+	}
+	if idx := index(header, "\n\n"); idx != -1 {
+		body = trimSpace(header[idx+2:])
+		header = trimSpace(header[:idx])
+	}
+	header = minusRe.ReplaceAllString(header, "")
+	if len(body) > 0 {
+		header += "\r\n\r\n" + body
+	}
+	return header
+}
+
 var availableMethods = []string{
 	http.MethodGet,
+	http.MethodHead,
 	http.MethodPost,
 	http.MethodPut,
+	http.MethodPatch,
+	http.MethodDelete,
+	http.MethodConnect,
+	http.MethodOptions,
+	http.MethodTrace,
 }
 
 // MethodHTTP should only be used with '--mode=api' arg

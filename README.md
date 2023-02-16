@@ -373,7 +373,18 @@ type Service interface {
 }
 ```
 
+从 `v1.12.2` 开始，现在针对 `/* */` 类型的注释，可以使用 `-` 来完整地书写 Header（和 Body），例如：
 
+```go
+/*
+	- Content-Type: application/json
+	- X-Request-Id: {{ RequestID }}
+	
+	{{ $.body }}
+*/
+```
+
+（`-` 横杠的作用是：去除 `-` 前后的空格字符，包括 `-` 本身）
 
 ### 日志记录
 
