@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"go/ast"
 	"net/http"
+	"regexp"
 )
 
 // Method represents a method declaration in an interface
@@ -33,8 +34,10 @@ func (method *Method) SortIn() []string {
 	return method.OrderedIn
 }
 
+var backslashRe = regexp.MustCompile(`\\[ \t\r]*?\n[ \t\r]*`)
+
 func (method *Method) MetaArgs() []string {
-	rawArgs := splitArgs(method.Meta)
+	rawArgs := splitArgs(backslashRe.ReplaceAllString(method.Meta, ""))
 	args := make([]string, 0, len(rawArgs))
 	for i := 0; i < len(rawArgs); i++ {
 		if rawArgs[i] != "" && rawArgs[i] != " " {
