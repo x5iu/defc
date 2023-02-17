@@ -72,9 +72,9 @@ func (method *Method) TmplHeader() string {
 		body = trimSpace(header[idx+2:])
 		header = trimSpace(header[:idx])
 	}
-	header = minusRe.ReplaceAllString(header, "")
+	header = minusRe.ReplaceAllString(header, "") + "\r\n\r\n"
 	if len(body) > 0 {
-		header += "\r\n\r\n" + body
+		header += body
 	}
 	return header
 }
