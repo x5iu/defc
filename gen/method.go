@@ -56,7 +56,7 @@ func (method *Method) TmplURL() string {
 	return ""
 }
 
-var minusRe = regexp.MustCompile(`[ \t]*?-[ \t]*`)
+var minusRe = regexp.MustCompile(`(?m)^[ \t]*?-[ \t]*`)
 
 // TmplHeader should only be used with '--mode=api' arg
 func (method *Method) TmplHeader() string {
