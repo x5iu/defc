@@ -32,8 +32,8 @@ type {{ $impName }}{{ $.GenericsRepr true }} struct{
 {{ $additionalFuncs := $.AdditionalFuncs }}
 var (
 {{ range $index, $method := $.Methods }} {{ if and (not (and $method.ReturnSlice ($.HasFeature "api/page"))) (not (isInner $method.Ident)) (not (isResponse $method.Ident)) }}
-    {{ printf "addrTmpl%s" $method.Ident }} = template.Must(template.New("Address{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote ($method.TmplURL) }}))
-    {{ if ne $method.Header "" -}} {{ printf "headerTmpl%s" $method.Ident }} = template.Must(template.New("Header{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote $method.TmplHeader }})) {{ end }} {{ end }} {{ end }}
+    {{ printf "addrTmpl%s" $method.Ident }} = template.Must(template.New("Address{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote ($method.TmplURL) }})) {{ if ne $method.Header "" }}
+        {{ printf "headerTmpl%s" $method.Ident }} = template.Must(template.New("Header{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote $method.TmplHeader }})) {{ end }} {{ end }} {{ end }}
 )
 
 {{ $getBufferFunc := (printf "__%sGetBuffer" $.Ident) }}

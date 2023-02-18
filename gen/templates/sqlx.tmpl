@@ -54,8 +54,8 @@ return nil
 var (
 _ = (*template.Template)(nil)
 
-{{ range $index, $method := $.Methods }} {{ if not (hasOption ($method.SqlxOptions) "CONST") }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }})) {{ end }}
-{{ end }}
+{{ range $index, $method := $.Methods }} {{ if not (hasOption ($method.SqlxOptions) "CONST") }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
+{{ end }}{{ end }}
 )
 
 {{ $getBufferFunc := (printf "__%sGetBuffer" $.Ident) }}
