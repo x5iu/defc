@@ -34,6 +34,7 @@ var (
 	trimSpace  = strings.TrimSpace
 	hasPrefix  = strings.HasPrefix
 	hasSuffix  = strings.HasSuffix
+	split      = strings.Split
 	concat     = strings.Join
 	toUpper    = strings.ToUpper
 	index      = strings.Index

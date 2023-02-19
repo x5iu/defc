@@ -386,6 +386,26 @@ type Service interface {
 
 （`-` 横杠的作用是：去除 `-` 前后的空格字符，包括 `-` 本身）
 
+从 `v1.13.0` 开始，你可以在 `<MEHOTD>` 和 `<URL>` 之间添加一个可选参数 `Scan(expr...)`，类似函数调用，用于向 `defc` 指明将方法入参中的某个参数加入到 `ScanValues` 参数列表中（参数位置在返回值之前），一个常见的场景为，某个接口返回的数据类型并非固定格式，而我们无法在定义 Schema 阶段就推断出返回值类型，因此需要将最终类型通过方法入参的形式传入（类似 `database/sql` 中的 `Scan` 方法），例如：
+
+```go
+type Object interface {
+  Type() string
+  ID() string
+}
+
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=api --output=service.go
+type Service interface {
+  Inner() *Inner
+  Response() *Response
+  
+  // GetObject GET Scan(obj) {{ $.Service.Host }}/api/{{ $.obj.Type }}/{{ $.obj.ID }}
+  GetObject(ctx context.Context, obj Object) error
+}
+```
+
+
+
 ### 日志记录
 
 与 `sqlx` 一样，如果你想要记录请求日志，那么请添加 `--features=api/log` 特性并为 `Inner` 的返回值类型实现 `Log` 接口，`Log` 接口的定义如下：

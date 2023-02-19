@@ -152,6 +152,20 @@ func (method *Method) HasContext() bool {
 	return false
 }
 
+// ExtraScan should only be used with '--mode=api' arg
+func (method *Method) ExtraScan() []string {
+	if args := method.MetaArgs(); len(args) >= 3 {
+		extra := make([]string, 0, 2)
+		for _, arg := range args[2:] {
+			if len(arg) > 6 && toUpper(arg[0:5]) == "SCAN(" && arg[len(arg)-1] == ')' {
+				extra = append(extra, split(arg[5:len(arg)-1], ",")...)
+			}
+		}
+		return extra
+	}
+	return nil
+}
+
 // ReturnSlice should only be used with '--mode=api' arg
 func (method *Method) ReturnSlice() bool {
 	if args := method.MetaArgs(); len(args) >= 3 {

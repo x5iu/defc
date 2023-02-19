@@ -359,11 +359,16 @@ var (
         fmt.Errorf("error returned from '{{ $method.Ident }}' response: %w", {{ $err }})
         }
 
-        if {{ $err }} = {{ $response }}.ScanValues({{ range $index, $type := $method.Out -}}
+        if {{ $err }} = {{ $response }}.ScanValues(
+        {{- range $index, $expr := $method.ExtraScan -}}
+            {{ $expr }},
+        {{- end -}}
+        {{ range $index, $type := $method.Out -}}
             {{- if lt $index (sub (len $method.Out) 1) -}}
                 {{ if not (isPointer $type) }}&{{ end }}v{{- $index -}}{{- $method.Ident }},
             {{- end -}}
-        {{- end -}}); {{ $err }} != nil {
+        {{- end -}}
+        ); {{ $err }} != nil {
         return {{ range $index, $type := $method.Out -}}
             {{- if lt $index (sub (len $method.Out) 1) -}}
                 v{{- $index -}}{{- $method.Ident }},
