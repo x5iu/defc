@@ -107,8 +107,10 @@ var (
         {{- $headerTmpl := printf "headerTmpl%s" $method.Ident -}}
         {{- if $method.ReturnSlice }}
             var (
-            {{ $type := index $method.Out 0 -}}
-            {{ $values }} = make({{ getRepr $type }}, 0, 10)
+            {{ if gt (len $method.Out) 1 -}}
+                {{ $type := index $method.Out 0 -}}
+                {{ $values }} = make({{ getRepr $type }}, 0, 10)
+            {{- end }}
             {{- if $.HasFeature "api/page" }}
                 {{ $n }}    = 0
                 {{ $page }} = func() int {
@@ -378,11 +380,17 @@ var (
         }
 
         {{ if $method.ReturnSlice }}
-            {{ $values }} = append({{ $values }}, v0{{- $method.Ident }}...)
-            {{ $setTotalCount := (printf "setTotalCount%s" $method.Ident) -}}
-            if {{ $setTotalCount }}, {{ $ok }} := {{ $response }}.(interface{ SetTotalCount(total int) }); {{ $ok }} {
-            {{ $setTotalCount }}.SetTotalCount(len({{ $values }}))
-            }
+            {{ if gt (len $method.Out) 1 }}
+                {{ $values }} = append({{ $values }}, {{ range $index, $type := $method.Out -}}
+                    {{- if and (eq $index 0) (lt $index (sub (len $method.Out) 1)) }}
+                        v{{ $index }}{{- $method.Ident }}...
+                    {{- end -}}
+                {{- end -}})
+                {{ $setTotalCount := (printf "setTotalCount%s" $method.Ident) -}}
+                if {{ $setTotalCount }}, {{ $ok }} := {{ $response }}.(interface{ SetTotalCount(total int) }); {{ $ok }} {
+                {{ $setTotalCount }}.SetTotalCount(len({{ $values }}))
+                }
+            {{ end }}
             if {{ $response }}.Break() {
             break loop
             }
@@ -403,7 +411,7 @@ var (
                     {{- end -}}
                     },
                     {{ range $index, $type := $method.Out -}}
-                        {{- if eq $index 0 }}
+                        {{- if and (eq $index 0) (lt $index (sub (len $method.Out) 1)) }}
                             {{- $values -}},
                         {{- else if lt $index (sub (len $method.Out) 1) -}}
                             v{{- $index -}}{{- $method.Ident }},
@@ -415,7 +423,7 @@ var (
             {{- end }}
 
             return {{ range $index, $type := $method.Out -}}
-                {{- if eq $index 0 }}
+                {{- if and (eq $index 0) (lt $index (sub (len $method.Out) 1)) }}
                     {{- $values -}},
                 {{- else if lt $index (sub (len $method.Out) 1) -}}
                     v{{- $index -}}{{- $method.Ident }},
