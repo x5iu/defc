@@ -186,6 +186,7 @@ _ = (*template.Template)(nil)
     _ = {{ $i }}
 
     {{- $execResult := printf "v0%s" $method.Ident }}
+    {{- $singleScan := $method.SingleScan }}
     {{ if hasOption ($method.SqlxOptions) "NAMED" -}}
         {{ $argList := printf "listArgs%s" $method.Ident }}
         var {{ $argList }} []interface{}
@@ -227,7 +228,7 @@ _ = (*template.Template)(nil)
             if {{ $i }} < len({{ $sqlSlice }})-1 {
             _, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $argList }}...)
             } else {
-            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}, {{ $splitSql }}, {{ $argList }}...)
+            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}, {{ $splitSql }}, {{ $argList }}...)
             }
         {{ end }}
 
@@ -252,7 +253,7 @@ _ = (*template.Template)(nil)
             if {{ $i }} < len({{ $sqlSlice }})-1 {
             _, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
             } else {
-            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}, {{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
+            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}, {{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
             }
         {{ end }}
 

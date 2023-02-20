@@ -166,6 +166,21 @@ func (method *Method) ExtraScan() []string {
 	return nil
 }
 
+// SingleScan should only be used with '--mode=sqlx' arg
+func (method *Method) SingleScan() string {
+	if args := method.MetaArgs(); len(args) >= 3 {
+		for _, opt := range args[2:] {
+			if len(opt) > 6 && toUpper(opt[0:5]) == "SCAN(" && opt[len(opt)-1] == ')' {
+				expressions := split(opt[5:len(opt)-1], ",")
+				for _, expr := range expressions {
+					return expr
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // ReturnSlice should only be used with '--mode=api' arg
 func (method *Method) ReturnSlice() bool {
 	if args := method.MetaArgs(); len(args) >= 3 {

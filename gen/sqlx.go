@@ -59,10 +59,17 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 				quote(method.Ident))
 		}
 
-		if len(method.Out) > 2 {
-			return fmt.Errorf("%s method expects 2 returned value at most, got %d",
-				quote(method.Ident),
-				len(method.Out))
+		if method.SingleScan() != "" {
+			if len(method.Out) != 1 {
+				return fmt.Errorf("%s method expects only error returned value when `scan(expr)` option has been specified",
+					quote(method.Ident))
+			}
+		} else {
+			if len(method.Out) > 2 {
+				return fmt.Errorf("%s method expects 2 returned value at most, got %d",
+					quote(method.Ident),
+					len(method.Out))
+			}
 		}
 
 		if method.Ident == sqlxMethodWithTx {
