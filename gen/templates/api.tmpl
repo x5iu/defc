@@ -246,7 +246,7 @@ var (
         {{- $request := printf "request%s" $method.Ident -}}
         {{- $httpMethod := $method.MethodHTTP }}
         {{- if httpMethodHasBody $httpMethod }}
-            {{- if headerHasBody $method.Header  }}
+            {{- if headerHasBody $method.TmplHeader }}
                 {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, {{ $bufReader }})
             {{ else }}
                 {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, {{- range $index, $ident := $sortIn -}}
