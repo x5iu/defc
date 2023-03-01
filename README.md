@@ -406,6 +406,17 @@ type Service interface {
 }
 ```
 
+补充：从 `v1.12.0` 开始，你可以对 `<URL>` 使用反斜杠 `\\` 进行换行操作，例如：
+
+```go
+/*
+  GetUser GET ONE
+    {{ $.Service.Host }}/user/{{ $.id }}?\
+      field1=value1&\
+      field2=value2
+*/
+```
+
 
 
 ### 日志记录
