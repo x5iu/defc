@@ -182,7 +182,7 @@ func (ctx apiContext) MergedImports() (imports []string) {
 		quote("text/template"),
 	}
 
-	if ctx.HasFeature(FeatureApiLog) {
+	if ctx.HasFeature(FeatureApiLog) || ctx.HasFeature(FeatureApiLogx) {
 		imports = append(imports, quote("time"))
 	}
 
