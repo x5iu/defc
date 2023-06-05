@@ -143,6 +143,15 @@ func (ctx *apiContext) HasHeader() bool {
 	return false
 }
 
+func (ctx *apiContext) HasBody() bool {
+	for _, method := range ctx.Methods {
+		if httpMethodHasBody(method.MethodHTTP()) && headerHasBody(method.TmplHeader()) {
+			return true
+		}
+	}
+	return false
+}
+
 func (ctx *apiContext) HasInner() bool {
 	return hasInner(ctx.Methods)
 }
@@ -199,6 +208,9 @@ func (ctx apiContext) MergedImports() (imports []string) {
 	if ctx.HasHeader() {
 		imports = append(imports, quote("bufio"))
 		imports = append(imports, quote("net/textproto"))
+		if ctx.HasBody() && ctx.HasFeature(FeatureApiLogx) {
+			imports = append(imports, quote("bytes"))
+		}
 	}
 
 	if importContext(ctx.Methods) {
@@ -358,6 +370,27 @@ func isInner(ident string) bool {
 	return toUpper(ident) == apiMethodInner
 }
 
+func httpMethodHasBody(method string) bool {
+	switch method {
+	case http.MethodGet:
+		return false
+	case http.MethodPost, http.MethodPut, http.MethodPatch:
+		return true
+	default:
+		return false
+	}
+}
+
+func headerHasBody(header string) bool {
+	if idx := index(header, "\r\n\r\n"); idx != -1 {
+		return len(trimSpace(header[idx+4:])) > 0
+	}
+	if idx := index(header, "\n\n"); idx != -1 {
+		return len(trimSpace(header[idx+2:])) > 0
+	}
+	return false
+}
+
 //go:embed templates/api.tmpl
 var apiTemplate string
 
@@ -365,35 +398,18 @@ func (ctx *apiContext) genApiCode(w io.Writer) error {
 	tmpl, err := template.
 		New("defc(api)").
 		Funcs(template.FuncMap{
-			"quote":         quote,
-			"isPointer":     isPointer,
-			"indirect":      indirect,
-			"importContext": importContext,
-			"sub":           func(x, y int) int { return x - y },
-			"getRepr":       func(node ast.Node) string { return ctx.Doc.Repr(node) },
-			"methodResp":    ctx.MethodResponse,
-			"methodInner":   ctx.MethodInner,
-			"isResponse":    isResponse,
-			"isInner":       isInner,
-			"httpMethodHasBody": func(method string) bool {
-				switch method {
-				case http.MethodGet:
-					return false
-				case http.MethodPost, http.MethodPut, http.MethodPatch:
-					return true
-				default:
-					return false
-				}
-			},
-			"headerHasBody": func(header string) bool {
-				if idx := index(header, "\r\n\r\n"); idx != -1 {
-					return len(trimSpace(header[idx+4:])) > 0
-				}
-				if idx := index(header, "\n\n"); idx != -1 {
-					return len(trimSpace(header[idx+2:])) > 0
-				}
-				return false
-			},
+			"quote":             quote,
+			"isPointer":         isPointer,
+			"indirect":          indirect,
+			"importContext":     importContext,
+			"sub":               func(x, y int) int { return x - y },
+			"getRepr":           func(node ast.Node) string { return ctx.Doc.Repr(node) },
+			"methodResp":        ctx.MethodResponse,
+			"methodInner":       ctx.MethodInner,
+			"isResponse":        isResponse,
+			"isInner":           isInner,
+			"httpMethodHasBody": httpMethodHasBody,
+			"headerHasBody":     headerHasBody,
 		}).
 		Parse(apiTemplate)
 

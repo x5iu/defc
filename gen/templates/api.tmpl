@@ -247,7 +247,21 @@ var (
         {{- $httpMethod := $method.MethodHTTP }}
         {{- if httpMethodHasBody $httpMethod }}
             {{- if headerHasBody $method.TmplHeader }}
-                {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, {{ $bufReader }})
+                {{- if $.HasFeature "api/logx" }}
+                    {{- $body := printf "requestBody%s" $method.Ident }}
+                    {{ $body }}, {{ $err }} := io.ReadAll({{ $bufReader }})
+                    if {{ $err }} != nil {
+                    return {{ range $index, $type := $method.Out -}}
+                        {{- if lt $index (sub (len $method.Out) 1) -}}
+                            v{{- $index -}}{{- $method.Ident }},
+                        {{- end -}}
+                    {{- end -}}
+                    fmt.Errorf("error reading '{{ $method.Ident }}' request body: %w", {{ $err }})
+                    }
+                    {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, bytes.NewReader({{ $body }}))
+                {{ else }}
+                    {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, {{ $bufReader }})
+                {{ end -}}
             {{ else }}
                 {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, {{- range $index, $ident := $sortIn -}}
                     {{- if eq $index (sub (len $sortIn) 1) }}
