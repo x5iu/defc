@@ -431,6 +431,16 @@ type Log interface {
 
 其中，`caller` 参数为当前方法的方法名，`method` 为请求方式，`url` 为请求的 URL，`elapse` 为当前请求所花费的时间。
 
+从 `v1.14.0` 开始，使用 `--features=api/logx` 启用“增强版”日志记录功能，启用该功能会在 `Log` 接口调用时传入 `*http.Request`/`*http.Response` 供日志记录方更详细地记录每个请求及响应的内容；详细的 `Log` 接口定义如下：
+
+```go
+type Log interface {
+  Log(ctx context.Context, caller string, request *http.Request, response *http.Response, elapse time.Duration)
+}
+```
+
+
+
 ### 使用自定义的 `http.Client`
 
 如果你想使用自定义的 `http.Client`，那么请添加 `--features=api/client` 为 `Inner` 方法的返回值实现 `Client` 接口，`Client` 接口的定义如下：

@@ -20,6 +20,7 @@ const (
 
 	FeatureApiCache  = "api/cache"
 	FeatureApiLog    = "api/log"
+	FeatureApiLogx   = "api/logx"
 	FeatureApiClient = "api/client"
 	FeatureApiPage   = "api/page"
 	FeatureApiError  = "api/error"

@@ -75,7 +75,7 @@ var (
         {{- $ok := printf "ok%s" $method.Ident -}}
 
         {{- if $.HasInner -}}
-            {{- if or ($.HasFeature "api/cache") ($.HasFeature "api/log") ($.HasFeature "api/client") -}}
+            {{- if or ($.HasFeature "api/cache") ($.HasFeature "api/log") ($.HasFeature "api/logx") ($.HasFeature "api/client") -}}
                 var {{ $inner }} any = __imp.{{ methodInner }}()
             {{- end -}}
         {{ end -}}
@@ -280,7 +280,7 @@ var (
 
         {{- $log := printf "log%s" $method.Ident }}
         {{ $start := printf "start%s" $method.Ident }}
-        {{ if $.HasFeature "api/log" }}
+        {{ if or ($.HasFeature "api/log") ($.HasFeature "api/logx") }}
             {{ $start }} := time.Now()
         {{ end }}
 
@@ -298,6 +298,12 @@ var (
         {{ if $.HasFeature "api/log" }}
             if {{ $log }}, {{ $ok }} := {{ $inner }}.(interface{ Log(ctx context.Context, caller string, method string, url string, elapse time.Duration) }); {{ $ok }} {
             {{ $log }}.Log({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ quote $method.Ident }}, {{ quote $httpMethod }}, {{ $url }}, time.Since({{ $start }}))
+            }
+        {{ end }}
+
+        {{ if $.HasFeature "api/logx" }}
+            if {{ $log }}, {{ $ok }} := {{ $inner }}.(interface{ Log(ctx context.Context, caller string, request *http.Request, response *http.Response, elapse time.Duration) }); {{ $ok }} {
+            {{ $log }}.Log({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ quote $method.Ident }}, {{ $request }}, {{ $httpResponse }}, time.Since({{ $start }}))
             }
         {{ end }}
 

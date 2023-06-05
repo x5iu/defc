@@ -27,6 +27,7 @@ var (
 	validFeatures = []string{
 		gen.FeatureApiCache,
 		gen.FeatureApiLog,
+		gen.FeatureApiLogx,
 		gen.FeatureApiClient,
 		gen.FeatureApiPage,
 		gen.FeatureApiError,
@@ -58,7 +59,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:           "defc",
-		Version:       "v1.13.3",
+		Version:       "v1.14.0",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{
