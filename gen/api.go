@@ -184,6 +184,7 @@ func (ctx apiContext) MergedImports() (imports []string) {
 
 	if ctx.HasFeature(FeatureApiLog) || ctx.HasFeature(FeatureApiLogx) {
 		imports = append(imports, quote("time"))
+		imports = append(imports, quote("context"))
 	}
 
 	if ctx.HasFeature(FeatureApiNoRt) {
