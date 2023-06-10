@@ -708,3 +708,23 @@ go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --import "encoding/json" --fu
 目前 `defc` 对泛型的支持尚未完善和稳定，实际的使用过程中，也并未发现过多必须使用泛型的场景，这也是因为 Go 语言目前对于泛型使用的限制，接口泛型参数，只能在接口的最外层定义，而无法为接口中的方法单独定义泛型参数（但是 Rust 可以）。
 
 所以，待 Go 支持对接口方法单独定义泛型参数时，再考虑完善 `defc`对泛型的支持。
+
+### 为何不生成全局可复用的 Prepare Statement 以提升 SQL 查询效率
+
+表面上，有众多稀奇古怪的原因，如下：
+
+1. 模板语句及多语句（MultiStatements）场合不适用；
+
+2. Prepare Statement 会造成多次 TCP 连接（Prepare、Exec/Query、Close），而直接使用 Exec/Query 则在大部分场合下，可以在一次 TCP 连接中完成查询（这取决于 Driver 是否实现了 `Queryer/QueryerContext`），详见 `database/sql/driver/driver.go:204`；
+
+	> If a Conn implements neither QueryerContext nor Queryer, the sql package's DB.Query will first prepare a query, execute the statement, and then close the statement.
+
+3. 每个 Stmt 占用一个 Conn，并发场合会造成大量 Conn 创建及切换，甚至导致资源泄漏；
+
+4. 官方推荐 Stmt 应为局部变量而非全局变量；
+
+深层次的原因在于，对于 Stmt，存在非常多的情况会触发 RePrepare（RePrepare 指当 Stmt 被关闭、Conn 已失效，或跨事务执行时，Stmt 原 Prepare 的语句已不可用，需要重新向数据库服务端再次提交 Prepare 请求的行为），例如：
+
+> If the statement has been closed or already belongs to a transaction, we can't reuse it in this connection. Since tx.StmtContext should never need to be called with a Stmt already belonging to tx, we ignore this edge case and re-prepare the statement in this case. No need to add code-complexity for this.
+
+即使使用全局 Stmt，由于其与 Conn 绑定，导致每次切换 Conn 时都会触发 RePrepare，而在并发场合下切换 Conn 是非常常见的情况，更不要说每次开启事务都会新获取一个 Conn（而这个 Conn 是否缓存了 Stmt 仍未可知），这就导致了即使使用了全局的 Stmt，仍然会面临每次调用都会重新 Prepare 的状况，而这并不能为我们带来性能的提升。
