@@ -627,6 +627,33 @@ if e, ok := err.(__rt.ResponseError); ok {
 
 *注：当且仅当 HTTP 响应码不为 2xx 时才会返回 `ResponseError` 错误，其他场景返回的错误将不会实现 `ResponseError` 接口。*
 
+### `api/future`
+
+*注：future 特性将在 defc v2 版本中作为普通特性提供，其包含一系列的 Breaking Changes。*
+
+首先是 `__rt.Response` 接口的变动，`future` 特性新增了 `__rt.FutureResponse` 接口，其与 `__rt.Response` 接口不同的地方在于，其将原 `FromBytes` 方法变更成 `FromResponse` 方法，新方法的签名如下：
+
+```go
+FromResponse(string, *http.Response) error
+```
+
+其使用 `http.Response` 替换了原 `[]byte` 类型，旨在让调用方在处理响应时，能根据 Response 的具体 Header 及 Body 的类型选择不同的处理方式。例如，对于 `Content-Type: application/json` 的响应选择 json 反序列化方式用于处理 Body；同时，对于 Body 的处理也更加的自由化，原先是由 defc 将所有 Body 读出（以 `[]byte` 的形式）后再处理，现在你可以选择自定义的方式来读取 Body 中的内容，例如 `json.Decoder`，对于更长更多的内容，自定义的 `Read` 方式很可能要比一次性读出所有 bytes 要更高效，占用更少的内存空间。
+
+**但要额外注意的是，如果你使用了 `FromResponse` 方法，那你就必须自己负责 `http.Response.Body` 中对于 `Close` 方法的调用；换句话说，你必须自己 Close 响应的 Body，defc 将不会帮你生成任何 `Body.Close` 的相关代码。**
+
+其次，由于 defc 不再预先读出完整的 Body 信息，如果你使用了 `api/error` 特性，那么会面临一个问题，原先定义的 `__rt.ResponseError` 接口中的 Body 方法将无法获取 Response 的 Body，导致这个接口无法正常工作。为此，我们定义了一个新接口 `__rt.FutureResponseError` 用于解决这个问题，新的接口定义如下：
+
+```go
+type FutureResponseError interface {
+  error
+  Response() *http.Response
+}
+```
+
+其不再单独返回 `Status` 和 `Body`，而是会返回完整的 `http.Response`，这给了错误处理更多的自由度（但同时也意味着复杂度）。
+
+**更加需要注意的是：如果你同时启用了 `api/future` 和 `api/error` 特性，那么当 HTTP 状态码为非 2xx 时，本次请求获得的响应，即 `http.Response` 会被包装在 `FutureResponseError` 中（用于错误处理），这也意味着调用方必须在处理错误的同时，负责关闭 `http.Response.Body`，请在启用上述提到的特性时，特别注意错误处理的方式，不要忘了及时关闭 `http.Response.Body`，避免资源泄露。**
+
 ### `sqlx/in` 
 
 使用 `sqlx/in` 特性将产生以下两项变动：

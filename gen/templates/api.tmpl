@@ -15,6 +15,11 @@ import (
 
 {{ block "schema" $ }}{{ end }}
 
+const (
+{{ range $index, $method := $.Methods }}{{ if and (not (isInner $method.Ident)) (not (isResponse $method.Ident)) }}
+    Caller{{ $method.Ident }} = "{{ $method.Ident }}"{{ end }}{{ end }}
+)
+
 {{ $impName := (printf "impl%s" $.Ident) }}
 {{ $receiver := (printf "%s%s" $impName ($.GenericsRepr false) ) }}
 
@@ -167,14 +172,16 @@ var (
         {{- end }}
 
         {{ $responseBody := printf "responseBody%s" $method.Ident -}}
-        {{ if $.HasFeature "api/nort" }}
-            {{ $responseBody }} := {{ $getBufferFunc }}()
-            defer {{ $putBufferFunc }}({{ $responseBody }})
-            defer {{ $responseBody }}.Reset()
-        {{ else }}
-            {{ $responseBody }} := __rt.GetBuffer()
-            defer __rt.PutBuffer({{ $responseBody }})
-            defer {{ $responseBody }}.Reset()
+        {{ if not ($.HasFeature "api/future") }}
+            {{ if $.HasFeature "api/nort" }}
+                {{ $responseBody }} := {{ $getBufferFunc }}()
+                defer {{ $putBufferFunc }}({{ $responseBody }})
+                defer {{ $responseBody }}.Reset()
+            {{ else }}
+                {{ $responseBody }} := __rt.GetBuffer()
+                defer __rt.PutBuffer({{ $responseBody }})
+                defer {{ $responseBody }}.Reset()
+            {{ end }}
         {{ end }}
 
         {{ if $method.ReturnSlice -}}
@@ -192,7 +199,7 @@ var (
         {{ $httpResponse := printf "httpResponse%s" $method.Ident -}}
         {{ $httpResponse }} *http.Response
         {{ $response := printf "response%s" $method.Ident -}}
-        {{ $response }} {{ if $.HasFeature "api/nort" }}{{ $responseInterface }}{{ else }}__rt.Response{{ end }} = __imp.{{ methodResp }}()
+        {{ $response }} {{ if $.HasFeature "api/nort" }}{{ $responseInterface }}{{ else }}{{ if $.HasFeature "api/future" }}__rt.FutureResponse{{ else }}__rt.Response{{ end }}{{ end }} = __imp.{{ methodResp }}()
         )
 
         if {{ $err }} = {{ $addrTmpl }}.Execute({{ $addr }}, map[string]any{
@@ -330,47 +337,75 @@ var (
         fmt.Errorf("error sending '{{ $method.Ident }}' request: %w", {{ $err }})
         }
 
-        if _, {{ $err }} = io.Copy({{ $responseBody }}, {{ $httpResponse }}.Body); {{ $err }} != nil {
-        {{ $httpResponse }}.Body.Close()
-        return {{ range $index, $type := $method.Out -}}
-            {{- if lt $index (sub (len $method.Out) 1) -}}
-                v{{- $index -}}{{- $method.Ident }},
+        {{ if $.HasFeature "api/future" }}
+            if {{ $httpResponse }}.StatusCode < 200 || {{ $httpResponse }}.StatusCode > 299 {
+            return {{ range $index, $type := $method.Out -}}
+                {{- if lt $index (sub (len $method.Out) 1) -}}
+                    v{{- $index -}}{{- $method.Ident }},
+                {{- end -}}
             {{- end -}}
-        {{- end -}}
-        fmt.Errorf("error copying '{{ $method.Ident }}' response body: %w", {{ $err }})
-        } else {
-        {{ $httpResponse }}.Body.Close()
-        }
-
-        if {{ $httpResponse }}.StatusCode < 200 || {{ $httpResponse }}.StatusCode > 299 {
-        return {{ range $index, $type := $method.Out -}}
-            {{- if lt $index (sub (len $method.Out) 1) -}}
-                v{{- $index -}}{{- $method.Ident }},
-            {{- end -}}
-        {{- end -}}
-        {{ if $.HasFeature "api/error" -}}
-            {{ if $.HasFeature "api/nort" -}}
-                {{ $newResponseErrorFunc }}({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+            {{ if $.HasFeature "api/error" -}}
+                {{ if $.HasFeature "api/nort" -}}
+                    {{ $newResponseErrorFunc }}({{ quote $method.Ident }}, {{ $httpResponse }})
+                {{ else -}}
+                    __rt.NewFutureResponseError({{ quote $method.Ident }}, {{ $httpResponse }})
+                {{ end -}}
             {{ else -}}
-                __rt.NewResponseError({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+                fmt.Errorf("response status code %d for '{{ $method.Ident }}'", {{ $httpResponse }}.StatusCode)
             {{ end -}}
-        {{ else -}}
-            fmt.Errorf("response status code %d for '{{ $method.Ident }}' with body: \n\n%s\n\n", {{ $httpResponse }}.StatusCode, {{ $responseBody }}.String())
-        {{ end -}}
-        }
+            }
 
-        if {{ $err }} = {{ $response }}.FromBytes({{ quote $method.Ident }}, {{ $responseBody }}.Bytes()); {{ $err }} != nil {
-        return {{ range $index, $type := $method.Out -}}
-            {{- if lt $index (sub (len $method.Out) 1) -}}
-                v{{- $index -}}{{- $method.Ident }},
+            if {{ $err }} = {{ $response }}.FromResponse({{ quote $method.Ident }}, {{ $httpResponse }}); {{ $err }} != nil {
+            return {{ range $index, $type := $method.Out -}}
+                {{- if lt $index (sub (len $method.Out) 1) -}}
+                    v{{- $index -}}{{- $method.Ident }},
+                {{- end -}}
             {{- end -}}
-        {{- end -}}
-        fmt.Errorf("error converting '{{ $method.Ident }}' response: %w", {{ $err }})
-        }
+            fmt.Errorf("error converting '{{ $method.Ident }}' response: %w", {{ $err }})
+            }
+        {{ else }}
+            if _, {{ $err }} = io.Copy({{ $responseBody }}, {{ $httpResponse }}.Body); {{ $err }} != nil {
+            {{ $httpResponse }}.Body.Close()
+            return {{ range $index, $type := $method.Out -}}
+                {{- if lt $index (sub (len $method.Out) 1) -}}
+                    v{{- $index -}}{{- $method.Ident }},
+                {{- end -}}
+            {{- end -}}
+            fmt.Errorf("error copying '{{ $method.Ident }}' response body: %w", {{ $err }})
+            } else {
+            {{ $httpResponse }}.Body.Close()
+            }
+
+            if {{ $httpResponse }}.StatusCode < 200 || {{ $httpResponse }}.StatusCode > 299 {
+            return {{ range $index, $type := $method.Out -}}
+                {{- if lt $index (sub (len $method.Out) 1) -}}
+                    v{{- $index -}}{{- $method.Ident }},
+                {{- end -}}
+            {{- end -}}
+            {{ if $.HasFeature "api/error" -}}
+                {{ if $.HasFeature "api/nort" -}}
+                    {{ $newResponseErrorFunc }}({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+                {{ else -}}
+                    __rt.NewResponseError({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+                {{ end -}}
+            {{ else -}}
+                fmt.Errorf("response status code %d for '{{ $method.Ident }}' with body: \n\n%s\n\n", {{ $httpResponse }}.StatusCode, {{ $responseBody }}.String())
+            {{ end -}}
+            }
+
+            if {{ $err }} = {{ $response }}.FromBytes({{ quote $method.Ident }}, {{ $responseBody }}.Bytes()); {{ $err }} != nil {
+            return {{ range $index, $type := $method.Out -}}
+                {{- if lt $index (sub (len $method.Out) 1) -}}
+                    v{{- $index -}}{{- $method.Ident }},
+                {{- end -}}
+            {{- end -}}
+            fmt.Errorf("error converting '{{ $method.Ident }}' response: %w", {{ $err }})
+            }
+        {{ end }}
 
         {{ $addr }}.Reset() {{ if ne $method.Header "" }}
             {{ $header }}.Reset(){{ end }}
-        {{ $responseBody }}.Reset()
+        {{ if not ($.HasFeature "api/future") }}{{ $responseBody }}.Reset(){{ end }}
 
         if {{ $err }} = {{ $response }}.Err(); {{ $err }} != nil {
         return {{ range $index, $type := $method.Out -}}
@@ -506,7 +541,7 @@ var (
     type {{ $responseInterface }} interface {
     Err() error
     ScanValues(...any) error
-    FromBytes(string, []byte) error
+    {{ if $.HasFeature "api/future" }}FromResponse(string, *http.Response) error{{ else }}FromBytes(string, []byte) error{{ end }}
     Break() bool
     }
 
@@ -545,37 +580,68 @@ var (
 
     {{ if $.HasFeature "api/error" }}
         {{ $responseErrorInterface := (printf "%sResponseErrorInterface" $.Ident) }}
-        type {{ $responseErrorInterface }} interface {
-        error
-        Status() int
-        Body() []byte
-        }
-
         {{ $implResponseError := (printf "__%sImplResponseError" $.Ident) }}
-        func {{ $newResponseErrorFunc }}(caller string, status int, body []byte) {{ $responseErrorInterface }} {
-        return &{{ $implResponseError }}{
-        caller: caller,
-        status: status,
-        body:   body,
-        }
-        }
+        {{ if $.HasFeature "api/future" }}
+            // {{ $responseErrorInterface }} represents future Response error interface which would
+            // be used in next major version of defc, who may cause breaking changes.
+            //
+            // generated with --features=api/future
+            type {{ $responseErrorInterface }} interface {
+            error
+            Response() *http.Response
+            }
 
-        type {{ $implResponseError }} struct {
-        caller string
-        status int
-        body   []byte
-        }
+            func {{ $newResponseErrorFunc }}(caller string, response *http.Response) {{ $responseErrorInterface }} {
+            return &{{ $implResponseError }}{
+            caller:   caller,
+            response: response,
+            }
+            }
 
-        func (e *{{ $implResponseError }}) Error() string {
-        return fmt.Sprintf("response status code %d for '%s' with body: \n\n%s\n\n", e.status, e.caller, string(e.body))
-        }
+            type {{ $implResponseError }} struct {
+            caller   string
+            response *http.Response
+            }
 
-        func (e *{{ $implResponseError }}) Status() int {
-        return e.status
-        }
+            func (e *{{ $implResponseError }}) Error() string {
+            return fmt.Sprintf("response status code %d for '%s'", e.response.StatusCode, e.caller)
+            }
 
-        func (e *{{ $implResponseError }}) Body() []byte {
-        return e.body
-        }
+            func (e *{{ $implResponseError }}) Response() *http.Response {
+            return e.response
+            }
+        {{ else }}
+            type {{ $responseErrorInterface }} interface {
+            error
+            Status() int
+            Body() []byte
+            }
+
+            func {{ $newResponseErrorFunc }}(caller string, status int, body []byte) {{ $responseErrorInterface }} {
+            return &{{ $implResponseError }}{
+            caller: caller,
+            status: status,
+            body:   body,
+            }
+            }
+
+            type {{ $implResponseError }} struct {
+            caller string
+            status int
+            body   []byte
+            }
+
+            func (e *{{ $implResponseError }}) Error() string {
+            return fmt.Sprintf("response status code %d for '%s' with body: \n\n%s\n\n", e.status, e.caller, string(e.body))
+            }
+
+            func (e *{{ $implResponseError }}) Status() int {
+            return e.status
+            }
+
+            func (e *{{ $implResponseError }}) Body() []byte {
+            return e.body
+            }
+        {{ end }}
     {{ end }}
 {{ end }}

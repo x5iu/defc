@@ -25,6 +25,7 @@ const (
 	FeatureApiPage   = "api/page"
 	FeatureApiError  = "api/error"
 	FeatureApiNoRt   = "api/nort"
+	FeatureApiFuture = "api/future"
 )
 
 func (builder *CliBuilder) buildApi(w io.Writer) error {
@@ -77,11 +78,14 @@ func (ctx *apiContext) Build(w io.Writer) error {
 			}
 		}
 
-		if len(method.Out) > 2 {
-			return fmt.Errorf("%s method expects 2 returned value at most, got %d",
-				quote(method.Ident),
-				len(method.Out))
-		}
+		// [2023-06-11] we limit 2 returned values on v1.0.0, now it is time to cancel this limitation
+		/*
+			if len(method.Out) > 2 {
+				return fmt.Errorf("%s method expects 2 returned value at most, got %d",
+					quote(method.Ident),
+					len(method.Out))
+			}
+		*/
 	}
 
 	if err := ctx.genApiCode(w); err != nil {
