@@ -67,7 +67,8 @@ func MergeNamedArgs(argsMap map[string]any) map[string]any {
 			}
 		} else if rv.Kind() == reflect.Struct ||
 			(rv.Kind() == reflect.Pointer && rv.Elem().Kind() == reflect.Struct) {
-			rt := reflect.Indirect(rv).Type()
+			rv = reflect.Indirect(rv)
+			rt := rv.Type()
 			for i := 0; i < rt.NumField(); i++ {
 				if tag, ok := rt.Field(i).Tag.Lookup("db"); ok {
 					namedMap[tag] = rv.Field(i).Interface()
