@@ -17,7 +17,7 @@ func Split(sql string, sep string) (group []string) {
 	group = make([]string, 0, len(tokens))
 	last := 0
 	for i, token := range tokens {
-		if token == sep {
+		if token == sep || i+1 == len(tokens) {
 			if joint := strings.Join(tokens[last:i+1], " "); len(strings.Trim(joint, sep)) > 0 {
 				group = append(group, joint)
 			}
