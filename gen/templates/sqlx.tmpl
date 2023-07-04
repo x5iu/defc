@@ -504,7 +504,29 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
     rv = reflect.Indirect(rv)
     rt := rv.Type()
     for i := 0; i < rt.NumField(); i++ {
-    if tag, ok := rt.Field(i).Tag.Lookup("db"); ok {
+    if sf := rt.Field(i); sf.Anonymous {
+    sft := sf.Type
+    if sft.Kind() == reflect.Pointer {
+    sft = sft.Elem()
+    }
+    for j := 0; j < sft.NumField(); j++ {
+    if tag, exists := sft.Field(j).Tag.Lookup("db"); exists {
+    for pos, char := range tag {
+    if !(('0' <= char && char <= '9') || ('a' <= char && char <= 'z') || ('A' <= char && char <= 'Z') || char == '_') {
+    tag = tag[:pos]
+    break
+    }
+    }
+    namedMap[tag] = rv.FieldByIndex([]int{i, j}).Interface()
+    }
+    }
+    } else if tag, exists := sf.Tag.Lookup("db"); exists {
+    for pos, char := range tag {
+    if !(('0' <= char && char <= '9') || ('a' <= char && char <= 'z') || ('A' <= char && char <= 'Z') || char == '_') {
+    tag = tag[:pos]
+    break
+    }
+    }
     namedMap[tag] = rv.Field(i).Interface()
     }
     }
