@@ -710,7 +710,7 @@ type FutureResponseError interface {
 --import "_ https://github.com/mattn/go-sqlite3"
 ```
 
-
+*注：如果你的代码中包含 unsafe 包或者 C 包（通常在使用 CGO 时），那仍然需要手动通过 `--import` 导入 unsafe/C 包，`defc` 无法处理 unsafe 和 C packages。*
 
 由于 `defc` 没有实现对其他包类型的完全准确地识别，因此如果你想在 Schema 中使用其他包中的类型，例如 `url.URL` 类型，推荐的方式是使用 `type alias`：
 
