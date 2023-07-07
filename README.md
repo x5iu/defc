@@ -712,6 +712,8 @@ type FutureResponseError interface {
 
 *注：如果你的代码中包含 unsafe 包或者 C 包（通常在使用 CGO 时），那仍然需要手动通过 `--import` 导入 unsafe/C 包，`defc` 无法处理 unsafe 和 C packages。*
 
+*注 2：对于某些特殊场合（例如在某些文件有不同的 build tag 并且包名冲突时），自动 import 很可能不会如预期工作，此时手动导入所需要的包是最好的选择，因此 `defc` 提供了一个 `--disable-auto-import` 选项，用于禁用自动导入功能，如果启用了 `--disable-auto-import`，那你需要自己通过 `--import` 参数导入所需要的包。*
+
 由于 `defc` 没有实现对其他包类型的完全准确地识别，因此如果你想在 Schema 中使用其他包中的类型，例如 `url.URL` 类型，推荐的方式是使用 `type alias`：
 
 ```go

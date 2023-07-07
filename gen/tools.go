@@ -46,6 +46,8 @@ var (
 	join       = filepath.Join
 	isAbs      = filepath.IsAbs
 	glob       = filepath.Glob
+	base       = filepath.Base
+	stat       = os.Stat
 	read       = os.ReadFile
 	list       = os.ReadDir
 )
@@ -377,7 +379,7 @@ func getImports(pkg string, dir string, name string, isIt func(ast.Node) bool) (
 		target *ast.File
 	)
 
-	filenames, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	filenames, err := glob(join(dir, "*.go"))
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +390,7 @@ func getImports(pkg string, dir string, name string, isIt func(ast.Node) bool) (
 			return nil, err
 		}
 		files = append(files, file)
-		if filepath.Base(name) == filepath.Base(filename) {
+		if base(name) == base(filename) {
 			target = file
 		}
 	}
@@ -457,8 +459,8 @@ func (importer *Importer) ImportFrom(path, dir string, _ types.ImportMode) (*typ
 	if path == "C" {
 		return importer.defaultImport.Import("C")
 	}
-	goroot := filepath.Join(build.Default.GOROOT, "src")
-	if _, err := os.Stat(filepath.Join(goroot, path)); err != nil {
+	goroot := join(build.Default.GOROOT, "src")
+	if _, err := stat(join(goroot, path)); err != nil {
 		if os.IsNotExist(err) {
 			target := importer.imported[path]
 			if target != nil {
@@ -474,7 +476,7 @@ func (importer *Importer) ImportFrom(path, dir string, _ types.ImportMode) (*typ
 			}
 			var files []*ast.File
 			for _, name := range append(pkg.GoFiles, pkg.CgoFiles...) {
-				name = filepath.Join(pkg.Dir, name)
+				name = join(pkg.Dir, name)
 				file, err := parser.ParseFile(importer.tokenFileSet, name, nil, 0)
 				if err != nil {
 					return nil, err

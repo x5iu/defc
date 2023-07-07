@@ -51,17 +51,18 @@ func init() {
 }
 
 var (
-	mode     string
-	output   string
-	features []string
-	imports  []string
-	funcs    []string
+	mode              string
+	output            string
+	features          []string
+	imports           []string
+	disableAutoImport bool
+	funcs             []string
 )
 
 var (
 	defc = &cobra.Command{
 		Use:           "defc",
-		Version:       "v1.15.5",
+		Version:       "v1.16.0",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{
@@ -99,7 +100,7 @@ var (
 
 			builder := gen.NewCliBuilder(modeMap[mode]).
 				WithFeats(features).
-				WithImports(imports).
+				WithImports(imports, disableAutoImport).
 				WithFuncs(funcs).
 				WithPkg(os.Getenv(EnvGoPackage)).
 				WithPwd(pwd).
@@ -234,6 +235,7 @@ func init() {
 	defc.PersistentFlags().StringVarP(&output, "output", "o", "", "output file name")
 	defc.PersistentFlags().StringSliceVarP(&features, "features", "f", nil, fmt.Sprintf("features=[%s]", printStrings(validFeatures)))
 	defc.PersistentFlags().StringArrayVar(&imports, "import", nil, "additional imports")
+	defc.PersistentFlags().BoolVar(&disableAutoImport, "disable-auto-import", false, "disable auto import and import packages manually by '--import' option")
 	defc.PersistentFlags().StringArrayVar(&funcs, "func", nil, "additional funcs")
 	defc.MarkPersistentFlagRequired("mode")
 	defc.MarkPersistentFlagRequired("output")
