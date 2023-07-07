@@ -451,6 +451,9 @@ type Importer struct {
 var importing types.Package
 
 func (importer *Importer) ImportFrom(path, dir string, _ types.ImportMode) (*types.Package, error) {
+	if path == "unsafe" {
+		return types.Unsafe, nil
+	}
 	if path == "C" {
 		return importer.defaultImport.Import("C")
 	}
