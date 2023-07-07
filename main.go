@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 )
 
@@ -60,7 +61,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:           "defc",
-		Version:       "v1.15.3",
+		Version:       "v1.15.4",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{
@@ -89,7 +90,7 @@ var (
 			)
 
 			if doc, err = os.ReadFile(path.Join(pwd, file)); err != nil {
-				return fmt.Errorf("$GOFILE: os.ReadFile(%q): %w", path.Join(pwd, file), err)
+				return fmt.Errorf("$GOFILE: os.ReadFile(%q): %w", filepath.Join(pwd, file), err)
 			}
 
 			if pos, err = strconv.Atoi(os.Getenv(EnvGoLine)); err != nil {
@@ -133,7 +134,7 @@ var (
 			}
 
 			var cfg gen.Config
-			switch ext := path.Ext(file); ext {
+			switch ext := filepath.Ext(file); ext {
 			case ".json":
 				if err = json.Unmarshal(schema, &cfg); err != nil {
 					return fmt.Errorf("json.Unmarshal: %w", err)

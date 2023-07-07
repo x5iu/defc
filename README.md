@@ -704,6 +704,14 @@ type FutureResponseError interface {
 
 ### 使用其他包中的类型
 
+**从 `v1.15.4` 开始，`defc` 通过静态代码分析，支持自动 import 所需要的 packages，因此无需手动使用 `--import` 命令行参数导入外部 package。但 `--import` 参数仍然保留，当需要导入匿名包时（例如导入数据库驱动）仍可以使用 `--import` 参数，例如：**
+
+```shell
+--import "_ https://github.com/mattn/go-sqlite3"
+```
+
+
+
 由于 `defc` 没有实现对其他包类型的完全准确地识别，因此如果你想在 Schema 中使用其他包中的类型，例如 `url.URL` 类型，推荐的方式是使用 `type alias`：
 
 ```go

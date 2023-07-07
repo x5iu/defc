@@ -3,13 +3,16 @@ package gen
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
+	"go/build"
+	"go/importer"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -40,8 +43,8 @@ var (
 	index      = strings.Index
 	cut        = strings.Cut
 	contains   = strings.Contains
-	join       = path.Join
-	isAbs      = path.IsAbs
+	join       = filepath.Join
+	isAbs      = filepath.IsAbs
 	glob       = filepath.Glob
 	read       = os.ReadFile
 	list       = os.ReadDir
@@ -358,4 +361,139 @@ func runCommand(args []string) (string, error) {
 		return "", err
 	}
 	return trimSpace(output.String()), nil
+}
+
+type Import struct {
+	Name string
+	Path string
+}
+
+func getImports(pkg string, dir string, name string, isIt func(ast.Node) bool) (imports []*Import, err error) {
+	imports = make([]*Import, 0, 8)
+
+	var (
+		fset   = token.NewFileSet()
+		files  = make([]*ast.File, 0, 8)
+		target *ast.File
+	)
+
+	filenames, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, filename := range filenames {
+		file, err := parser.ParseFile(fset, filename, nil, 0)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, file)
+		if filepath.Base(name) == filepath.Base(filename) {
+			target = file
+		}
+	}
+
+	conf := types.Config{
+		IgnoreFuncBodies: true,
+		FakeImportC:      true,
+		Importer: &Importer{
+			imported:      map[string]*types.Package{},
+			tokenFileSet:  fset,
+			defaultImport: importer.Default(),
+		},
+	}
+
+	info := &types.Info{
+		Types:      map[ast.Expr]types.TypeAndValue{},
+		Instances:  map[*ast.Ident]types.Instance{},
+		Defs:       map[*ast.Ident]types.Object{},
+		Uses:       map[*ast.Ident]types.Object{},
+		Implicits:  map[ast.Node]types.Object{},
+		Selections: map[*ast.SelectorExpr]*types.Selection{},
+		Scopes:     map[ast.Node]*types.Scope{},
+		InitOrder:  []*types.Initializer{},
+	}
+
+	_, err = conf.Check(pkg, fset, files, info)
+	if err != nil {
+		return nil, err
+	}
+
+	ast.Inspect(target, func(x ast.Node) bool {
+		if isIt(x) {
+			ast.Inspect(x, func(n ast.Node) bool {
+				switch node := n.(type) {
+				case ast.Expr:
+					if named, ok := info.TypeOf(node).(*types.Named); ok {
+						if objPkg := named.Obj().Pkg(); objPkg != nil {
+							imports = append(imports, &Import{
+								Name: objPkg.Name(),
+								Path: objPkg.Path(),
+							})
+						}
+					}
+				}
+				return true
+			})
+		}
+		return true
+	})
+
+	return imports, nil
+}
+
+type Importer struct {
+	imported      map[string]*types.Package
+	tokenFileSet  *token.FileSet
+	defaultImport types.Importer
+}
+
+var importing types.Package
+
+func (importer *Importer) ImportFrom(path, dir string, _ types.ImportMode) (*types.Package, error) {
+	if path == "C" {
+		return importer.defaultImport.Import("C")
+	}
+	goroot := filepath.Join(build.Default.GOROOT, "src")
+	if _, err := os.Stat(filepath.Join(goroot, path)); err != nil {
+		if os.IsNotExist(err) {
+			target := importer.imported[path]
+			if target != nil {
+				if target == &importing {
+					return nil, errors.New("cycle importing " + path)
+				}
+				return target, nil
+			}
+			importer.imported[path] = &importing
+			pkg, err := build.Import(path, dir, 0)
+			if err != nil {
+				return nil, err
+			}
+			var files []*ast.File
+			for _, name := range append(pkg.GoFiles, pkg.CgoFiles...) {
+				name = filepath.Join(pkg.Dir, name)
+				file, err := parser.ParseFile(importer.tokenFileSet, name, nil, 0)
+				if err != nil {
+					return nil, err
+				}
+				files = append(files, file)
+			}
+			conf := types.Config{
+				Importer:         importer,
+				FakeImportC:      true,
+				IgnoreFuncBodies: true,
+			}
+			target, err = conf.Check(path, importer.tokenFileSet, files, nil)
+			if err != nil {
+				return nil, err
+			}
+			importer.imported[path] = target
+			return target, nil
+		}
+	}
+	return importer.defaultImport.Import(path)
+}
+
+func (importer *Importer) Import(path string) (*types.Package, error) {
+	return importer.ImportFrom(path, "", 0)
 }

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strings"
 	"text/template"
 
 	_ "embed"
@@ -289,6 +290,33 @@ inspectType:
 			"no available 'Interface' type declaration (*ast.InterfaceType) found, "+
 				"available *ast.GenDecl are: \n\n"+
 				"%s\n\n", concat(nodeMap(f.Decls, fmtNode), "\n"))
+	}
+
+	imports, err := getImports(builder.pkg, builder.pwd, builder.file, func(node ast.Node) bool {
+		switch x := node.(type) {
+		case *ast.TypeSpec:
+			return x.Name.Name == typeSpec.Name.Name
+		}
+		return false
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, spec := range f.Imports {
+		path := spec.Path.Value[1 : len(spec.Path.Value)-1]
+		for _, imported := range imports {
+			if path == imported.Path {
+				var name string
+				if spec.Name != nil {
+					name = spec.Name.Name
+				}
+				if importRepr := strings.TrimSpace(name + " " + path); !in(builder.imports, importRepr) {
+					builder.imports = append(builder.imports, importRepr)
+				}
+			}
+		}
 	}
 
 	for _, method := range ifaceType.Methods.List {
