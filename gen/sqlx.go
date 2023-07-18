@@ -27,6 +27,7 @@ const (
 	FeatureSqlxLog    = "sqlx/log"
 	FeatureSqlxRebind = "sqlx/rebind"
 	FeatureSqlxNoRt   = "sqlx/nort"
+	FeatureSqlxFuture = "sqlx/future"
 )
 
 func (builder *CliBuilder) buildSqlx(w io.Writer) error {
@@ -102,7 +103,12 @@ func (ctx *sqlxContext) MergedImports() (imports []string) {
 		quote("database/sql"),
 		quote("context"),
 		quote("text/template"),
-		quote("github.com/jmoiron/sqlx"),
+	}
+
+	if ctx.HasFeature(FeatureSqlxFuture) {
+		imports = append(imports, quote("github.com/x5iu/sqlx"))
+	} else {
+		imports = append(imports, quote("github.com/jmoiron/sqlx"))
 	}
 
 	if ctx.HasFeature(FeatureSqlxLog) {
