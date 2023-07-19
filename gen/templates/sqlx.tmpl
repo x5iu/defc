@@ -320,16 +320,16 @@ _ = (*template.Template)(nil)
     {{ end }}
     }
 
-    func (tx {{ $tx }}) Beginx() (*sqlx.Tx, error) {
+    func (tx *{{ $tx }}) Beginx() (*sqlx.Tx, error) {
     return tx.Tx, nil
     }
 
-    func (tx {{ $tx }}) BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error) {
+    func (tx *{{ $tx }}) BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error) {
     return tx.Tx, nil
     }
 
     {{ if $.HasFeature "sqlx/log" -}}
-        func (tx {{ $tx }}) Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) {
+        func (tx *{{ $tx }}) Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) {
         if tx.log != nil {
         tx.log.Log(ctx, caller, query, args, elapse)
         }
