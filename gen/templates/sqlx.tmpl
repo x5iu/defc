@@ -288,6 +288,21 @@ _ = (*template.Template)(nil)
     }
     }
 
+    {{ if isQuery $method.SqlxOperation }}
+        {{ if $.HasFeature "sqlx/callback" }}
+            {{ $callback := printf "callback%s" $method.Ident }}
+            if {{ $callback }}, {{ $ok }} := any({{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}).(interface{Callback(context.Context, {{ $.Ident }}) error}); {{ $ok }} {
+            if {{ $err }} := {{ $callback }}.Callback({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, __imp); {{ $err }} != nil {
+            return {{ range $index, $type := $method.Out -}}
+                {{- if lt $index (sub (len $method.Out) 1) -}}
+                    v{{- $index -}}{{- $method.Ident }},
+                {{- end -}}
+            {{- end -}} fmt.Errorf("error invoking %s callback: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+            }
+            }
+        {{ end }}
+    {{ end }}
+
     return {{ range $index, $type := $method.Out -}}
         {{- if lt $index (sub (len $method.Out) 1) -}}
             v{{- $index -}}{{- $method.Ident }},

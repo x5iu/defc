@@ -39,6 +39,7 @@ var (
 		gen.FeatureSqlxRebind,
 		gen.FeatureSqlxNoRt,
 		gen.FeatureSqlxFuture,
+		gen.FeatureSqlxCallback,
 	}
 )
 
@@ -63,7 +64,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:           "defc",
-		Version:       "v1.17.1",
+		Version:       "v1.18.0",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{

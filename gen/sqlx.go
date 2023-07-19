@@ -23,11 +23,12 @@ const (
 	sqlxCmdInclude = "#INCLUDE"
 	sqlxCmdScript  = "#SCRIPT"
 
-	FeatureSqlxIn     = "sqlx/in"
-	FeatureSqlxLog    = "sqlx/log"
-	FeatureSqlxRebind = "sqlx/rebind"
-	FeatureSqlxNoRt   = "sqlx/nort"
-	FeatureSqlxFuture = "sqlx/future"
+	FeatureSqlxIn       = "sqlx/in"
+	FeatureSqlxLog      = "sqlx/log"
+	FeatureSqlxRebind   = "sqlx/rebind"
+	FeatureSqlxNoRt     = "sqlx/nort"
+	FeatureSqlxFuture   = "sqlx/future"
+	FeatureSqlxCallback = "sqlx/callback"
 )
 
 func (builder *CliBuilder) buildSqlx(w io.Writer) error {
