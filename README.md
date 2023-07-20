@@ -678,6 +678,41 @@ type FutureResponseError interface {
 
 **注：请谨慎地组合使用 `sqlx/in` 特性和 `bindvars` 函数（在模板中），错误地在 `sqlx/in` 特性下使用 `bindvars` 函数将会导致不可预期的后果；但由于 `bindvars` 仍然有其特定使用场景（例如快速生成 N 个占位符），因此并未强制在 `sqlx/in` 特性下禁用 `bindvars` 函数**
 
+### sqlx/future
+
+于 `defc@v1.17.0` 新增，**实验性的特性**，将 `sqlx` 模式中引入的 `github.com/jmoiron/sqlx` 包替换为 `github.com/x5iu/sqlx` 包，其提供了以下接口：
+
+```go
+type IRow interface {
+  Columns() ([]string, error)
+  Scan(...any) error
+}
+
+type FromRow interface {
+  FromRow(IRow) error
+}
+```
+
+其中，对于实现了 `FromRow` 接口的**结构体**，`sqlx.Select`/`sqlx.Get` 函数会优先使用 `FromRow` 方法将查询结果映射至结构体中，而非使用 `sqlx.reflectx`（即原 `sqlx` 默认的映射方式，通过反射映射数据库查询结果）。对于映射结构体私有字段，`FromRow` 非常有用（原版 `sqlx` 仅支持将数据映射至可导出的字段，即 `Exported Field`）。
+
+***注意，请只为结构体实现 `FromRow` 接口。***
+
+### sqlx/callback
+
+于 `defc@v1.18.0` 新增，**实验性的特性**，在 `sqlx` 模式中，你可以为方法的返回值类型实现如下的接口：
+
+```go
+interface {
+  Callback(context.Context, Interface) error
+}
+```
+
+对于实现了该接口的返回值（接口参数中的 `Interface` 为代表 `defc` Schema 的接口，即使用 `go:generate` 进行标记和代码生成的接口），`defc` 会生成相应的回调代码，即在完成方法定义的 SQL 查询后，额外调用 `Callback` 方法。通常来说，如果你的某个结构体中，有部分字段是需要通过其他 SQL 查询映射而来（例如 Relations/Edges），那么使用 `Callback` 是非常好的选择，你可以在 `Callback` 方法中定义查询 Relations/Edges 的代码，并将查询结果映射到结构体对应的字段中。
+
+***注意：如果你的结构体存在循环引用的情况（例如你的结构体 A 中有个字段类型是 B 结构体，B 结构体中又包含了类型为 A 结构体的字段），那么使用 Callback 时要注意防止 Callback 的循环调用导致 StackOverflow，常用的解决方式是在 Context 中加入相应的调用标识符，当检测到某个特定的标识符或标识符满足某个条件时，终止 Callback 调用。***
+
+***注意 2：Callback 中的查询与其外层主函数的查询默认分属于不同事务，如果想要确保 Callback 与主函数同属一个事务，请使用 `WithTx` 方法开启事务，开启事务后，Callback 中的查询与其外层主函数的查询即同属于同一事务中。***
+
 ## 对一些常见问题的解答
 
 ### `--features` 参数如何实现传递多个值
