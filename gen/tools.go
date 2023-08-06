@@ -70,7 +70,18 @@ func indirect(node ast.Node) ast.Node {
 		// hack for compatibility
 		return &Expr{
 			Expr:   ptr.X,
-			Offset: int(node.Pos()),
+			Offset: int(ptr.X.Pos() - 1),
+		}
+	}
+	return node
+}
+
+func deselect(node ast.Node) ast.Node {
+	if sel, ok := getNode(node).(*ast.SelectorExpr); ok {
+		// hack for compatibility
+		return &Expr{
+			Expr:   sel.Sel,
+			Offset: int(sel.Sel.Pos() - 1),
 		}
 	}
 	return node

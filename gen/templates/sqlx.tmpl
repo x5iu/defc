@@ -18,26 +18,38 @@ import (
 {{ $impName := (printf "impl%s" $.Ident) }}
 {{ $receiver := $impName }}
 
-func New{{ $.Ident }}(drv string, dsn string) {{ $.Ident }} {
+func New{{ $.Ident }}(drv string, dsn string{{ range $index, $embed := $.Embeds }}, {{ getRepr (deselect $embed) }} {{ getRepr $embed }}{{ end }}) {{ $.Ident }} {
 return &{{ $impName }}{
+{{ range $index, $embed := $.Embeds -}}
+    {{ getRepr (deselect $embed) }}: {{ getRepr (deselect $embed) }},
+{{ end -}}
 __core: sqlx.MustOpen(drv, dsn),
 }
 }
 
-func New{{ $.Ident }}FromDB(core *sqlx.DB) {{ $.Ident }} {
+func New{{ $.Ident }}FromDB(core *sqlx.DB{{ range $index, $embed := $.Embeds }}, {{ getRepr (deselect $embed) }} {{ getRepr $embed }}{{ end }}) {{ $.Ident }} {
 return &{{ $impName }}{
+{{ range $index, $embed := $.Embeds -}}
+    {{ getRepr (deselect $embed) }}: {{ getRepr (deselect $embed) }},
+{{ end -}}
 __core: core,
 }
 }
 
 {{ $coreInterface := (printf "%sCoreInterface" $.Ident) }}
-func New{{ $.Ident }}FromCore(core {{ $coreInterface }}) {{ $.Ident }} {
+func New{{ $.Ident }}FromCore(core {{ $coreInterface }}{{ range $index, $embed := $.Embeds }}, {{ getRepr (deselect $embed) }} {{ getRepr $embed }}{{ end }}) {{ $.Ident }} {
 return &{{ $impName }}{
+{{ range $index, $embed := $.Embeds -}}
+    {{ getRepr (deselect $embed) }}: {{ getRepr (deselect $embed) }},
+{{ end -}}
 __core: core,
 }
 }
 
 type {{ $impName }} struct {
+{{ range $index, $embed := $.Embeds -}}
+    {{ getRepr $embed }}
+{{ end -}}
 __withTx bool
 __core {{ $coreInterface }}
 }
@@ -314,8 +326,11 @@ _ = (*template.Template)(nil)
 {{ if $.WithTx }}
     {{ $tx := printf "tx%s" $.Ident }}
 
-    func New{{ $.Ident }}FromTx{{ if $.HasFeature "sqlx/log" }}AndLog{{ end }}(core *sqlx.Tx{{ if $.HasFeature "sqlx/log" }}, log interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) } {{ end }}) {{ $.Ident }} {
+    func New{{ $.Ident }}FromTx{{ if $.HasFeature "sqlx/log" }}AndLog{{ end }}(core *sqlx.Tx{{ if $.HasFeature "sqlx/log" }}, log interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) } {{ end }}{{ range $index, $embed := $.Embeds }}, {{ getRepr (deselect $embed) }} {{ getRepr $embed }}{{ end }}) {{ $.Ident }} {
     return &{{ $impName }}{
+    {{ range $index, $embed := $.Embeds -}}
+        {{ getRepr (deselect $embed) }}: {{ getRepr (deselect $embed) }},
+    {{ end -}}
     __withTx: true,
     __core: &{{ $tx }}{
     Tx: core,

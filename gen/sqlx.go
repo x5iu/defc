@@ -44,6 +44,7 @@ type sqlxContext struct {
 	BuildTags     []string
 	Ident         string
 	Methods       []*Method
+	Embeds        []ast.Expr
 	WithTx        bool
 	WithTxContext bool
 	Features      []string
@@ -227,7 +228,20 @@ inspectType:
 		}
 	}
 
+	var (
+		methods = make([]*ast.Field, 0, len(ifaceType.Methods.List))
+		embeds  = make([]ast.Expr, 0, len(ifaceType.Methods.List))
+	)
+
 	for _, method := range ifaceType.Methods.List {
+		if _, ok := method.Type.(*ast.FuncType); ok {
+			methods = append(methods, method)
+		} else if method.Names == nil {
+			embeds = append(embeds, method.Type)
+		}
+	}
+
+	for _, method := range methods {
 		if name := method.Names[0].Name; name != sqlxMethodWithTx && !checkInput(method.Type.(*ast.FuncType)) {
 			return nil, fmt.Errorf(""+
 				"input params for method %s should "+
@@ -247,7 +261,8 @@ inspectType:
 		Package:   builder.pkg,
 		BuildTags: parseBuildTags(builder.doc),
 		Ident:     typeSpec.Name.Name,
-		Methods:   nodeMap(ifaceType.Methods.List, builder.doc.InspectMethod),
+		Methods:   nodeMap(methods, builder.doc.InspectMethod),
+		Embeds:    embeds,
 		Features:  sqlxFeatures,
 		Imports:   builder.imports,
 		Funcs:     builder.funcs,
@@ -345,6 +360,7 @@ func (ctx *sqlxContext) genSqlxCode(w io.Writer) error {
 			"isSlice":       isSlice,
 			"isPointer":     isPointer,
 			"indirect":      indirect,
+			"deselect":      deselect,
 			"readHeader":    func(header string) (string, error) { return readHeader(header, ctx.Pwd) },
 			"isContextType": func(ident string, expr ast.Expr) bool { return ctx.Doc.IsContextType(ident, expr) },
 			"sub":           func(x, y int) int { return x - y },
