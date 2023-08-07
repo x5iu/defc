@@ -127,7 +127,9 @@ func (ctx *sqlxContext) MergedImports() (imports []string) {
 			quote("bytes"),
 			quote("database/sql/driver"))
 	} else {
-		imports = append(imports, quote("github.com/x5iu/defc/__rt"))
+		if len(ctx.Methods) > 0 {
+			imports = append(imports, quote("github.com/x5iu/defc/__rt"))
+		}
 	}
 
 	for _, imp := range ctx.Imports {
