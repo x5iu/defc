@@ -54,6 +54,46 @@ __withTx bool
 __core {{ $coreInterface }}
 }
 
+func (__imp *{{ $receiver }}) SetWithTx(withTx bool) {
+{{ range $index, $embed := $.Embeds -}}
+    if embed, ok := __imp.{{ getRepr (deselect $embed) }}.(interface{ SetWithTx(withTx bool) }); ok {
+    embed.SetWithTx(withTx)
+    }
+{{ end -}}
+__imp.__withTx = withTx
+}
+
+func (__imp *{{ $receiver }}) SetCore(core any) {
+{{ range $index, $embed := $.Embeds -}}
+    if embed, ok := __imp.{{ getRepr (deselect $embed) }}.(interface{ SetCore(core any) }); ok {
+    embed.SetCore(core)
+    }
+{{ end -}}
+__imp.__core = core.({{ $coreInterface }})
+}
+
+func (__imp *{{ $receiver }}) Clone() {{ $.Ident }} {
+var (
+{{ range $index, $embed := $.Embeds -}}
+    embed{{ $index }} {{ getRepr $embed }}
+{{ end -}}
+)
+{{ range $index, $embed := $.Embeds -}}
+    if embed, ok := __imp.{{ getRepr (deselect $embed) }}.(interface{ Clone() {{ getRepr $embed }} }); ok {
+    embed{{ $index }} = embed.Clone()
+    } else {
+    embed{{ $index }} = __imp.{{ getRepr (deselect $embed) }}
+    }
+{{ end -}}
+return &{{ $impName }}{
+{{ range $index, $embed := $.Embeds -}}
+    {{ getRepr (deselect $embed) }}: embed{{ $index }},
+{{ end -}}
+__withTx: __imp.__withTx,
+__core: __imp.__core,
+}
+}
+
 func (__imp *{{ $receiver }}) Close() error {
 if closer, ok := __imp.__core.( interface{ Close() error } ); ok {
 return closer.Close()
@@ -301,9 +341,20 @@ _ = (*template.Template)(nil)
     }
 
     {{ if isQuery $method.SqlxOperation }}
+        {{ $callback := printf "callback%s" $method.Ident }}
         {{ if $.HasFeature "sqlx/callback" }}
-            {{ $callback := printf "callback%s" $method.Ident }}
             if {{ $callback }}, {{ $ok }} := any({{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}).(interface{Callback(context.Context, {{ $.Ident }}) error}); {{ $ok }} {
+            if {{ $err }} := {{ $callback }}.Callback({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, __imp); {{ $err }} != nil {
+            return {{ range $index, $type := $method.Out -}}
+                {{- if lt $index (sub (len $method.Out) 1) -}}
+                    v{{- $index -}}{{- $method.Ident }},
+                {{- end -}}
+            {{- end -}} fmt.Errorf("error invoking %s callback: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+            }
+            }
+        {{ end }}
+        {{ if $.HasFeature "sqlx/any-callback" }}
+            if {{ $callback }}, {{ $ok }} := any({{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}).(interface{Callback(context.Context, any) error}); {{ $ok }} {
             if {{ $err }} := {{ $callback }}.Callback({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, __imp); {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}
                 {{- if lt $index (sub (len $method.Out) 1) -}}
@@ -327,17 +378,26 @@ _ = (*template.Template)(nil)
     {{ $tx := printf "tx%s" $.Ident }}
 
     func New{{ $.Ident }}FromTx{{ if $.HasFeature "sqlx/log" }}AndLog{{ end }}(core *sqlx.Tx{{ if $.HasFeature "sqlx/log" }}, log interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) } {{ end }}{{ range $index, $embed := $.Embeds }}, {{ getRepr (deselect $embed) }} {{ getRepr $embed }}{{ end }}) {{ $.Ident }} {
+    tx :=  &{{ $tx }}{
+    Tx: core,
+    {{ if $.HasFeature "sqlx/log" -}}
+        log: log,
+    {{- end }}
+    }
+    {{ range $index, $embed := $.Embeds -}}
+        if embed, ok := {{ getRepr (deselect $embed) }}.(interface{ SetWithTx(withTx bool) }); ok {
+        embed.SetWithTx(true)
+        }
+        if embed, ok := {{ getRepr (deselect $embed) }}.(interface{ SetCore(core any) }); ok {
+        embed.SetCore(tx)
+        }
+    {{ end -}}
     return &{{ $impName }}{
     {{ range $index, $embed := $.Embeds -}}
         {{ getRepr (deselect $embed) }}: {{ getRepr (deselect $embed) }},
     {{ end -}}
     __withTx: true,
-    __core: &{{ $tx }}{
-    Tx: core,
-    {{ if $.HasFeature "sqlx/log" -}}
-        log: log,
-    {{- end }}
-    },
+    __core: tx,
     }
     }
 
@@ -385,10 +445,9 @@ _ = (*template.Template)(nil)
             }
         {{ end }}
 
-        tx := &{{ $impName }}{
-        __withTx: true,
-        __core: core,
-        }
+        tx := __imp.Clone()
+        tx.(interface{ SetWithTx(withTx bool) }).SetWithTx(true)
+        tx.(interface{ SetCore(core any) }).SetCore(core)
 
         if err = f(tx); err != nil {
         return err
@@ -419,10 +478,9 @@ _ = (*template.Template)(nil)
             }
         {{ end }}
 
-        tx := &{{ $impName }}{
-        __withTx: true,
-        __core: core,
-        }
+        tx := __imp.Clone()
+        tx.(interface{ SetWithTx(withTx bool) }).SetWithTx(true)
+        tx.(interface{ SetCore(core any) }).SetCore(core)
 
         if err = f(tx); err != nil {
         return err

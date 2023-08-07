@@ -713,6 +713,19 @@ interface {
 
 ***注意 2：Callback 中的查询与其外层主函数的查询默认分属于不同事务，如果想要确保 Callback 与主函数同属一个事务，请使用 `WithTx` 方法开启事务，开启事务后，Callback 中的查询与其外层主函数的查询即同属于同一事务中。***
 
+### sqlx/any-callback
+
+于 `defc@v1.19.1` 新增，**实验性的特性**，与 `sqlx/callback` 基本相同，不同点在于，其要求的接口变更为：
+
+```go
+interface {
+  //                        👇注意这里
+  Callback(context.Context, any) error
+}
+```
+
+
+
 ## 对一些常见问题的解答
 
 ### `--features` 参数如何实现传递多个值
