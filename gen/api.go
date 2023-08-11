@@ -337,7 +337,7 @@ inspectType:
 		}
 	}
 
-	generics := make(map[string]ast.Expr, 10)
+	generics := make(map[string]ast.Expr, 16)
 	if typeSpec.TypeParams != nil {
 		for _, param := range typeSpec.TypeParams.List {
 			for _, name := range param.Names {

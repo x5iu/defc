@@ -69,8 +69,9 @@ func indirect(node ast.Node) ast.Node {
 	if ptr, ok := getNode(node).(*ast.StarExpr); ok {
 		// hack for compatibility
 		return &Expr{
-			Expr:   ptr.X,
-			Offset: int(ptr.X.Pos() - 1),
+			Expr: ptr.X,
+			// `ptr` may come from parser.ParseExpr, so we calculate offset by field offsets
+			Offset: int(node.Pos() + (ptr.X.Pos() - ptr.Star) - 1),
 		}
 	}
 	return node
@@ -80,8 +81,9 @@ func deselect(node ast.Node) ast.Node {
 	if sel, ok := getNode(node).(*ast.SelectorExpr); ok {
 		// hack for compatibility
 		return &Expr{
-			Expr:   sel.Sel,
-			Offset: int(sel.Sel.Pos() - 1),
+			Expr: sel.Sel,
+			// `sel` may come from parser.ParseExpr, so we calculate offset by field offsets
+			Offset: int(node.Pos() + (sel.Sel.Pos() - sel.X.Pos()) - 1),
 		}
 	}
 	return node

@@ -114,7 +114,7 @@ var (
             var (
             {{ if gt (len $method.Out) 1 -}}
                 {{ $type := index $method.Out 0 -}}
-                {{ $values }} = make({{ getRepr $type }}, 0, 10)
+                {{ $values }} = make({{ getRepr $type }}, 0, 32)
             {{- end }}
             {{- if $.HasFeature "api/page" }}
                 {{ $n }}    = 0
