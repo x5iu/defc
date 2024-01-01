@@ -56,9 +56,9 @@ func (ctx *apiContext) Build(w io.Writer) error {
 	}
 
 	for _, method := range ctx.Methods {
-		if isResponse(method.Ident) && isInner(method.Ident) {
+		if !isResponse(method.Ident) && !isInner(method.Ident) {
 			if l := len(method.Out); l == 0 || !checkErrorType(method.Out[l-1]) {
-				return fmt.Errorf("checkErrorType: no 'error' found in method %s returned value",
+				return fmt.Errorf("checkErrorType: no 'error' found in method %s returned values",
 					quote(method.Ident))
 			}
 		}

@@ -103,6 +103,8 @@ type Query interface {
 
 从 `v1.13.2` 开始，`<ARG>` 新增参数 `SCAN(expr)`，将使用 `expr` 代替返回值作为参数传入 `sqlx.Select`/`sqlx.Get` 方法中，当使用 `SCAN` 参数时，方法返回值仅可为 `error`。
 
+从 `v1.20.1` 开始，`<ARG>` 新增参数 `BIND`，将使用 binding 方式绑定查询参数，详情请见章节【查询参数定义】。
+
 ### SQL 语句定义
 
 从注释的第二行开始，则为 SQL 语句定义，在这里可以书写你要执行的 SQL，支持 SQL 换行（但仍然需要在注释范围内），及多条 SQL（多行 SQL 仅支持在 `EXEC` 中使用，多条 SQL 以分号 `;` 分隔，这些 SQL 会被放在同一个事务中执行）；SQL 中的参数使用问号 `?` 占位符表示，**额外的：如果你使用的是 `PostgreSQL` 或其他不使用 `?` 占位符的数据库，你可以在 `def` 命令中使用 `--features=sqlx/rebind` 特性来将 SQL 中的 `?` 转换为适配对应数据库的占位符，例如 `PostgreSQL` 中的 `$1`。**
@@ -173,6 +175,21 @@ type Query interface {
 ```
 
 关于 `ctx context.Context` 参数，这是一个可选参数，但是我们建议在通常情况下的方法定义都带上 `ctx context.Context` 参数，按照 `Go` 语言的规范，我们约定其参数名为 `ctx`（请不要使用其他参数名，因为 `defc` 就只认识 `ctx`）；
+
+从 `defc@v1.20.1` 开始，`defc` 添加了新的参数 binding 模式，你可以通过使用 BIND 参数来启用这种模式，例如：
+
+```go
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=query.go
+type QUery interface {
+  // GetUsers QUERY BIND
+  // SELECT * FROM `user` WHERE `id` IN ({{ bind $.ids }}) AND `status` = {{ bind $.name.String }};
+  GetUsers(ctx context.Context, name fmt.Stringer, ids []int64) ([]*User, error)
+}
+```
+
+使用 binding 模式时，通过模板语法指定需要绑定的参数值，并使用 `bind` 函数来将参数添加到查询参数列表中，例如你有一个 `user` object，你需要使用 `user.ID` 作为查询参数，那么你可以在 sql 中这样写：`{{ bind $.user.ID }}`，`defc` 不仅会将 `user.ID` 添加到查询参数列表中，还会在 `{{ bind $.user.ID }}` 的位置放置一个（或多个，取决于参数类型）占位符，避免发生 sql 注入攻击。
+
+*注意，使用 binding 模式时，由于每次都会构建并渲染模板，其执行性能相比于启用 `CONST` 参数要慢不少，请根据你的实际场景选择具体的参数。*
 
 ### 查询结果及错误定义
 

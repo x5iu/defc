@@ -106,7 +106,7 @@ return nil
 var (
 _ = (*template.Template)(nil)
 
-{{ range $index, $method := $.Methods }} {{ if not (hasOption ($method.SqlxOptions) "CONST") }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
+{{ range $index, $method := $.Methods }} {{ if and (not (hasOption ($method.SqlxOptions) "CONST")) (not (hasOption ($method.SqlxOptions) "BIND")) }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
 {{ end }}{{ end }}
 )
 
@@ -132,6 +132,7 @@ _ = (*template.Template)(nil)
         )
     {{- end -}}
     {
+    {{- $argList := (printf "argList%s" $method.Ident) }}
     var (
     {{ range $index, $type := $method.Out -}}
         {{ if lt $index (sub (len $method.Out) 1) -}}
@@ -140,7 +141,29 @@ _ = (*template.Template)(nil)
     {{ end -}}
     {{- $err := printf "err%s" $method.Ident }}
     {{- $err }} error
+    {{ if not (hasOption ($method.SqlxOptions) "NAMED") }}
+        {{- $argList }} = make([]any, 0, 8)
+    {{- end }}
     )
+
+    {{ if not (hasOption ($method.SqlxOptions) "NAMED") }}
+        {{ $bindFunc := (printf "__%sBindFunc" $method.Ident) }}
+        {{ if and (not (hasOption ($method.SqlxOptions) "CONST")) (hasOption ($method.SqlxOptions) "BIND") }}
+            {{ $bindFunc }} := func(arg any) string {
+            {{ $argList }} = append({{ $argList }}, arg)
+            return {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}(len({{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}(arg)))
+            }
+            {{ printf "sqlTmpl%s" $method.Ident }} := template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bind": {{ $bindFunc }}, "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
+        {{ else }}
+            {{ $argList }} = []any{
+            {{ range $index, $ident := $sortIn -}}
+                {{ if not (isContextType $ident (index $method.In $ident)) -}}
+                    {{- $ident -}},
+                {{ end -}}
+            {{ end }}
+            }
+        {{ end }}
+    {{ end }}
 
     {{ $query := printf "query%s" $method.Ident }}
     {{ if not (hasOption ($method.SqlxOptions) "CONST") }}
@@ -204,13 +227,7 @@ _ = (*template.Template)(nil)
     {{- else }}
         {{ $offset }} := 0
         {{- if $.HasFeature "sqlx/in" }}
-            {{ $query }}, {{ $args }}, {{ $err }} := {{ if $.HasFeature "sqlx/nort" }}{{ $inFunc }}{{ else }}__rt.In{{ end }}({{ $query }}, []any{
-            {{ range $index, $ident := $sortIn -}}
-                {{ if not (isContextType $ident (index $method.In $ident)) -}}
-                    {{- $ident -}},
-                {{ end -}}
-            {{ end }}
-            })
+            {{ $query }}, {{ $args }}, {{ $err }} := {{ if $.HasFeature "sqlx/nort" }}{{ $inFunc }}{{ else }}__rt.In{{ end }}({{ $query }}, {{ $argList }})
             if {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}
                 {{- if lt $index (sub (len $method.Out) 1) -}}
@@ -219,13 +236,7 @@ _ = (*template.Template)(nil)
             {{- end -}} fmt.Errorf("error building %s query: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
             }
         {{- else }}
-            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}(
-            {{ range $index, $ident := $sortIn -}}
-                {{ if not (isContextType $ident (index $method.In $ident)) -}}
-                    {{- $ident -}},
-                {{ end -}}
-            {{ end }}
-            )
+            {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}({{ $argList }}...)
         {{ end }}
     {{ end }}
 

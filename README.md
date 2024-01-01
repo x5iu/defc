@@ -101,7 +101,9 @@ Starting from `v1.9.4`, `<ARG>` supports two additional values `MANY`/`ONE`, whi
 
 Starting from `v1.12.0`, `<ARG>` introduces a new parameter `CONST`. Using the `CONST` parameter indicates that you want `defc` **not** to generate template (`text/template`) construction-related code, meaning `defc` will treat the comment content as the complete SQL for database querying, and template syntax will not be effective. This can significantly improve performance (as template construction is very slow) when executing simple SQL (referring to SQL strings that do not require additional concatenation and judgment).
 
-From `v1.13.2`, `<ARG>` adds a new parameter `SCAN(expr)`, which will use `expr` instead of the return value as the parameter passed into the `sqlx.Select`/`sqlx.Get` method. When using the `SCAN` parameter, the method return value can only be `error`.
+Starting from `v1.13.2`, `<ARG>` adds a new parameter `SCAN(expr)`, which will use `expr` instead of the return value as the parameter passed into the `sqlx.Select`/`sqlx.Get` method. When using the `SCAN` parameter, the method return value can only be `error`.
+
+Starting from `v1.20.1`, a new argument `BIND` has been added to `<ARG>`. It will use the `binding` method to bind query parameters. For more details, please refer to the section "Query Parameter Definition".
 
 ### SQL Statement Definition
 
@@ -171,6 +173,21 @@ type Query interface {
 ```
 
 Regarding the `ctx context.Context` parameter, it is optional, but we recommend including the `ctx context.Context` parameter in standard method definitions according to Go's conventions, with the parameter name designated as `ctx` (please do not use any other names, as `defc` only recognizes `ctx`).
+
+Starting from `defc@v1.20.1`, `defc` has added a new parameter mode called `binding`. You can enable this mode by using the `BIND` argument, for example:
+
+```go
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=query.go
+type Query interface {
+  // GetUsers QUERY BIND
+  // SELECT * FROM `user` WHERE `id` IN ({{ bind $.ids }}) AND `status` = {{ bind $.status.String }};
+  GetUsers(ctx context.Context, status fmt.Stringer, ids []int64) ([]*User, error)
+}
+```
+
+When using the `binding` mode, specify the values of the parameters that need to be bound using template syntax, and use the `bind` function to add the parameters to the query parameter list. For example, if you have a `user` object and you need to use `user.ID` as a query parameter, you can write in the SQL like this: `{{ bind $.user.ID }}`. `defc` will not only add `user.ID` to the query parameter list but also place a placeholder (or multiple, depending on the parameter type) at the position of `{{ bind $.user.ID }}` to prevent SQL injection attacks.
+
+*Note that when using binding mode, since the template is built and rendered each time, its execution performance is significantly slower compared to when the `CONST` argument is enabled. Please choose the specific parameters according to your actual scenario.*
 
 ### Query Results and Error Definitions
 

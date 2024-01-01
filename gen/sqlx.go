@@ -57,9 +57,10 @@ type sqlxContext struct {
 }
 
 func (ctx *sqlxContext) Build(w io.Writer) error {
+	var fixedMethods []*Method = nil
 	for i, method := range ctx.Methods {
 		if l := len(method.Out); l == 0 || !checkErrorType(method.Out[l-1]) {
-			return fmt.Errorf("checkErrorType: no 'error' found in method %s returned value",
+			return fmt.Errorf("checkErrorType: no 'error' found in method %s returned values",
 				quote(method.Ident))
 		}
 
@@ -79,8 +80,17 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 		if method.Ident == sqlxMethodWithTx {
 			ctx.WithTx = true
 			ctx.WithTxContext = method.HasContext()
-			ctx.Methods = append(ctx.Methods[:i], ctx.Methods[i+1:]...)
+			fixedMethods = make([]*Method, 0, len(ctx.Methods)-1)
+			fixedMethods = append(fixedMethods, ctx.Methods[:i]...)
+			fixedMethods = append(fixedMethods, ctx.Methods[i+1:]...)
 		}
+	}
+
+	// Modifying the value of Methods within the loop can cause the loop to skip the check for one of the methods.
+	// To avoid this issue, we assign the modified Methods value to fixedMethods and then assign it back to the
+	// original Methods after the loop ends.
+	if fixedMethods != nil {
+		ctx.Methods = fixedMethods
 	}
 
 	if err := ctx.genSqlxCode(w); err != nil {
