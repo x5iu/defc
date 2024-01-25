@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/x5iu/defc/gen"
 	"go/format"
+	ximport "golang.org/x/tools/imports"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path"
@@ -65,7 +66,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:           "defc",
-		Version:       "v1.20.1",
+		Version:       "v1.20.2",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{
@@ -169,13 +170,22 @@ var (
 	}
 )
 
-func save(name string, code []byte) error {
-	fmtCode, err := format.Source(code)
+func save(name string, code []byte) (err error) {
+	code, err = format.Source(code)
 	if err != nil {
 		return fmt.Errorf("format.Source: \n\n%s\n\n%w", code, err)
 	}
 
-	if err = os.WriteFile(name, fmtCode, 0644); err != nil {
+	if err = os.WriteFile(name, code, 0644); err != nil {
+		return fmt.Errorf("os.WriteFile(%q, 0644): %w", name, err)
+	}
+
+	code, err = ximport.Process(name, code, nil)
+	if err != nil {
+		return fmt.Errorf("imports.Process: \n\n%s\n\n%w", code, err)
+	}
+
+	if err = os.WriteFile(name, code, 0644); err != nil {
 		return fmt.Errorf("os.WriteFile(%q, 0644): %w", name, err)
 	}
 
