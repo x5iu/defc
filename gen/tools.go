@@ -31,6 +31,7 @@ const (
 
 var (
 	sprintf    = fmt.Sprintf
+	errorf     = fmt.Errorf
 	quote      = strconv.Quote
 	trimPrefix = strings.TrimPrefix
 	trimSuffix = strings.TrimSuffix
@@ -60,9 +61,14 @@ func getRepr(node ast.Node, src []byte) string {
 	return getPosRepr(src, node.Pos(), node.End())
 }
 
-func hit(fset *token.FileSet, node ast.Node, line int) bool {
+func surroundLine(fset *token.FileSet, node ast.Node, line int) bool {
 	pos, end := fset.Position(node.Pos()), fset.Position(node.End())
 	return pos.Line <= line && end.Line >= line
+}
+
+func afterLine(fset *token.FileSet, node ast.Node, line int) bool {
+	_, end := fset.Position(node.Pos()), fset.Position(node.End())
+	return end.Line >= line
 }
 
 func indirect(node ast.Node) ast.Node {
@@ -434,25 +440,27 @@ func getImports(pkg string, dir string, name string, isIt func(ast.Node) bool) (
 		return nil, err
 	}
 
-	ast.Inspect(target, func(x ast.Node) bool {
-		if isIt(x) {
-			ast.Inspect(x, func(n ast.Node) bool {
-				switch node := n.(type) {
-				case ast.Expr:
-					if named, ok := info.TypeOf(node).(*types.Named); ok {
-						if objPkg := named.Obj().Pkg(); objPkg != nil {
-							imports = append(imports, &Import{
-								Name: objPkg.Name(),
-								Path: objPkg.Path(),
-							})
+	if target != nil {
+		ast.Inspect(target, func(x ast.Node) bool {
+			if x != nil && isIt(x) {
+				ast.Inspect(x, func(n ast.Node) bool {
+					switch node := n.(type) {
+					case ast.Expr:
+						if named, ok := info.TypeOf(node).(*types.Named); ok {
+							if objPkg := named.Obj().Pkg(); objPkg != nil {
+								imports = append(imports, &Import{
+									Name: objPkg.Name(),
+									Path: objPkg.Path(),
+								})
+							}
 						}
 					}
-				}
-				return true
-			})
-		}
-		return true
-	})
+					return true
+				})
+			}
+			return true
+		})
+	}
 
 	return imports, nil
 }
@@ -470,7 +478,7 @@ func (importer *Importer) ImportFrom(path, dir string, _ types.ImportMode) (*typ
 		return types.Unsafe, nil
 	}
 	if path == "C" {
-		return importer.defaultImport.Import("C")
+		return nil, errorf("unreachable: %s", "import \"C\"")
 	}
 	goroot := join(build.Default.GOROOT, "src")
 	if _, err := stat(join(goroot, path)); err != nil {
@@ -508,6 +516,9 @@ func (importer *Importer) ImportFrom(path, dir string, _ types.ImportMode) (*typ
 			importer.imported[path] = target
 			return target, nil
 		}
+	}
+	if importerFrom, ok := importer.defaultImport.(types.ImporterFrom); ok {
+		return importerFrom.ImportFrom(path, dir, 0)
 	}
 	return importer.defaultImport.Import(path)
 }

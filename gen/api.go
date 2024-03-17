@@ -71,11 +71,19 @@ func (ctx *apiContext) Build(w io.Writer) error {
 		}
 
 		if isResponse(method.Ident) {
-			if !checkResponseType(method) {
+			methodOut0 := method.Out[0]
+			if !checkResponseType(methodOut0) {
 				return fmt.Errorf(
 					"checkResponseType: returned type of %s "+
-						"should be kind of *ast.Ident or *ast.StarExpr",
-					quote(apiMethodResponse))
+						"should be kind of "+
+						"*ast.Ident/"+
+						"*ast.StarExpr/"+
+						"*ast.SelectorExpr/"+
+						"*ast.IndexExpr/"+
+						"*ast.IndexListExpr"+
+						", got %T",
+					quote(apiMethodResponse),
+					methodOut0)
 			}
 		}
 
@@ -188,7 +196,7 @@ func (ctx *apiContext) MethodInner() string {
 	return apiMethodInner
 }
 
-func (ctx apiContext) MergedImports() (imports []string) {
+func (ctx *apiContext) MergedImports() (imports []string) {
 	imports = []string{
 		quote("fmt"),
 		quote("io"),
@@ -258,7 +266,7 @@ func (builder *CliBuilder) inspectApi() (*apiContext, error) {
 	line := builder.pos + 1
 inspectDecl:
 	for _, declIface := range f.Decls {
-		if hit(fset, declIface, line) {
+		if surroundLine(fset, declIface, line) {
 			if decl := declIface.(*ast.GenDecl); decl.Tok == token.TYPE {
 				genDecl = decl
 				break inspectDecl
@@ -275,9 +283,9 @@ inspectDecl:
 
 inspectType:
 	for _, specIface := range genDecl.Specs {
-		if hit(fset, specIface, line) {
+		if afterLine(fset, specIface, line) {
 			spec := specIface.(*ast.TypeSpec)
-			if iface, ok := spec.Type.(*ast.InterfaceType); ok && hit(fset, iface, line) {
+			if iface, ok := spec.Type.(*ast.InterfaceType); ok && afterLine(fset, iface, line) {
 				typeSpec = spec
 				ifaceType = iface
 				break inspectType
@@ -368,10 +376,10 @@ func checkResponse(methods []*Method) bool {
 	return false
 }
 
-func checkResponseType(method *Method) bool {
-	node := getNode(method.Out[0])
+func checkResponseType(node ast.Node) bool {
+	node = getNode(node)
 	switch node.(type) {
-	case *ast.Ident, *ast.StarExpr:
+	case *ast.Ident, *ast.StarExpr, *ast.SelectorExpr, *ast.IndexExpr, *ast.IndexListExpr:
 		return true
 	default:
 		return false

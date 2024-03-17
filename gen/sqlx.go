@@ -178,7 +178,7 @@ func (builder *CliBuilder) inspectSqlx() (*sqlxContext, error) {
 	line := builder.pos + 1
 inspectDecl:
 	for _, declIface := range f.Decls {
-		if hit(fset, declIface, line) {
+		if surroundLine(fset, declIface, line) {
 			if decl := declIface.(*ast.GenDecl); decl.Tok == token.TYPE {
 				genDecl = decl
 				break inspectDecl
@@ -195,9 +195,9 @@ inspectDecl:
 
 inspectType:
 	for _, specIface := range genDecl.Specs {
-		if hit(fset, specIface, line) {
+		if afterLine(fset, specIface, line) {
 			spec := specIface.(*ast.TypeSpec)
-			if iface, ok := spec.Type.(*ast.InterfaceType); ok && hit(fset, iface, line) {
+			if iface, ok := spec.Type.(*ast.InterfaceType); ok && afterLine(fset, iface, line) {
 				typeSpec = spec
 				ifaceType = iface
 				break inspectType
