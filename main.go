@@ -65,7 +65,48 @@ var (
 
 var (
 	defc = &cobra.Command{
-		Use:           "defc",
+		Use:   "defc --mode MODE --output FILE [--features LIST] [--import PACKAGE]... [--func FUNCTION]...",
+		Short: "By defining the Schema, use go generate to generate database CRUD or HTTP request code.",
+		Long: `defc originates from the tedium of repetitively writing code for "create, read, update, delete" (CRUD) 
+operations and "network interface integration" in our daily work and life.
+
+For example, for database queries, we often need to:
+
+1. Define a new function or method;
+2. Write a new SQL query;
+3. Execute the query, handle errors, and map the results to a structure;
+4. If there are multiple SQL statements, initiate a transaction, and perform commit or rollback;
+5. Log the query;
+6. ...
+
+Similarly, for network interface integration, for a new interface, we often:
+
+1. Define a new function or method;
+2. Set the interface URL, configure parameters (such as Headers, Query, Body in HTTP requests);
+3. Make the request, handle errors, and map the response to a structure;
+4. If it involves pagination, concatenate the results of multiple paginated queries into the final result;
+5. Log the request;
+6. ...
+
+All of the above are repeated several times when writing new requirements or scenarios. Especially the parts related 
+to queries, requests, error handling, transaction commit/rollback, data mapping, list concatenation, and log recording, 
+which are all logically identical repetitive codes. Writing them is very annoying; some codes are very long, and 
+copying and pasting require various changes to variable names, method names, and configuration information, which 
+greatly affects development efficiency;
+
+Unfortunately, the Go language does not provide official macro features, and we cannot use macros to complete these 
+complex repetitive codes like Rust does (of course, macros also have their limitations; they are devastating to code 
+readability when not expanded and also affect IDE completion). However, fortunately, Go provides a workaround with go 
+generate. Through go generate, we can approximately provide macro functionality, that is, code generation capabilities.
+
+Based on the above background, I wanted to implement a code generation tool. By defining the Schema of a query or 
+request, it is possible to automatically generate code for the related CRUD operations or HTTP requests, which includes 
+parameter construction, error handling, result mapping, and log recording logic. defc is my experimental attempt at 
+such a schema-to-code generation; "def" stands for "define," indicating the behavior of setting up a Schema. Currently, 
+defc provides the following two scenarios of code generation features:
+
+* CRUD code generation based on sqlx for databases
+* HTTP interface request code generation based on the net/http package in the Golang standard library`,
 		Version:       "v1.20.3",
 		SilenceUsage:  true,
 		SilenceErrors: true,
