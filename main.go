@@ -7,6 +7,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 	"github.com/x5iu/defc/gen"
+	runtime "github.com/x5iu/defc/runtime"
 	"go/format"
 	goimport "golang.org/x/tools/imports"
 	"gopkg.in/yaml.v3"
@@ -107,7 +108,7 @@ defc provides the following two scenarios of code generation features:
 
 * CRUD code generation based on sqlx for databases
 * HTTP interface request code generation based on the net/http package in the Golang standard library`,
-		Version:       "v1.21.0",
+		Version:       runtime.Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{
