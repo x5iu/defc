@@ -1,6 +1,7 @@
 package defc
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -78,4 +79,42 @@ func (e *implFutureResponseError) Error() string {
 
 func (e *implFutureResponseError) Response() *http.Response {
 	return e.response
+}
+
+// JSON is a Response handler that quickly adapts to interfaces with Content-Type: application/json.
+// You can directly use *JSON as the return type for response methods in the API Schema to handle
+// the JSON data returned by the interface.
+//
+// NOTE: Not suitable for pagination query interfaces. If your interface involves pagination queries,
+// please implement a custom Response handler.
+type JSON struct {
+	Raw json.RawMessage
+}
+
+func (j *JSON) Err() error {
+	return nil
+}
+
+func (j *JSON) FromBytes(_ string, bytes []byte) error {
+	j.Raw = bytes
+	return nil
+}
+
+func (j *JSON) FromResponse(_ string, r *http.Response) error {
+	defer r.Body.Close()
+	decoder := json.NewDecoder(r.Body)
+	return decoder.Decode(&j.Raw)
+}
+
+func (j *JSON) ScanValues(vs ...any) error {
+	for _, v := range vs {
+		if err := json.Unmarshal(j.Raw, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (j *JSON) Break() bool {
+	panic("JSON is not well-suited for pagination query requests")
 }

@@ -49,3 +49,54 @@ func TestNewFutureResponseError(t *testing.T) {
 		return
 	}
 }
+
+func TestJSON(t *testing.T) {
+	body := []byte(`{"code": 200}`)
+	r := &http.Response{
+		Body: io.NopCloser(bytes.NewReader(body)),
+	}
+	j := new(JSON)
+	if err := j.Err(); err != nil {
+		t.Errorf("json: %s", err)
+		return
+	}
+	if err := j.FromBytes("test", body); err != nil {
+		t.Errorf("json: %s", err)
+		return
+	}
+	if err := j.FromResponse("test", r); err != nil {
+		t.Errorf("json: %s", err)
+		return
+	}
+	if err := j.ScanValues([]any{}...); err != nil {
+		t.Errorf("json: %s", err)
+		return
+	}
+	var val struct {
+		Code int `json:"code"`
+	}
+	if err := j.ScanValues(val); err == nil {
+		t.Errorf("json: expects UnmarshalError, got nil")
+		return
+	} else if val.Code != 0 {
+		t.Errorf("json: %v != 0", val.Code)
+		return
+	}
+	if err := j.ScanValues(&val); err != nil {
+		t.Errorf("json: %s", err)
+		return
+	} else if val.Code != 200 {
+		t.Errorf("json: %v != 200", val.Code)
+		return
+	}
+	defer func() {
+		if err := recover(); err == nil {
+			t.Errorf("json: expects Panic, got nil")
+			return
+		}
+	}()
+	if j.Break() {
+		t.Errorf("json: unreachable")
+		return
+	}
+}
