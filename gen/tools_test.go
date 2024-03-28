@@ -243,7 +243,7 @@ func TestImporter(t *testing.T) {
 		}
 	})
 	t.Run("twice", func(t *testing.T) {
-		pkg1, err := testImporter.Import("github.com/x5iu/defc/__rt")
+		pkg1, err := testImporter.Import("github.com/x5iu/defc/runtime")
 		if err != nil {
 			t.Errorf("import: %s", err)
 			return
@@ -251,7 +251,7 @@ func TestImporter(t *testing.T) {
 			t.Errorf("import: expects non-nil *types.Package, got nil")
 			return
 		}
-		pkg2, err := testImporter.Import("github.com/x5iu/defc/__rt")
+		pkg2, err := testImporter.Import("github.com/x5iu/defc/runtime")
 		if err != nil {
 			t.Errorf("import: %s", err)
 			return

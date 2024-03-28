@@ -9,7 +9,7 @@ import (
 	"net/http"
 
 	gofmt "fmt"
-	defc "github.com/x5iu/defc/__rt"
+	defc "github.com/x5iu/defc/runtime"
 
 	_ "unsafe"
 )

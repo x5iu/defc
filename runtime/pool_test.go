@@ -1,4 +1,4 @@
-package __rt
+package defc
 
 import (
 	"runtime"

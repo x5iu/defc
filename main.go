@@ -107,7 +107,7 @@ defc provides the following two scenarios of code generation features:
 
 * CRUD code generation based on sqlx for databases
 * HTTP interface request code generation based on the net/http package in the Golang standard library`,
-		Version:       "v1.20.3",
+		Version:       "v1.21.0",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{

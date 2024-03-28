@@ -215,7 +215,7 @@ func (ctx *apiContext) MergedImports() (imports []string) {
 			quote("sync"),
 			quote("reflect"))
 	} else {
-		imports = append(imports, quote("github.com/x5iu/defc/__rt"))
+		imports = append(imports, quote("__rt github.com/x5iu/defc/runtime"))
 	}
 
 	if ctx.HasHeader() {
