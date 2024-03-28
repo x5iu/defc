@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	goformat "go/format"
-	ximport "golang.org/x/tools/imports"
+	goimport "golang.org/x/tools/imports"
 )
 
 func runTest(path string, builder Builder) (err error) {
@@ -22,7 +22,7 @@ func runTest(path string, builder Builder) (err error) {
 	if err = os.WriteFile(path, code, 0644); err != nil {
 		return err
 	}
-	code, err = ximport.Process(path, code, nil)
+	code, err = goimport.Process(path, code, nil)
 	if err != nil {
 		return err
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/x5iu/defc/gen"
 	"go/format"
-	ximport "golang.org/x/tools/imports"
+	goimport "golang.org/x/tools/imports"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path"
@@ -66,7 +66,7 @@ var (
 var (
 	defc = &cobra.Command{
 		Use:           "defc",
-		Version:       "v1.20.2",
+		Version:       "v1.20.3",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		CompletionOptions: cobra.CompletionOptions{
@@ -104,7 +104,12 @@ var (
 
 			builder := gen.NewCliBuilder(modeMap[mode]).
 				WithFeats(features).
-				WithImports(imports, disableAutoImport).
+				// Since we are using the golang.org/x/tools/imports
+				// package to handle imports, there is no need to
+				// use the auto-import feature.
+				//
+				// disableAutoImport = true
+				WithImports(imports, true).
 				WithFuncs(funcs).
 				WithPkg(os.Getenv(EnvGoPackage)).
 				WithPwd(pwd).
@@ -180,13 +185,15 @@ func save(name string, code []byte) (err error) {
 		return fmt.Errorf("os.WriteFile(%q, 0644): %w", name, err)
 	}
 
-	code, err = ximport.Process(name, code, nil)
-	if err != nil {
-		return fmt.Errorf("imports.Process: \n\n%s\n\n%w", code, err)
-	}
+	if !disableAutoImport {
+		code, err = goimport.Process(name, code, nil)
+		if err != nil {
+			return fmt.Errorf("imports.Process: \n\n%s\n\n%w", code, err)
+		}
 
-	if err = os.WriteFile(name, code, 0644); err != nil {
-		return fmt.Errorf("os.WriteFile(%q, 0644): %w", name, err)
+		if err = os.WriteFile(name, code, 0644); err != nil {
+			return fmt.Errorf("os.WriteFile(%q, 0644): %w", name, err)
+		}
 	}
 
 	return nil
