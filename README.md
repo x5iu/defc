@@ -594,9 +594,9 @@ You can also compile `github.com/x5iu/defc` into a binary file and then use the 
 
 ## Additional Features (`--features`) Explanation
 
-### `sqlx/not` and `api/not`
+### `sqlx/nort` and `api/nort`
 
-Using the `not` feature tells `defc` not to import the additional `github.com/x5iu/defc/__rt` package. All auxiliary interfaces, types, and functions will be defined within the generated file; the generated file will contain only the standard library (with the addition of `github.com/jmoiron/sqlx` in `sqlx` mode).
+Using the `nort` feature tells `defc` not to import the additional `github.com/x5iu/defc/__rt` package. All auxiliary interfaces, types, and functions will be defined within the generated file; the generated file will contain only the standard library (with the addition of `github.com/jmoiron/sqlx` in `sqlx` mode).
 
 ### `api/cache`
 
