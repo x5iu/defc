@@ -78,7 +78,11 @@ Next are the interface name definition and method definitions. After defining th
 - `NewQuery`
 - `NewQueryFrom*`
 
-Method definitions are the most important part of the Schema, directly influencing the logic of the final generated code. We will elaborate further on this part. It is important to note that **the Schema's definition relies on the content of comments. Therefore, in the Schema, you may not be able to freely write what you want to express in the comments;~~ and please use single-line double-slash comments `//`, do not use multi-line `/* */` comments, otherwise `defc` will not be able to parse the Schema content defined in the comments;~~ comments should be closely attached to the method definition**.
+Method definitions are the most important part of the Schema, directly influencing the logic of the final generated code. We will elaborate further on this part. It is important to note that:
+
+- the Schema's definition relies on the content of comments. Therefore, in the Schema, you may not be able to freely write what you want to express in the comments;
+- ~~and please use single-line double-slash comments `//`, do not use multi-line `/* */` comments, otherwise `defc` will not be able to parse the Schema content defined in the comments;~~
+- **comments should be closely attached to the method definition**;
 
 ### Method Name and Query Type Definition
 
