@@ -214,7 +214,8 @@ manually specify the type that defc should handle using the '--type/-T' paramete
 				}
 				var declNotFoundErr error
 				pkg, mod, pos, declNotFoundErr = gen.DetectTargetDecl(file, doc, targetType)
-				if goLine := os.Getenv(EnvGoLine); goLine != "" {
+				specifyManually := len(args) > 0 || targetType != ""
+				if goLine := os.Getenv(EnvGoLine); goLine != "" && !specifyManually {
 					if pos, err = strconv.Atoi(goLine); err != nil {
 						return fmt.Errorf("strconv.Atoi(%s): %w", goLine, err)
 					}
