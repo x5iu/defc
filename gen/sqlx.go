@@ -179,7 +179,7 @@ func (builder *CliBuilder) inspectSqlx() (*sqlxContext, error) {
 inspectDecl:
 	for _, declIface := range f.Decls {
 		if surroundLine(fset, declIface, line) {
-			if decl := declIface.(*ast.GenDecl); decl.Tok == token.TYPE {
+			if decl, ok := declIface.(*ast.GenDecl); ok && decl.Tok == token.TYPE {
 				genDecl = decl
 				break inspectDecl
 			}
@@ -196,11 +196,12 @@ inspectDecl:
 inspectType:
 	for _, specIface := range genDecl.Specs {
 		if afterLine(fset, specIface, line) {
-			spec := specIface.(*ast.TypeSpec)
-			if iface, ok := spec.Type.(*ast.InterfaceType); ok && afterLine(fset, iface, line) {
-				typeSpec = spec
-				ifaceType = iface
-				break inspectType
+			if spec, ok := specIface.(*ast.TypeSpec); ok {
+				if iface, ok := spec.Type.(*ast.InterfaceType); ok && afterLine(fset, iface, line) {
+					typeSpec = spec
+					ifaceType = iface
+					break inspectType
+				}
 			}
 		}
 	}
@@ -255,11 +256,13 @@ inspectType:
 	}
 
 	for _, method := range methods {
-		if name := method.Names[0].Name; name != sqlxMethodWithTx && !checkInput(method.Type.(*ast.FuncType)) {
-			return nil, fmt.Errorf(""+
-				"input params for method %s should "+
-				"contain 'Name' and 'Type' both",
-				quote(name))
+		if name := method.Names[0].Name; name != sqlxMethodWithTx {
+			if funcType, ok := method.Type.(*ast.FuncType); ok && !checkInput(funcType) {
+				return nil, fmt.Errorf(""+
+					"input params for method %s should "+
+					"contain 'Name' and 'Type' both",
+					quote(name))
+			}
 		}
 	}
 
@@ -274,7 +277,7 @@ inspectType:
 		Package:   builder.pkg,
 		BuildTags: parseBuildTags(builder.doc),
 		Ident:     typeSpec.Name.Name,
-		Methods:   nodeMap(methods, builder.doc.InspectMethod),
+		Methods:   typeMap(methods, builder.doc.InspectMethod),
 		Embeds:    embeds,
 		Features:  sqlxFeatures,
 		Imports:   builder.imports,

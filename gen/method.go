@@ -196,8 +196,8 @@ func (method *Method) ReturnSlice() bool {
 	return len(method.Out) > 1 && isSlice(method.Out[0])
 }
 
-func inspectMethod(node ast.Node, source []byte) (method *Method) {
-	field := node.(*ast.Field)
+func inspectMethod(node *ast.Field, source []byte) (method *Method) {
+	field := node
 	method = new(Method)
 	method.Source = source
 	if field.Doc != nil {
@@ -226,24 +226,25 @@ func inspectMethod(node ast.Node, source []byte) (method *Method) {
 		}
 	}
 	method.Ident = field.Names[0].Name
-	funcType := field.Type.(*ast.FuncType)
-	inParams := funcType.Params.List
-	method.In = make(map[string]ast.Expr, len(inParams))
-	for _, param := range inParams {
-		if param.Names != nil {
-			for _, name := range param.Names {
-				method.OrderedIn = append(method.OrderedIn, name.Name)
-				method.In[name.Name] = param.Type
+	if funcType, ok := field.Type.(*ast.FuncType); ok {
+		inParams := funcType.Params.List
+		method.In = make(map[string]ast.Expr, len(inParams))
+		for _, param := range inParams {
+			if param.Names != nil {
+				for _, name := range param.Names {
+					method.OrderedIn = append(method.OrderedIn, name.Name)
+					method.In[name.Name] = param.Type
+				}
+			} else {
+				method.UnnamedIn = append(method.UnnamedIn, param.Type)
 			}
-		} else {
-			method.UnnamedIn = append(method.UnnamedIn, param.Type)
 		}
-	}
-	if funcType.Results != nil {
-		outParams := funcType.Results.List
-		method.Out = make([]ast.Expr, 0, len(outParams))
-		for _, param := range outParams {
-			method.Out = append(method.Out, param.Type)
+		if funcType.Results != nil {
+			outParams := funcType.Results.List
+			method.Out = make([]ast.Expr, 0, len(outParams))
+			for _, param := range outParams {
+				method.Out = append(method.Out, param.Type)
+			}
 		}
 	}
 	return method

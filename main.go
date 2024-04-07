@@ -12,9 +12,9 @@ import (
 	goimport "golang.org/x/tools/imports"
 	"gopkg.in/yaml.v3"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -62,6 +62,7 @@ var (
 	imports           []string
 	disableAutoImport bool
 	funcs             []string
+	targetType        string
 )
 
 var (
@@ -136,8 +137,12 @@ defc provides the following two scenarios of code generation features:
 				pos  int
 			)
 
-			if doc, err = os.ReadFile(path.Join(pwd, file)); err != nil {
-				return fmt.Errorf("$GOFILE: os.ReadFile(%q): %w", filepath.Join(pwd, file), err)
+			if !filepath.IsAbs(file) {
+				file = filepath.Join(pwd, file)
+			}
+
+			if doc, err = os.ReadFile(file); err != nil {
+				return fmt.Errorf("$GOFILE: os.ReadFile(%q): %w", file, err)
 			}
 
 			if pos, err = strconv.Atoi(os.Getenv(EnvGoLine)); err != nil {
@@ -163,56 +168,124 @@ defc provides the following two scenarios of code generation features:
 				return err
 			}
 
-			return save(path.Join(pwd, output), buffer.Bytes())
+			if !filepath.IsAbs(output) {
+				output = filepath.Join(pwd, output)
+			}
+			return save(output, buffer.Bytes())
 		},
 	}
 
 	generate = &cobra.Command{
-		Use:           "generate",
-		Short:         "Generate code from schema file",
+		Use:   "generate FILE",
+		Short: "Generate code from schema file",
+		Long: `When the target file is a .go file, defc will analyze the file content, automatically determine the type 
+representing the schema, and match the corresponding mode. This means you don't have to specify the corresponding mode 
+using the '--mode/-m' parameter. You can also ignore the '--output' parameter, and defc will use the current file's name
+with a .gen suffix as the generated code file's name. This allows you to generate the corresponding code by only 
+providing a filename without any flags. If your .go file contains multiple types that meet the criteria, you can also 
+manually specify the type that defc should handle using the '--type/-T' parameter to avoid generating incorrect code.`,
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err = checkFlags(); err != nil {
-				return err
-			}
-
 			file := args[0]
-
-			schema, err := os.ReadFile(file)
-			if err != nil {
-				return fmt.Errorf("os.ReadFile(%s): %w", args[0], err)
-			}
-
-			var cfg gen.Config
-			switch ext := filepath.Ext(file); ext {
-			case ".json":
-				if err = json.Unmarshal(schema, &cfg); err != nil {
-					return fmt.Errorf("json.Unmarshal: %w", err)
+			ext := filepath.Ext(file)
+			if ext == ".go" {
+				var (
+					pwd = os.Getenv(EnvPWD)
+					doc []byte
+					pos int
+					pkg string
+					mod gen.Mode
+					out = output
+				)
+				if !filepath.IsAbs(file) {
+					file = filepath.Join(pwd, file)
 				}
-			case ".toml":
-				if err = toml.Unmarshal(schema, &cfg); err != nil {
-					return fmt.Errorf("toml.Unmarshal: %w", err)
+				if doc, err = os.ReadFile(file); err != nil {
+					return fmt.Errorf("os.ReadFile(%q): %w", filepath.Join(pwd, file), err)
 				}
-			case ".yaml", ".yml":
-				if err = yaml.Unmarshal(schema, &cfg); err != nil {
-					return fmt.Errorf("yaml.Unmarshal: %w", err)
+				var declNotFoundErr error
+				pkg, mod, pos, declNotFoundErr = gen.DetectTargetDecl(file, doc, targetType)
+				if goLine := os.Getenv(EnvGoLine); goLine != "" {
+					if pos, err = strconv.Atoi(goLine); err != nil {
+						return fmt.Errorf("strconv.Atoi(%s): %w", goLine, err)
+					}
+				} else {
+					if declNotFoundErr != nil {
+						return fmt.Errorf("gen.DetectTargetDecl: %w", declNotFoundErr)
+					}
 				}
-			default:
-				return fmt.Errorf("%s currently does not support schema extension %q", cmd.Root().Name(), ext)
+				if goPackage := os.Getenv(EnvGoPackage); goPackage != "" {
+					pkg = goPackage
+				}
+				if mode != "" {
+					if mod = modeMap[mode]; !mod.IsValid() {
+						return fmt.Errorf("invalid mode %q, available modes are: [%s]", mode, printStrings(validModes))
+					}
+				}
+				if out == "" {
+					out = strings.TrimSuffix(file, ext) + ".gen" + ext
+				}
+				mode, output = mod.String(), out
+				if err = checkFlags(); err != nil {
+					return err
+				}
+				builder := gen.NewCliBuilder(mod).
+					WithFeats(features).
+					WithImports(imports, true).
+					WithFuncs(funcs).
+					WithPkg(pkg).
+					WithPwd(pwd).
+					WithFile(file, doc).
+					WithPos(pos)
+				var buffer bytes.Buffer
+				if err = builder.Build(&buffer); err != nil {
+					return err
+				}
+				if !filepath.IsAbs(output) {
+					output = filepath.Join(pwd, output)
+				}
+				return save(output, buffer.Bytes())
+			} else {
+				if err = checkFlags(); err != nil {
+					return err
+				}
+
+				schema, err := os.ReadFile(file)
+				if err != nil {
+					return fmt.Errorf("os.ReadFile(%s): %w", args[0], err)
+				}
+
+				var cfg gen.Config
+				switch ext := filepath.Ext(file); ext {
+				case ".json":
+					if err = json.Unmarshal(schema, &cfg); err != nil {
+						return fmt.Errorf("json.Unmarshal: %w", err)
+					}
+				case ".toml":
+					if err = toml.Unmarshal(schema, &cfg); err != nil {
+						return fmt.Errorf("toml.Unmarshal: %w", err)
+					}
+				case ".yaml", ".yml":
+					if err = yaml.Unmarshal(schema, &cfg); err != nil {
+						return fmt.Errorf("yaml.Unmarshal: %w", err)
+					}
+				default:
+					return fmt.Errorf("%s currently does not support schema extension %q", cmd.Root().Name(), ext)
+				}
+
+				cfg.Features = append(cfg.Features, features...)
+				cfg.Imports = append(cfg.Imports, imports...)
+				cfg.Funcs = append(cfg.Funcs, funcs...)
+
+				var buffer bytes.Buffer
+				if err = gen.Generate(&buffer, modeMap[mode], &cfg); err != nil {
+					return err
+				}
+
+				return save(output, buffer.Bytes())
 			}
-
-			cfg.Features = append(cfg.Features, features...)
-			cfg.Imports = append(cfg.Imports, imports...)
-			cfg.Funcs = append(cfg.Funcs, funcs...)
-
-			var buffer bytes.Buffer
-			if err = gen.Generate(&buffer, modeMap[mode], &cfg); err != nil {
-				return err
-			}
-
-			return save(output, buffer.Bytes())
 		},
 	}
 )
@@ -299,8 +372,16 @@ func init() {
 	defc.PersistentFlags().StringArrayVar(&imports, "import", nil, "additional imports")
 	defc.PersistentFlags().BoolVar(&disableAutoImport, "disable-auto-import", false, "disable auto import and import packages manually by '--import' option")
 	defc.PersistentFlags().StringArrayVar(&funcs, "func", nil, "additional funcs")
-	defc.MarkPersistentFlagRequired("mode")
-	defc.MarkPersistentFlagRequired("output")
+
+	// [2024-04-07]
+	// Since we use the `checkFlags` function to validate required parameters,
+	// we can disable Cobra's check for required flags.
+	/*
+		defc.MarkPersistentFlagRequired("mode")
+		defc.MarkPersistentFlagRequired("output")
+	*/
+
+	generate.PersistentFlags().StringVarP(&targetType, "type", "T", "", "the type representing the schema definition")
 }
 
 func main() {

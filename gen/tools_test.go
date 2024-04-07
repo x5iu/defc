@@ -3,6 +3,7 @@ package gen
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/importer"
@@ -288,4 +289,70 @@ func TestImporter(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestDetectTargetDecl(t *testing.T) {
+	var src = []byte(`
+package test
+
+type TestApi1[I any] interface {
+	Inner() I
+}
+
+type TestApi2[I any] interface {
+	// Test POST https://localhost:port/test
+	Test(r any) error
+
+	Inner() I
+}
+
+type TestSqlx1 interface {
+	WithTx(func(TestSqlx) error) error
+}
+
+type TestSqlx2 interface {
+	// Select Query Scan(obj)
+	Select(obj any) error
+}
+`)
+	pkg, mod, pos, err := DetectTargetDecl("test.go", src, "")
+	if err != nil {
+		t.Errorf("detect: %s", err)
+		return
+	} else if pkg != "test" || mod != ModeApi || pos != 3 {
+		t.Errorf("detect: pkg = %q; mod = %q; pos = %d", pkg, mod, pos)
+		return
+	}
+	pkg, mod, pos, err = DetectTargetDecl("test.go", src, "TestApi2")
+	if err != nil {
+		t.Errorf("detect: %s", err)
+		return
+	} else if pkg != "test" || mod != ModeApi || pos != 7 {
+		t.Errorf("detect: pkg = %q; mod = %q; pos = %d", pkg, mod, pos)
+		return
+	}
+	pkg, mod, pos, err = DetectTargetDecl("test.go", src, "TestSqlx1")
+	if err != nil {
+		t.Errorf("detect: %s", err)
+		return
+	} else if pkg != "test" || mod != ModeSqlx || pos != 14 {
+		t.Errorf("detect: pkg = %q; mod = %q; pos = %d", pkg, mod, pos)
+		return
+	}
+	pkg, mod, pos, err = DetectTargetDecl("test.go", src, "TestSqlx2")
+	if err != nil {
+		t.Errorf("detect: %s", err)
+		return
+	} else if pkg != "test" || mod != ModeSqlx || pos != 18 {
+		t.Errorf("detect: pkg = %q; mod = %q; pos = %d", pkg, mod, pos)
+		return
+	}
+	_, _, _, err = DetectTargetDecl("test.go", src, "Test")
+	if err == nil {
+		t.Errorf("detect: expects errors, got nil")
+		return
+	} else if !errors.Is(err, ErrNoTargetDeclFound) {
+		t.Errorf("detect: expects ErrNoTargetDeclFound, got => %s", err)
+		return
+	}
 }

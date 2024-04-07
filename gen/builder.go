@@ -39,7 +39,7 @@ func (doc Doc) Repr(node ast.Node) string {
 	return getRepr(node, doc)
 }
 
-func (doc Doc) InspectMethod(node ast.Node) *Method {
+func (doc Doc) InspectMethod(node *ast.Field) *Method {
 	return inspectMethod(node, doc)
 }
 

@@ -11,6 +11,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -134,6 +135,14 @@ func checkErrorType(node ast.Node) bool {
 
 func isContextType(ident string, expr ast.Expr, src []byte) bool {
 	return ident == "ctx" || contains(getRepr(expr, src), ExprContextIdent)
+}
+
+func typeMap[T any, U any](src []T, f func(T) U) []U {
+	dst := make([]U, len(src))
+	for i := 0; i < len(dst); i++ {
+		dst[i] = f(src[i])
+	}
+	return dst
 }
 
 func nodeMap[T ast.Node, U any](src []T, f func(ast.Node) U) []U {
@@ -525,4 +534,60 @@ func (importer *Importer) ImportFrom(path, dir string, _ types.ImportMode) (*typ
 
 func (importer *Importer) Import(path string) (*types.Package, error) {
 	return importer.ImportFrom(path, "", 0)
+}
+
+var ErrNoTargetDeclFound = errors.New("no target decl found")
+
+func DetectTargetDecl(file string, src []byte, target string) (string, Mode, int, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, file, src, parser.ParseComments)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	for _, decl := range f.Decls {
+		if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
+			for _, spec := range genDecl.Specs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+					if target != "" && typeSpec.Name.String() != target {
+						continue
+					}
+					if ifaceType, ok := typeSpec.Type.(*ast.InterfaceType); ok && ifaceType.Methods != nil {
+						for _, field := range ifaceType.Methods.List {
+							if _, ok := field.Type.(*ast.FuncType); ok {
+								if field.Doc != nil && len(field.Doc.List) > 0 {
+									firstLine := field.Doc.List[0]
+									firstLineArgs := splitArgs(trimSlash(firstLine.Text))
+									if len(firstLineArgs) > 0 {
+										switch opArg := firstLineArgs[1]; toUpper(opArg) {
+										case sqlxOpExec, sqlxOpQuery:
+											return f.Name.String(), ModeSqlx, fset.Position(typeSpec.Pos()).Line - 1, nil
+										case http.MethodGet,
+											http.MethodHead,
+											http.MethodPost,
+											http.MethodPut,
+											http.MethodPatch,
+											http.MethodDelete,
+											http.MethodConnect,
+											http.MethodOptions,
+											http.MethodTrace:
+											return f.Name.String(), ModeApi, fset.Position(typeSpec.Pos()).Line - 1, nil
+										}
+									}
+								}
+								if len(field.Names) > 0 {
+									if funcName := field.Names[0]; funcName.String() == sqlxMethodWithTx {
+										return f.Name.String(), ModeSqlx, fset.Position(typeSpec.Pos()).Line - 1, nil
+									} else if upperName := toUpper(funcName.String()); upperName == apiMethodInner ||
+										upperName == apiMethodResponse {
+										return f.Name.String(), ModeApi, fset.Position(typeSpec.Pos()).Line - 1, nil
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return "", 0, 0, ErrNoTargetDeclFound
 }

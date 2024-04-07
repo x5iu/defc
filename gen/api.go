@@ -267,7 +267,7 @@ func (builder *CliBuilder) inspectApi() (*apiContext, error) {
 inspectDecl:
 	for _, declIface := range f.Decls {
 		if surroundLine(fset, declIface, line) {
-			if decl := declIface.(*ast.GenDecl); decl.Tok == token.TYPE {
+			if decl, ok := declIface.(*ast.GenDecl); ok && decl.Tok == token.TYPE {
 				genDecl = decl
 				break inspectDecl
 			}
@@ -284,11 +284,12 @@ inspectDecl:
 inspectType:
 	for _, specIface := range genDecl.Specs {
 		if afterLine(fset, specIface, line) {
-			spec := specIface.(*ast.TypeSpec)
-			if iface, ok := spec.Type.(*ast.InterfaceType); ok && afterLine(fset, iface, line) {
-				typeSpec = spec
-				ifaceType = iface
-				break inspectType
+			if spec, ok := specIface.(*ast.TypeSpec); ok {
+				if iface, ok := spec.Type.(*ast.InterfaceType); ok && afterLine(fset, iface, line) {
+					typeSpec = spec
+					ifaceType = iface
+					break inspectType
+				}
 			}
 		}
 	}
@@ -330,11 +331,13 @@ inspectType:
 	}
 
 	for _, method := range ifaceType.Methods.List {
-		if !checkInput(method.Type.(*ast.FuncType)) {
-			return nil, fmt.Errorf(""+
-				"input params for method %s should "+
-				"contain 'Name' and 'Type' both",
-				quote(method.Names[0].Name))
+		if funcType, ok := method.Type.(*ast.FuncType); ok {
+			if !checkInput(funcType) {
+				return nil, fmt.Errorf(""+
+					"input params for method %s should "+
+					"contain 'Name' and 'Type' both",
+					quote(method.Names[0].Name))
+			}
 		}
 	}
 
@@ -359,7 +362,7 @@ inspectType:
 		BuildTags: parseBuildTags(builder.doc),
 		Ident:     typeSpec.Name.Name,
 		Generics:  generics,
-		Methods:   nodeMap(ifaceType.Methods.List, builder.doc.InspectMethod),
+		Methods:   typeMap(ifaceType.Methods.List, builder.doc.InspectMethod),
 		Features:  apiFeatures,
 		Imports:   builder.imports,
 		Funcs:     builder.funcs,
