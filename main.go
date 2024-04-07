@@ -184,11 +184,18 @@ using the '--mode/-m' parameter. You can also ignore the '--output' parameter, a
 with a .gen suffix as the generated code file's name. This allows you to generate the corresponding code by only 
 providing a filename without any flags. If your .go file contains multiple types that meet the criteria, you can also 
 manually specify the type that defc should handle using the '--type/-T' parameter to avoid generating incorrect code.`,
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			file := args[0]
+			var file string
+			if len(args) > 0 {
+				file = args[0]
+			} else if goFile := os.Getenv(EnvGoFile); goFile != "" {
+				file = goFile
+			} else {
+				return fmt.Errorf("unable to retrieve schema file from the $GOFILE environment variable or positional arguments")
+			}
 			ext := filepath.Ext(file)
 			if ext == ".go" {
 				var (
