@@ -119,9 +119,12 @@ defc provides the following two scenarios of code generation features:
 			HiddenDefaultCmd:    true,
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-			if cmd.Flags().NFlag() == 0 && len(args) == 0 {
-				defer os.Exit(0)
-				return cmd.Usage()
+			// parent == nil means root command
+			if cmd.Parent() == nil {
+				if cmd.Flags().NFlag() == 0 && len(args) == 0 {
+					defer os.Exit(0)
+					return cmd.Usage()
+				}
 			}
 			return nil
 		},
