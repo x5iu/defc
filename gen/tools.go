@@ -557,7 +557,7 @@ func DetectTargetDecl(file string, src []byte, target string) (string, Mode, int
 								if field.Doc != nil && len(field.Doc.List) > 0 {
 									firstLine := field.Doc.List[0]
 									firstLineArgs := splitArgs(trimSlash(firstLine.Text))
-									if len(firstLineArgs) > 0 {
+									if len(firstLineArgs) > 1 {
 										switch opArg := firstLineArgs[1]; toUpper(opArg) {
 										case sqlxOpExec, sqlxOpQuery:
 											return f.Name.String(), ModeSqlx, fset.Position(typeSpec.Pos()).Line - 1, nil
