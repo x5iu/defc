@@ -213,7 +213,7 @@ manually specify the type that defc should handle using the '--type/-T' paramete
 					file = filepath.Join(pwd, file)
 				}
 				if doc, err = os.ReadFile(file); err != nil {
-					return fmt.Errorf("os.ReadFile(%q): %w", filepath.Join(pwd, file), err)
+					return fmt.Errorf("os.ReadFile(%q): %w", file, err)
 				}
 				var declNotFoundErr error
 				pkg, mod, pos, declNotFoundErr = gen.DetectTargetDecl(file, doc, targetType)
