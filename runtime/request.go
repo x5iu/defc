@@ -114,29 +114,35 @@ func (b *MultipartBody[T]) Read(p []byte) (n int, err error) {
 		}
 		readers := make([]io.Reader, 0, s.val.NumField())
 		for i := 0; s.Scan(); i++ {
-			var buf bytes.Buffer
-			if i == 0 {
-				buf.WriteString("--" + b.getBoundary() + "\r\n")
-			} else {
-				buf.WriteString("\r\n--" + b.getBoundary() + "\r\n")
-			}
-			val := s.Val()
-			if file, ok := val.(namedReader); ok {
-				buf.WriteString(fmt.Sprintf(`Content-Disposition: form-data; name="%s"; filename="%s"`+"\r\n",
-					escapeQuotes(s.Tag()),
-					escapeQuotes(file.Name())))
-				buf.WriteString("Content-Type: application/octet-stream\r\n\r\n")
-				readers = append(readers, &buf)
-				readers = append(readers, file)
-			} else {
-				var fieldvalue string
-				if fieldvalue, ok = val.(string); !ok {
-					fieldvalue = fmt.Sprintf("%v", val)
+			tag := s.Tag()
+			if tag != "-" && s.Exported() {
+				if tagContains(tag, "omitempty") && s.Empty() {
+					continue
 				}
-				buf.WriteString(fmt.Sprintf(`Content-Disposition: form-data; name="%s"`+"\r\n\r\n",
-					escapeQuotes(s.Tag())))
-				buf.WriteString(fieldvalue)
-				readers = append(readers, &buf)
+				var buf bytes.Buffer
+				if i == 0 {
+					buf.WriteString("--" + b.getBoundary() + "\r\n")
+				} else {
+					buf.WriteString("\r\n--" + b.getBoundary() + "\r\n")
+				}
+				val := s.Val()
+				if file, ok := val.(namedReader); ok {
+					buf.WriteString(fmt.Sprintf(`Content-Disposition: form-data; name="%s"; filename="%s"`+"\r\n",
+						escapeQuotes(getTag(tag)),
+						escapeQuotes(file.Name())))
+					buf.WriteString("Content-Type: application/octet-stream\r\n\r\n")
+					readers = append(readers, &buf)
+					readers = append(readers, file)
+				} else {
+					var fieldvalue string
+					if fieldvalue, ok = val.(string); !ok {
+						fieldvalue = fmt.Sprintf("%v", val)
+					}
+					buf.WriteString(fmt.Sprintf(`Content-Disposition: form-data; name="%s"`+"\r\n\r\n",
+						escapeQuotes(getTag(tag))))
+					buf.WriteString(fieldvalue)
+					readers = append(readers, &buf)
+				}
 			}
 		}
 		readers = append(readers, strings.NewReader("\r\n--"+b.getBoundary()+"--\r\n"))
@@ -190,4 +196,31 @@ func (s *fieldScanner) Tag() string {
 
 func (s *fieldScanner) Val() any {
 	return s.val.Field(s.pos()).Interface()
+}
+
+func (s *fieldScanner) Empty() bool {
+	return s.val.Field(s.pos()).IsZero()
+}
+
+func (s *fieldScanner) Exported() bool {
+	return s.typ.Field(s.pos()).IsExported()
+}
+
+func getTag(tag string) string {
+	tag, _, _ = strings.Cut(tag, ",")
+	return tag
+}
+
+func tagContains(tag string, option string) bool {
+	parts := strings.Split(tag, ",")
+	if len(parts) <= 1 {
+		return false
+	}
+	options := parts[1:]
+	for _, o := range options {
+		if strings.TrimSpace(o) == option {
+			return true
+		}
+	}
+	return false
 }

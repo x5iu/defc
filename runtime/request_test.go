@@ -102,9 +102,12 @@ func TestJSONBody(t *testing.T) {
 
 type testRequestMultipartBody struct {
 	MultipartBody[testRequestMultipartBody]
-	File *os.File `form:"file"`
-	Name string   `form:"name"`
-	N    int      `form:"n"`
+	File       *os.File `form:"file"`
+	Name       string   `form:"name"`
+	N          int      `form:"n,test"`
+	Skip       string   `form:"-"`
+	Exclude    string   `form:"exclude,omitempty"`
+	unexported string
 }
 
 type testPanicRequestMultipartBody struct {
