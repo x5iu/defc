@@ -2,8 +2,13 @@ package defc
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io"
 	"reflect"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -60,4 +65,129 @@ func (b *JSONBody[T]) Read(p []byte) (n int, err error) {
 		return 0, err
 	}
 	return b.data.Read(p)
+}
+
+type MultipartBody[T any] struct {
+	reader   io.Reader
+	boundary string
+	once     sync.Once
+}
+
+func (b *MultipartBody[T]) getBoundary() string {
+	if b.boundary == "" {
+		var buf [32]byte
+		io.ReadFull(rand.Reader, buf[:])
+		b.boundary = hex.EncodeToString(buf[:])
+	}
+	return b.boundary
+}
+
+func (b *MultipartBody[T]) ContentType() string {
+	boundary := b.getBoundary()
+	if strings.ContainsAny(boundary, `()<>@,;:\"/[]?= `) {
+		boundary = `"` + boundary + `"`
+	}
+	return "multipart/form-data; boundary=" + boundary
+}
+
+type namedReader interface {
+	io.Reader
+	Name() string
+}
+
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+func escapeQuotes(s string) string {
+	return quoteEscaper.Replace(s)
+}
+
+func (b *MultipartBody[T]) Read(p []byte) (n int, err error) {
+	b.once.Do(func() {
+		var x T
+		x = *(*T)(unsafe.Pointer(b))
+		s := &fieldScanner{tag: "form", val: reflect.ValueOf(x)}
+		if s.val.Kind() != reflect.Struct {
+			panic("use the value type of a struct rather than a pointer type as the value for generics")
+		}
+		if !s.CheckFirstEmbedType(reflect.TypeOf(b).Elem()) {
+			panic("MultipartBody is not the first embedded field of struct type T")
+		}
+		readers := make([]io.Reader, 0, s.val.NumField())
+		for i := 0; s.Scan(); i++ {
+			var buf bytes.Buffer
+			if i == 0 {
+				buf.WriteString("--" + b.getBoundary() + "\r\n")
+			} else {
+				buf.WriteString("\r\n--" + b.getBoundary() + "\r\n")
+			}
+			val := s.Val()
+			if file, ok := val.(namedReader); ok {
+				buf.WriteString(fmt.Sprintf(`Content-Disposition: form-data; name="%s"; filename="%s"`+"\r\n",
+					escapeQuotes(s.Tag()),
+					escapeQuotes(file.Name())))
+				buf.WriteString("Content-Type: application/octet-stream\r\n\r\n")
+				readers = append(readers, &buf)
+				readers = append(readers, file)
+			} else {
+				var fieldvalue string
+				if fieldvalue, ok = val.(string); !ok {
+					fieldvalue = fmt.Sprintf("%v", val)
+				}
+				buf.WriteString(fmt.Sprintf(`Content-Disposition: form-data; name="%s"`+"\r\n\r\n",
+					escapeQuotes(s.Tag())))
+				buf.WriteString(fieldvalue)
+				readers = append(readers, &buf)
+			}
+		}
+		readers = append(readers, strings.NewReader("\r\n--"+b.getBoundary()+"--\r\n"))
+		b.reader = io.MultiReader(readers...)
+	})
+	return b.reader.Read(p)
+}
+
+type fieldScanner struct {
+	tag string
+	val reflect.Value
+	typ reflect.Type
+	idx int
+}
+
+func (s *fieldScanner) CheckFirstEmbedType(target reflect.Type) bool {
+	if s.typ == nil {
+		s.typ = s.val.Type()
+	}
+	if s.typ.NumField() == 0 {
+		return false
+	}
+	sf := s.typ.Field(0)
+	return sf.Anonymous && sf.Type == target
+}
+
+func (s *fieldScanner) pos() int {
+	return s.idx - 1
+}
+
+func (s *fieldScanner) Scan() bool {
+	if s.val.Kind() != reflect.Struct {
+		return false
+	}
+	if s.typ == nil {
+		s.typ = s.val.Type()
+	}
+	s.idx++
+	if s.pos() >= s.typ.NumField() {
+		return false
+	}
+	if sf := s.typ.Field(s.pos()); sf.Anonymous {
+		s.idx++
+	}
+	return s.pos() < s.typ.NumField()
+}
+
+func (s *fieldScanner) Tag() string {
+	return s.typ.Field(s.pos()).Tag.Get(s.tag)
+}
+
+func (s *fieldScanner) Val() any {
+	return s.val.Field(s.pos()).Interface()
 }
