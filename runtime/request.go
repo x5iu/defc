@@ -67,6 +67,23 @@ func (b *JSONBody[T]) Read(p []byte) (n int, err error) {
 	return b.data.Read(p)
 }
 
+// MultipartBody is a shortcut type used for quickly constructing an io.Reader.
+//
+// Embed MultipartBody as the first field in the struct, and set the generic parameter of
+// MultipartBody to the type of the embedded struct (ensure to use a value type rather than a
+// pointer type). This will allow the struct to be converted to an io.Reader and used as the
+// body of an HTTP request.
+//
+// Use the ContentType method to obtain the Content-Type Header with a boundary. Use the "form"
+// tag to specify the name of fields in multipart/form-data, its usage is similar to the
+// encoding/json package, and it also supports the omitempty syntax.
+//
+// For file types, you can directly use os.File as a value, or you can use types that implement
+// the namedReader interface (os.File has implemented the namedReader interface).
+//
+// Note that incorrectly setting the value of the generic type T (for example, not setting it
+// to a type consistent with the embedding struct) can lead to severe errors. Please adhere
+// to the aforementioned rule.
 type MultipartBody[T any] struct {
 	reader   io.Reader
 	boundary string
