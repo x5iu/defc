@@ -69,7 +69,7 @@ func TestBuildSqlx(t *testing.T) {
 			WithPwd(testDirAbs).
 			WithFile(testGo, doc).
 			WithPos(pos).
-			WithTemplate(""), true
+			WithTemplate(quote(`{{ define "test_template" }} test_template {{ end }}`)), true
 	}
 	t.Run("success", func(t *testing.T) {
 		builder, ok := newBuilder(t)

@@ -94,6 +94,13 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 		ctx.Methods = fixedMethods
 	}
 
+	// Small hack: When the --template/-t option is enabled, the Bind option is enabled by default.
+	if ctx.Template != "" {
+		for _, method := range ctx.Methods {
+			method.Meta += " BIND"
+		}
+	}
+
 	if err := ctx.genSqlxCode(w); err != nil {
 		return fmt.Errorf("genSqlxCode: %w", err)
 	}
