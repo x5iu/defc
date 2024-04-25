@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
@@ -63,6 +64,7 @@ var (
 	disableAutoImport bool
 	funcs             []string
 	targetType        string
+	template          string
 )
 
 var (
@@ -242,6 +244,26 @@ manually specify the type that defc should handle using the '--type/-T' paramete
 				if err = checkFlags(); err != nil {
 					return err
 				}
+				if template != "" {
+					if mod == gen.ModeApi {
+						return errors.New("the --template/-t option is not supported in the current mode=api scenario")
+					}
+					if strings.HasPrefix(template, ":") {
+						template = template[1:]
+						if template == "" {
+							return errors.New("invalid empty template")
+						}
+					} else {
+						if !filepath.IsAbs(template) {
+							template = filepath.Join(pwd, template)
+						}
+						templateBytes, err := os.ReadFile(template)
+						if err != nil {
+							return fmt.Errorf("os.ReadFile(%q): %w", template, err)
+						}
+						template = strconv.Quote(string(templateBytes))
+					}
+				}
 				builder := gen.NewCliBuilder(mod).
 					WithFeats(features).
 					WithImports(imports, true).
@@ -249,7 +271,8 @@ manually specify the type that defc should handle using the '--type/-T' paramete
 					WithPkg(pkg).
 					WithPwd(pwd).
 					WithFile(file, doc).
-					WithPos(pos)
+					WithPos(pos).
+					WithTemplate(template)
 				var buffer bytes.Buffer
 				if err = builder.Build(&buffer); err != nil {
 					return err
@@ -393,6 +416,9 @@ func init() {
 	*/
 
 	generate.PersistentFlags().StringVarP(&targetType, "type", "T", "", "the type representing the schema definition")
+	// --template/-t is an experimental parameter, during the experimental phase
+	// it will only be applied to the generate command.
+	generate.PersistentFlags().StringVarP(&template, "template", "t", "", "only applicable to additional template content under the sqlx mode")
 }
 
 func main() {

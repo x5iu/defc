@@ -68,7 +68,8 @@ func TestBuildSqlx(t *testing.T) {
 			WithPkg(testPk).
 			WithPwd(testDirAbs).
 			WithFile(testGo, doc).
-			WithPos(pos), true
+			WithPos(pos).
+			WithTemplate(""), true
 	}
 	t.Run("success", func(t *testing.T) {
 		builder, ok := newBuilder(t)

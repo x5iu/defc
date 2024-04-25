@@ -102,11 +102,13 @@ return nil
 }
 
 {{ $bindVarsFunc := (printf "__%sBindVars" $.Ident) }}
+{{ $templateVar := (printf "__%sTemplate" $.Ident) }}
 {{ $additionalFuncs := $.AdditionalFuncs }}
 var (
 _ = (*template.Template)(nil)
+{{ if $.Template }} {{ $templateVar }} = {{ $.Template }} {{ end }}
 
-{{ range $index, $method := $.Methods }} {{ if and (not (hasOption ($method.SqlxOptions) "CONST")) (not (hasOption ($method.SqlxOptions) "BIND")) }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
+{{ range $index, $method := $.Methods }} {{ if and (not (hasOption ($method.SqlxOptions) "CONST")) (not (hasOption ($method.SqlxOptions) "BIND")) }} {{ printf "sqlTmpl%s" $method.Ident }} = {{ if $.Template }}template.Must({{ end }}template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ if $.Template }}.Parse({{ $templateVar }})){{ end }}.Parse({{ quote (readHeader $method.Header) }}))
 {{ end }}{{ end }}
 )
 
@@ -153,7 +155,7 @@ _ = (*template.Template)(nil)
             {{ $argList }} = append({{ $argList }}, arg)
             return {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}(len({{ if $.HasFeature "sqlx/nort" }}{{ $mergeArgsFunc }}{{ else }}__rt.MergeArgs{{ end }}(arg)))
             }
-            {{ printf "sqlTmpl%s" $method.Ident }} := template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bind": {{ $bindFunc }}, "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ quote (readHeader $method.Header) }}))
+            {{ printf "sqlTmpl%s" $method.Ident }} := {{ if $.Template }}template.Must({{ end }}template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bind": {{ $bindFunc }}, "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ if $.Template }}.Parse({{ $templateVar }})){{ end }}.Parse({{ quote (readHeader $method.Header) }}))
         {{ else }}
             {{ $argList }} = []any{
             {{ range $index, $ident := $sortIn -}}

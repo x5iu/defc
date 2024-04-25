@@ -84,6 +84,9 @@ type CliBuilder struct {
 
 	// pos position of `go generate` command
 	pos int
+
+	// template
+	template string
 }
 
 func (builder *CliBuilder) WithFeats(feats []string) *CliBuilder {
@@ -123,12 +126,18 @@ func (builder *CliBuilder) WithPos(pos int) *CliBuilder {
 	return builder
 }
 
+func (builder *CliBuilder) WithTemplate(template string) *CliBuilder {
+	builder.template = template
+	return builder
+}
+
 func (builder *CliBuilder) Build(w io.Writer) error {
 	switch builder.mode {
 	case ModeApi:
 		return builder.buildApi(w)
 	case ModeSqlx:
 		return builder.buildSqlx(w)
+	default:
 	}
 	return nil
 }

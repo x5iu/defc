@@ -54,6 +54,7 @@ type sqlxContext struct {
 	Pwd           string
 	Doc           Doc
 	Schema        string
+	Template      string
 }
 
 func (ctx *sqlxContext) Build(w io.Writer) error {
@@ -283,6 +284,7 @@ inspectType:
 		Imports:   builder.imports,
 		Funcs:     builder.funcs,
 		Doc:       builder.doc,
+		Template:  builder.template,
 	}, nil
 }
 

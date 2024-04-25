@@ -596,6 +596,9 @@ You can also compile `github.com/x5iu/defc` into a binary file and then use the 
 
 Starting from version `v1.22.0`, `defc generate` now supports `.go` files. When using a `.go` file as input, `defc` will analyze the file content, automatically determine the type representing the schema, and match the corresponding mode. This means you don't need to specify the corresponding mode using the `--mode/-m` parameter. You can also ignore the `--output` parameter, and `defc` will use the current file's name with a `.gen` suffix as the generated code file's name. **You can generate the corresponding code by simply providing a filename without any flags**. If your `.go` file contains multiple types that meet the criteria, you can also manually specify the type that `defc` should handle using the `--type/-T` parameter to avoid generating incorrect code.
 
+In version `v1.25.0`, we added a new option `--template/-t` for the `sqlx` mode, which is used to add uniform 
+template content to all SQL query statements. This is experimental and requires more testing.
+
 *Note: Currently, `defc generate` is only an experimental feature, and the stability of its functions and API is not guaranteed. Documentation is also not yet complete, and users may need to figure out how to use various features themselves (such as the formats of various parameters).*
 
 ## Additional Features (`--features`) Explanation
