@@ -142,6 +142,13 @@ defc provides the following two scenarios of code generation features:
 				pos  int
 			)
 
+			if pwd == "" {
+				pwd, err = os.Getwd()
+				if err != nil {
+					return fmt.Errorf("get current working directory: %w", err)
+				}
+			}
+
 			if !filepath.IsAbs(file) {
 				file = filepath.Join(pwd, file)
 			}
@@ -211,6 +218,12 @@ manually specify the type that defc should handle using the '--type/-T' paramete
 					mod gen.Mode
 					out = output
 				)
+				if pwd == "" {
+					pwd, err = os.Getwd()
+					if err != nil {
+						return fmt.Errorf("get current working directory: %w", err)
+					}
+				}
 				if !filepath.IsAbs(file) {
 					file = filepath.Join(pwd, file)
 				}
