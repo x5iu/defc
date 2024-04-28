@@ -261,6 +261,11 @@ manually specify the type that defc should handle using the '--type/-T' paramete
 					if mod == gen.ModeApi {
 						return errors.New("the --template/-t option is not supported in the current mode=api scenario")
 					}
+					// The --template option supports two types of parameters. The first type is the path of a template
+					// file, the program will read the content string of the file and generate a template. The second
+					// type starts with a colon followed by an expression string. The program will remove the colon and
+					// use the expression after the colon as the template string, generating a template based on the
+					// value of that expression.
 					if strings.HasPrefix(template, ":") {
 						template = template[1:]
 						if template == "" {
