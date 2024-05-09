@@ -108,7 +108,17 @@ var (
 _ = (*template.Template)(nil)
 {{ if $.Template }} {{ $templateVar }} = {{ $.Template }} {{ end }}
 
-{{ range $index, $method := $.Methods }} {{ if and (not (hasOption ($method.SqlxOptions) "CONST")) (not (hasOption ($method.SqlxOptions) "BIND")) }} {{ printf "sqlTmpl%s" $method.Ident }} = {{ if $.Template }}template.Must({{ end }}template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ if $.Template }}.Parse({{ $templateVar }})){{ end }}.Parse({{ quote (readHeader $method.Header) }}))
+{{ $hasGlobalTemplate := false }}
+{{ range $index, $method := $.Methods }}
+    {{ if and (not (hasOption ($method.SqlxOptions) "CONST")) (not (hasOption ($method.SqlxOptions) "BIND")) }}
+        {{ $hasGlobalTemplate = true }}
+    {{ end }}
+{{ end }}
+
+{{ $baseTemplate := (printf "__%sBaseTemplate" $.Ident) }}
+{{ if $hasGlobalTemplate }}{{ $baseTemplate }} = template.Must(template.New({{ quote (printf "%sBaseTemplate" $.Ident) }}).Funcs(template.FuncMap{ "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }).Parse({{ if $.Template }}{{ $templateVar }}{{ else }}""{{ end }})){{ end }}
+
+{{ range $index, $method := $.Methods }} {{ if and (not (hasOption ($method.SqlxOptions) "CONST")) (not (hasOption ($method.SqlxOptions) "BIND")) }} {{ printf "sqlTmpl%s" $method.Ident }} = template.Must({{ $baseTemplate }}.New({{ quote $method.Ident }}).Parse({{ quote (readHeader $method.Header) }}))
 {{ end }}{{ end }}
 )
 
