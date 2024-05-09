@@ -196,8 +196,8 @@ _ = (*template.Template)(nil)
             defer {{ $sql }}.Reset()
         {{ end }}
 
-        if {{ $err }} = {{ $sqlTmpl }}.Execute({{ $sql }}, map[string]any{
-        {{ if $arguments }}{{ quote $arguments }}: &{{ $argList }},{{ end }}
+        if {{ $err }} = {{ $sqlTmpl }}.Execute({{ $sql }}, map[string]any{ {{ if $arguments }}
+            {{ quote $arguments }}: &{{ $argList }},{{ end }}
         {{ range $index, $ident := $sortIn -}}
             {{- quote $ident }}: {{ $ident -}},
         {{ end }}
