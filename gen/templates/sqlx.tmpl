@@ -117,6 +117,7 @@ _ = (*template.Template)(nil)
 {{ $mergeArgsFunc := (printf "__%sMergeArgs" $.Ident) }}
 {{ $mergeNamedArgsFunc := (printf "__%sMergeNamedArgs" $.Ident) }}
 {{ $inFunc := (printf "__%sIn" $.Ident) }}
+{{ $argumentsType := (printf "__%sArguments" $.Ident) }}
 {{ $countFunc := (printf "__%sCount" $.Ident) }}
 {{ $splitFunc := (printf "__%sSplit" $.Ident) }}
 {{ range $index, $method := $.Methods }}
@@ -144,10 +145,11 @@ _ = (*template.Template)(nil)
     {{- $err := printf "err%s" $method.Ident }}
     {{- $err }} error
     {{ if not (hasOption ($method.SqlxOptions) "NAMED") }}
-        {{- $argList }} = make([]any, 0, 8)
+        {{- $argList }} = make({{ if $.HasFeature "sqlx/nort" }}{{ $argumentsType }}{{ else }}__rt.Arguments{{ end }}, 0, 8)
     {{- end }}
     )
 
+    {{ $arguments := $method.ArgumentsVar }}
     {{ if not (hasOption ($method.SqlxOptions) "NAMED") }}
         {{ $bindFunc := (printf "__%sBindFunc" $method.Ident) }}
         {{ if and (not (hasOption ($method.SqlxOptions) "CONST")) (hasOption ($method.SqlxOptions) "BIND") }}
@@ -157,13 +159,15 @@ _ = (*template.Template)(nil)
             }
             {{ printf "sqlTmpl%s" $method.Ident }} := {{ if $.Template }}template.Must({{ end }}template.Must(template.New({{ quote $method.Ident }}).Funcs(template.FuncMap{ "bind": {{ $bindFunc }}, "bindvars": {{ if $.HasFeature "sqlx/nort" }}{{ $bindVarsFunc }}{{ else }}__rt.BindVars{{ end }}, {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ if $.Template }}.Parse({{ $templateVar }})){{ end }}.Parse({{ quote (readHeader $method.Header) }}))
         {{ else }}
-            {{ $argList }} = []any{
-            {{ range $index, $ident := $sortIn -}}
-                {{ if not (isContextType $ident (index $method.In $ident)) -}}
-                    {{- $ident -}},
-                {{ end -}}
+            {{ if eq $arguments "" }}
+                {{ $argList }} = {{ if $.HasFeature "sqlx/nort" }}{{ $argumentsType }}{{ else }}__rt.Arguments{{ end }}{
+                {{ range $index, $ident := $sortIn -}}
+                    {{ if not (isContextType $ident (index $method.In $ident)) -}}
+                        {{- $ident -}},
+                    {{ end -}}
+                {{ end }}
+                }
             {{ end }}
-            }
         {{ end }}
     {{ end }}
 
@@ -183,6 +187,7 @@ _ = (*template.Template)(nil)
         {{ end }}
 
         if {{ $err }} = {{ $sqlTmpl }}.Execute({{ $sql }}, map[string]any{
+        {{ if $arguments }}{{ quote $arguments }}: &{{ $argList }},{{ end }}
         {{ range $index, $ident := $sortIn -}}
             {{- quote $ident }}: {{ $ident -}},
         {{ end }}
@@ -664,9 +669,9 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
     }
 
     {{ $splitTokensFunc := (printf "__%sSplitTokens" $.Ident) }}
-    func {{ $inFunc }}(query string, args []any) (string, []any, error) {
+    func {{ $inFunc }}[S ~[]any](query string, args S) (string, S, error) {
     tokens := {{ $splitTokensFunc }}(query)
-    targetArgs := make([]any, 0, len(args))
+    targetArgs := make(S, 0, len(args))
     targetQuery := make([]string, 0, len(tokens))
     n := 0
     for _, token := range tokens {
@@ -690,6 +695,14 @@ SelectContext(ctx context.Context, dest interface{}, query string, args ...inter
     return "", nil, errors.New("number of bindVars less than number arguments")
     }
     return strings.Join(targetQuery, " "), targetArgs, nil
+    }
+
+    type {{ $argumentsType }} []any
+
+    func (arguments *{{ $argumentsType }}) Add(argument any) string {
+    merged := {{ $mergeArgsFunc }}(argument)
+    *arguments = append(*arguments, merged...)
+    return {{ $bindVarsFunc }}(len(merged))
     }
 
     func {{ $countFunc }}(sql string, ch string) (n int) {

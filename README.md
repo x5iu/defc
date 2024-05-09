@@ -109,6 +109,8 @@ Starting from `v1.13.2`, `<ARG>` adds a new parameter `SCAN(expr)`, which will u
 
 Starting from `v1.20.1`, a new argument `BIND` has been added to `<ARG>`. It will use the `binding` method to bind query parameters. For more details, please refer to the section "Query Parameter Definition".
 
+Starting from `v1.26.0`, the `<ARG>` parameter has been added as a new argument for SQL templates to include a list of query parameters variables. For more details, please refer to the section "Query Parameter Definition".
+
 ### SQL Statement Definition
 
 Starting from the second line of the comment, the SQL statement definition follows. Here, you can write the SQL statements you want to execute. SQL line breaks are supported (while still needing to be within the comment scope), and so are multiple SQL statements (multi-line SQL is only supported for use in `EXEC`, with multiple SQL statements separated by semicolons `;`; these SQL will be executed in the same transaction). In SQL, parameters are represented with question marks `?` as placeholders. **Additionally, if you are using `PostgreSQL` or other databases that do not use `?` as a placeholder, you can convert the `?` in SQL to the placeholder suitable for the respective database with the `--features=sqlx/rebind` feature in the `def` command. For instance, it changes to `$1` in `PostgreSQL`.**
@@ -192,6 +194,19 @@ type Query interface {
 When using the `binding` mode, specify the values of the parameters that need to be bound using template syntax, and use the `bind` function to add the parameters to the query parameter list. For example, if you have a `user` object and you need to use `user.ID` as a query parameter, you can write in the SQL like this: `{{ bind $.user.ID }}`. `defc` will not only add `user.ID` to the query parameter list but also place a placeholder (or multiple, depending on the parameter type) at the position of `{{ bind $.user.ID }}` to prevent SQL injection attacks.
 
 *Note that when using binding mode, since the template is built and rendered each time, its execution performance is significantly slower compared to when the `CONST` argument is enabled. Please choose the specific parameters according to your actual scenario.*
+
+To address the performance overhead of re-rendering templates with each method execution in binding mode, a new `arguments` parameter has been introduced in version `defc@v1.26.0`. By using syntax like `arguments=ARGUMENTS`, you can specify an alias (variable name) for the SQL query parameters list within the template. Subsequently, you can directly call the `Add` method on the query parameters list to add new parameters and leave a placeholder for a parameter in the original SQL statement:
+
+```go
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=query.go
+type Query interface {
+  // GetUsers QUERY arguments=sqlArguments
+  // SELECT * FROM `user` WHERE `id` IN ({{ $.sqlArguments.Add ( $.ids ) }}) AND `status` = {{ $.sqlArguments.Add ( $.name.String ) }};
+  GetUsers(ctx context.Context, name fmt.Stringer, ids []int64) ([]*User, error)
+}
+```
+
+Using the `arguments` parameter will render the SQL template **only once** during program initialization.
 
 ### Query Results and Error Definitions
 

@@ -109,6 +109,8 @@ type Query interface {
 
 从 `v1.20.1` 开始，`<ARG>` 新增参数 `BIND`，将使用 binding 方式绑定查询参数，详情请见章节【查询参数定义】。
 
+从 `v1.26.0` 开始，`<ARG>` 新增参数 `arguments`，为 sql 模板添加查询参数列表变量，详情请见章节【查询参数定义】。
+
 ### SQL 语句定义
 
 从注释的第二行开始，则为 SQL 语句定义，在这里可以书写你要执行的 SQL，支持 SQL 换行（但仍然需要在注释范围内），及多条 SQL（多行 SQL 仅支持在 `EXEC` 中使用，多条 SQL 以分号 `;` 分隔，这些 SQL 会被放在同一个事务中执行）；SQL 中的参数使用问号 `?` 占位符表示，**额外的：如果你使用的是 `PostgreSQL` 或其他不使用 `?` 占位符的数据库，你可以在 `def` 命令中使用 `--features=sqlx/rebind` 特性来将 SQL 中的 `?` 转换为适配对应数据库的占位符，例如 `PostgreSQL` 中的 `$1`。**
@@ -194,6 +196,19 @@ type QUery interface {
 使用 binding 模式时，通过模板语法指定需要绑定的参数值，并使用 `bind` 函数来将参数添加到查询参数列表中，例如你有一个 `user` object，你需要使用 `user.ID` 作为查询参数，那么你可以在 sql 中这样写：`{{ bind $.user.ID }}`，`defc` 不仅会将 `user.ID` 添加到查询参数列表中，还会在 `{{ bind $.user.ID }}` 的位置放置一个（或多个，取决于参数类型）占位符，避免发生 sql 注入攻击。
 
 *注意，使用 binding 模式时，由于每次都会构建并渲染模板，其执行性能相比于启用 `CONST` 参数要慢不少，请根据你的实际场景选择具体的参数。*
+
+为了解决 binding 模式下，每次执行方法都需要重新渲染模板的性能开销，在 `defc@v1.26.0` 版本中，新增了 `arguments` 参数，通过 `arguments=ARGUMENTS` 这样的语法为 sql 查询参数列表指定一个在模板中的别名（变量名称），随后，就可以在模板中直接调用查询参数列表的 `Add` 方法为查询参数列表添加新的参数，同时在原 sql 语句处留下一个参数占位符：
+
+```go
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=query.go
+type QUery interface {
+  // GetUsers QUERY arguments=sqlArguments
+  // SELECT * FROM `user` WHERE `id` IN ({{ $.sqlArguments.Add ( $.ids ) }}) AND `status` = {{ $.sqlArguments.Add ( $.name.String ) }};
+  GetUsers(ctx context.Context, name fmt.Stringer, ids []int64) ([]*User, error)
+}
+```
+
+使用 `arguments` 参数将只会在程序初始化时渲染**一次** sql 模板。
 
 ### 查询结果及错误定义
 

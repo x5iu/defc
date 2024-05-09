@@ -23,13 +23,21 @@ func TestMethod(t *testing.T) {
 		t.Errorf("method: %v != nil", exScan)
 		return
 	}
-	m = &Method{Meta: "Test Query One Scan(obj)"}
+	if argVar := m.ArgumentsVar(); argVar != "" {
+		t.Errorf("method: %q != \"\"", argVar)
+		return
+	}
+	m = &Method{Meta: "Test Query One Scan(obj) arguments=sqlArguments"}
 	if exScan := m.ExtraScan(); !reflect.DeepEqual(exScan, []string{"obj"}) {
 		t.Errorf("method: %v != [obj]", exScan)
 		return
 	}
 	if rtnSlice := m.ReturnSlice(); rtnSlice != false {
 		t.Errorf("method: %v != false", rtnSlice)
+		return
+	}
+	if argVar := m.ArgumentsVar(); argVar != "sqlArguments" {
+		t.Errorf("method: %q != \"sqlArguments\"", argVar)
 		return
 	}
 }

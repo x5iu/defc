@@ -340,3 +340,20 @@ func TestIn(t *testing.T) {
 		})
 	})
 }
+
+func TestArguments(t *testing.T) {
+	var arguments = make(Arguments, 0, 2)
+	bindvars := arguments.Add([]int{1, 2, 3})
+	if bindvars != "?, ?, ?" {
+		t.Errorf("arguments: %q != \"?, ?, ?\"", bindvars)
+		return
+	}
+	if l := len(arguments); l != 3 {
+		t.Errorf("arguments: len(arguments) != 3, got %d", l)
+		return
+	}
+	if !reflect.DeepEqual(arguments, Arguments{1, 2, 3}) {
+		t.Errorf("arguments: %v != [1, 2, 3]", arguments)
+		return
+	}
+}

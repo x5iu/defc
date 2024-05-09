@@ -128,9 +128,9 @@ func BindVars(data any) string {
 	return strings.Join(bindVars, ", ")
 }
 
-func In(query string, args []any) (string, []any, error) {
+func In[S ~[]any](query string, args S) (string, S, error) {
 	tokens := splitTokens(query)
-	targetArgs := make([]any, 0, len(args))
+	targetArgs := make(S, 0, len(args))
 	targetQuery := make([]string, 0, len(tokens))
 	n := 0
 	for _, token := range tokens {
@@ -154,4 +154,12 @@ func In(query string, args []any) (string, []any, error) {
 		return "", nil, errors.New("number of bindVars less than number arguments")
 	}
 	return strings.Join(targetQuery, " "), targetArgs, nil
+}
+
+type Arguments []any
+
+func (arguments *Arguments) Add(argument any) string {
+	merged := MergeArgs(argument)
+	*arguments = append(*arguments, merged...)
+	return BindVars(len(merged))
 }
