@@ -96,16 +96,30 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 
 	// Small hack: When the --template/-t option is enabled, the Bind option is enabled by default.
 	if ctx.Template != "" {
+		const bindOption = "BIND"
 		// [2024-05-07]
 		// Eventually, it was realized that arbitrarily adding a Bind option to each method was a foolish act.
 		// Bind would require parsing the template content every time the method is called, which is very slow.
 		// In some scenarios, there is simply a need for some common templates without wanting this heavy burden.
 		// Therefore, today we will disable this unwise behavior.
-		/*
-			for _, method := range ctx.Methods {
-				method.Meta += " BIND"
+		//
+		// [2024-05-11]
+		// When the situation becomes that one method includes a Bind option, but other methods do not include a
+		// Bind option, the best strategy should be to add a Bind option to all methods. This is because the
+		// template may contain calls to bind, and if you do not add a Bind option for the method, it will cause
+		// an error in rendering the template.
+		var useBind bool
+		for _, method := range ctx.Methods {
+			if hasOption(method.SqlxOptions(), bindOption) {
+				useBind = true
+				break
 			}
-		*/
+		}
+		if useBind {
+			for _, method := range ctx.Methods {
+				method.Meta += " " + bindOption
+			}
+		}
 	}
 
 	if err := ctx.genSqlxCode(w); err != nil {
