@@ -103,13 +103,34 @@ Here, `<NAME>` is the method name. You should keep it consistent with the curren
 
 Starting from `v1.9.4`, `<ARG>` supports two additional values `MANY`/`ONE`, which are only available when the `<CMD>` value is `QUERY`. `MANY` represents using the `sqlx.Select` method for querying, where the result should be stored in a slice; `ONE` represents using the `sqlx.Get` method for querying, where the result should be stored in a structure, a basic type, or a type that implements the `sql.Scanner` interface. Additionally, from `v1.9.4`, the `[]byte` type will be treated as a separate type like `string`, not a slice type. When using `[]byte` as the return type without specifying `MANY`/`ONE`, `defc` will default to the `sqlx.Get` method for querying.
 
-Starting from `v1.12.0`, `<ARG>` introduces a new parameter `CONST`. Using the `CONST` parameter indicates that you want `defc` **not** to generate template (`text/template`) construction-related code, meaning `defc` will treat the comment content as the complete SQL for database querying, and template syntax will not be effective. This can significantly improve performance (as template construction is very slow) when executing simple SQL (referring to SQL strings that do not require additional concatenation and judgment).
+Starting from `v1.12.0`, `<ARG>` adds a new parameter `CONST`. Using the `CONST` parameter indicates that you want `defc` **not** to generate template (`text/template`) construction-related code, meaning `defc` will treat the comment content as the complete SQL for database querying, and template syntax will not be effective. This can significantly improve performance (as template construction is very slow) when executing simple SQL (referring to SQL strings that do not require additional concatenation and judgment).
 
 Starting from `v1.13.2`, `<ARG>` adds a new parameter `SCAN(expr)`, which will use `expr` instead of the return value as the parameter passed into the `sqlx.Select`/`sqlx.Get` method. When using the `SCAN` parameter, the method return value can only be `error`.
 
-Starting from `v1.20.1`, a new argument `BIND` has been added to `<ARG>`. It will use the `binding` method to bind query parameters. For more details, please refer to the section "Query Parameter Definition".
+Starting from `v1.20.1`, `<ARG>` adds a new parameter `BIND`. It will use the `binding` method to bind query parameters. For more details, please refer to the section "Query Parameter Definition".
 
-Starting from `v1.26.0`, the `<ARG>` parameter has been added as a new argument for SQL templates to include a list of query parameters variables. For more details, please refer to the section "Query Parameter Definition".
+Starting from `v1.26.0`, `<ARG>` adds a new parameter `arguments` for SQL templates to include a list of query parameters variables. For more details, please refer to the section "Query Parameter Definition".
+
+Starting from `v1.27.0`, `<ARG>` adds a new parameter `wrap`. Through the `wrap` parameter, you can customize the data reception logic for a specific type of reception:
+
+```go
+type UserDao struct {
+  *User
+}
+
+func convertUserToDao(user *User) *UserDao {
+  return &UserDao{User: user} // Implement your object conversion logic here.
+}
+
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=query.go
+type Query interface {
+  // GetUser QUERY wrap=convertUserToDao
+  // SELECT * FROM `user` WHERE `id` = ?;
+  GetUser(ctx context.Context, id int64) (*User, error)
+}
+```
+
+In the aforementioned code, once you set `wrap=convertUserToDao`, `defc` will utilize `*UserDao` to receive data returned from the database and map it into `*UserDao` instead of the original `*User` object. In the generated code, the `GetUser` method will employ the function `convertUserToDao` to transform a `*User` into a `*UserDao`. It then passes this `*UserDao` into functions/methods like `Query`/`Get` for receiving query data from the database (and completing mapping).
 
 ### SQL Statement Definition
 

@@ -267,6 +267,7 @@ _ = (*template.Template)(nil)
 
     {{- $execResult := printf "v0%s" $method.Ident }}
     {{- $singleScan := $method.SingleScan }}
+    {{- $wrapFunc := $method.WrapFunc }}
     {{ if hasOption ($method.SqlxOptions) "NAMED" -}}
         {{ $argList := printf "listArgs%s" $method.Ident }}
         var {{ $argList }} []interface{}
@@ -308,7 +309,7 @@ _ = (*template.Template)(nil)
             if {{ $i }} < len({{ $sqlSlice }})-1 {
             _, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $argList }}...)
             } else {
-            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}, {{ $splitSql }}, {{ $argList }}...)
+            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if $wrapFunc }}{{ $wrapFunc }}({{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}{{ if $wrapFunc }}){{ end }}, {{ $splitSql }}, {{ $argList }}...)
             }
         {{ end }}
 
@@ -333,7 +334,7 @@ _ = (*template.Template)(nil)
             if {{ $i }} < len({{ $sqlSlice }})-1 {
             _, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
             } else {
-            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}, {{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
+            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if $wrapFunc }}{{ $wrapFunc }}({{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}{{ if $wrapFunc }}){{ end }}, {{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
             }
         {{ end }}
 
@@ -371,7 +372,7 @@ _ = (*template.Template)(nil)
     {{ if isQuery $method.SqlxOperation }}
         {{ $callback := printf "callback%s" $method.Ident }}
         {{ if $.HasFeature "sqlx/callback" }}
-            if {{ $callback }}, {{ $ok }} := any({{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}).(interface{Callback(context.Context, {{ $.Ident }}) error}); {{ $ok }} {
+            if {{ $callback }}, {{ $ok }} := any({{ if $wrapFunc }}{{ $wrapFunc }}({{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}{{ if $wrapFunc }}){{ end }}).(interface{Callback(context.Context, {{ $.Ident }}) error}); {{ $ok }} {
             if {{ $err }} := {{ $callback }}.Callback({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, __imp); {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}
                 {{- if lt $index (sub (len $method.Out) 1) -}}
@@ -382,7 +383,7 @@ _ = (*template.Template)(nil)
             }
         {{ end }}
         {{ if $.HasFeature "sqlx/any-callback" }}
-            if {{ $callback }}, {{ $ok }} := any({{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}).(interface{Callback(context.Context, any) error}); {{ $ok }} {
+            if {{ $callback }}, {{ $ok }} := any({{ if $wrapFunc }}{{ $wrapFunc }}({{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}{{ if $wrapFunc }}){{ end }}).(interface{Callback(context.Context, any) error}); {{ $ok }} {
             if {{ $err }} := {{ $callback }}.Callback({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, __imp); {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}
                 {{- if lt $index (sub (len $method.Out) 1) -}}

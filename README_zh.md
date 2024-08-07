@@ -111,6 +111,27 @@ type Query interface {
 
 从 `v1.26.0` 开始，`<ARG>` 新增参数 `arguments`，为 sql 模板添加查询参数列表变量，详情请见章节【查询参数定义】。
 
+从 `v1.27.0` 开始，`<ARG>` 新增参数 `wrap`，通过 `wrap` 参数你可以为一个接收类型自定义数据接收逻辑：
+
+```go
+type UserDao struct {
+  *User
+}
+
+func convertUserToDao(user *User) *UserDao {
+  return &UserDao{User: user} // 在这里实现你的对象转换逻辑
+}
+
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=query.go
+type Query interface {
+  // GetUser QUERY wrap=convertUserToDao
+  // SELECT * FROM `user` WHERE `id` = ?;
+  GetUser(ctx context.Context, id int64) (*User, error)
+}
+```
+
+在上述代码中，当你设置了 `wrap=convertUserToDao` 后，`defc` 会使用 `*UserDao` 来接收从数据库返回的数据，并将数据映射到 `*UserDao` 中，而不是原先的 `*User` 对象。在生成的代码中，`GetUser` 方法会使用 `convertUserToDao` 函数将 `*User` 转换为 `*UserDao`，再将 `*UserDao` 传入 `Query`/`Get` 函数/方法中以接收数据库查询数据（并完成映射）。
+
 ### SQL 语句定义
 
 从注释的第二行开始，则为 SQL 语句定义，在这里可以书写你要执行的 SQL，支持 SQL 换行（但仍然需要在注释范围内），及多条 SQL（多行 SQL 仅支持在 `EXEC` 中使用，多条 SQL 以分号 `;` 分隔，这些 SQL 会被放在同一个事务中执行）；SQL 中的参数使用问号 `?` 占位符表示，**额外的：如果你使用的是 `PostgreSQL` 或其他不使用 `?` 占位符的数据库，你可以在 `def` 命令中使用 `--features=sqlx/rebind` 特性来将 SQL 中的 `?` 转换为适配对应数据库的占位符，例如 `PostgreSQL` 中的 `$1`。**
@@ -695,7 +716,7 @@ type FutureResponseError interface {
 
 **更加需要注意的是：如果你同时启用了 `api/future` 和 `api/error` 特性，那么当 HTTP 状态码为非 2xx 时，本次请求获得的响应，即 `http.Response` 会被包装在 `FutureResponseError` 中（用于错误处理），这也意味着调用方必须在处理错误的同时，负责关闭 `http.Response.Body`，请在启用上述提到的特性时，特别注意错误处理的方式，不要忘了及时关闭 `http.Response.Body`，避免资源泄露。**
 
-### `sqlx/in` 
+### `sqlx/in`
 
 使用 `sqlx/in` 特性将产生以下两项变动：
 

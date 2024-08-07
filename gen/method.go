@@ -181,6 +181,19 @@ func (method *Method) SingleScan() string {
 	return ""
 }
 
+// WrapFunc should only be used with '--mode=sqlx' arg
+func (method *Method) WrapFunc() string {
+	const prefix = "WRAP="
+	if args := method.MetaArgs(); len(args) >= 3 {
+		for _, opt := range args[2:] {
+			if len(opt) > len(prefix) && toUpper(opt[:len(prefix)]) == prefix {
+				return opt[len(prefix):]
+			}
+		}
+	}
+	return ""
+}
+
 // ArgumentsVar should only be used with '--mode=sqlx' arg
 func (method *Method) ArgumentsVar() string {
 	const prefix = "ARGUMENTS="
