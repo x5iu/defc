@@ -730,7 +730,7 @@ Using the `sqlx/in` feature will result in the following two changes:
 
 ### sqlx/future
 
-Added in `defc@v1.17.0` as an **experimental feature**, the `sqlx` mode introduces the `github.com/x5iu/sqlx` package as a replacement for the `github.com/jmoiron/sqlx` package, providing the following interfaces:
+Added in `defc@v1.17.0` as an **experimental feature**, the `sqlx` mode introduces the `github.com/x5iu/sqlx` package as a replacement for the `github.com/jmoiron/sqlx` package(starting from `defc@v1.28.0`, it will be replaced with the `github.com/x5iu/defc/sqlx` package), providing the following interfaces:
 
 ```go
 type IRow interface {

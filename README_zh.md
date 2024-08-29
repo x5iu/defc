@@ -742,7 +742,7 @@ type FutureResponseError interface {
 
 ### sqlx/future
 
-于 `defc@v1.17.0` 新增，**实验性的特性**，将 `sqlx` 模式中引入的 `github.com/jmoiron/sqlx` 包替换为 `github.com/x5iu/sqlx` 包，其提供了以下接口：
+于 `defc@v1.17.0` 新增，**实验性的特性**，将 `sqlx` 模式中引入的 `github.com/jmoiron/sqlx` 包替换为 `github.com/x5iu/sqlx` 包（从 `defc@v1.28.0` 开始，将替换为 `github.com/x5iu/defc/sqlx` 包），其提供了以下接口：
 
 ```go
 type IRow interface {

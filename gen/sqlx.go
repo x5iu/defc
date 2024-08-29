@@ -148,7 +148,7 @@ func (ctx *sqlxContext) MergedImports() (imports []string) {
 	}
 
 	if ctx.HasFeature(FeatureSqlxFuture) {
-		imports = append(imports, quote("github.com/x5iu/sqlx"))
+		imports = append(imports, quote("github.com/x5iu/defc/sqlx"))
 	} else {
 		imports = append(imports, quote("github.com/jmoiron/sqlx"))
 	}
