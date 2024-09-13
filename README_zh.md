@@ -716,6 +716,10 @@ type FutureResponseError interface {
 
 **更加需要注意的是：如果你同时启用了 `api/future` 和 `api/error` 特性，那么当 HTTP 状态码为非 2xx 时，本次请求获得的响应，即 `http.Response` 会被包装在 `FutureResponseError` 中（用于错误处理），这也意味着调用方必须在处理错误的同时，负责关闭 `http.Response.Body`，请在启用上述提到的特性时，特别注意错误处理的方式，不要忘了及时关闭 `http.Response.Body`，避免资源泄露。**
 
+### `api/ignore-status`
+
+启用 `api/ignore-status` 特性时，`defc` 生成的代码将不再包含对 `http.Respoonse.StatusCode` 值的判断，即使服务返回了非 `http.StatusOK` 的状态码，也不再会额外返回一个 `error`，调用方需要自己处理状态码，并根据状态码提供和返回对应的 `error`。
+
 ### `sqlx/in`
 
 使用 `sqlx/in` 特性将产生以下两项变动：

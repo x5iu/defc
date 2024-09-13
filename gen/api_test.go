@@ -64,7 +64,7 @@ func TestBuildApi(t *testing.T) {
 			return nil, false
 		}
 		return NewCliBuilder(ModeApi).
-			WithFeats([]string{FeatureApiNoRt}).
+			WithFeats([]string{FeatureApiNoRt, FeatureApiFuture}).
 			WithPkg(testPk).
 			WithPwd(testDirAbs).
 			WithFile(testGo, doc).

@@ -19,14 +19,15 @@ const (
 	apiMethodInner    = "INNER"
 	apiMethodResponse = "RESPONSE"
 
-	FeatureApiCache  = "api/cache"
-	FeatureApiLog    = "api/log"
-	FeatureApiLogx   = "api/logx"
-	FeatureApiClient = "api/client"
-	FeatureApiPage   = "api/page"
-	FeatureApiError  = "api/error"
-	FeatureApiNoRt   = "api/nort"
-	FeatureApiFuture = "api/future"
+	FeatureApiCache        = "api/cache"
+	FeatureApiLog          = "api/log"
+	FeatureApiLogx         = "api/logx"
+	FeatureApiClient       = "api/client"
+	FeatureApiPage         = "api/page"
+	FeatureApiError        = "api/error"
+	FeatureApiNoRt         = "api/nort"
+	FeatureApiFuture       = "api/future"
+	FeatureApiIgnoreStatus = "api/ignore-status"
 )
 
 func (builder *CliBuilder) buildApi(w io.Writer) error {
@@ -95,6 +96,13 @@ func (ctx *apiContext) Build(w io.Writer) error {
 					len(method.Out))
 			}
 		*/
+	}
+
+	// When using the api/future feature without enabling the api/error feature, it may cause connections
+	// to not be closed properly, potentially leading to memory leak risks. To prevent this from happening,
+	// when the api/future feature is enabled, the api/error feature must also be enforced.
+	if in(ctx.Features, FeatureApiFuture) && !in(ctx.Features, FeatureApiError) {
+		ctx.Features = append(ctx.Features, FeatureApiError)
 	}
 
 	if err := ctx.genApiCode(w); err != nil {

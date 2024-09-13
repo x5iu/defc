@@ -338,22 +338,24 @@ var (
         }
 
         {{ if $.HasFeature "api/future" }}
-            if {{ $httpResponse }}.StatusCode < 200 || {{ $httpResponse }}.StatusCode > 299 {
-            return {{ range $index, $type := $method.Out -}}
-                {{- if lt $index (sub (len $method.Out) 1) -}}
-                    v{{- $index -}}{{- $method.Ident }},
+            {{ if not ( $.HasFeature "api/ignore-status" ) }}
+                if {{ $httpResponse }}.StatusCode < 200 || {{ $httpResponse }}.StatusCode > 299 {
+                return {{ range $index, $type := $method.Out -}}
+                    {{- if lt $index (sub (len $method.Out) 1) -}}
+                        v{{- $index -}}{{- $method.Ident }},
+                    {{- end -}}
                 {{- end -}}
-            {{- end -}}
-            {{ if $.HasFeature "api/error" -}}
-                {{ if $.HasFeature "api/nort" -}}
-                    {{ $newResponseErrorFunc }}({{ quote $method.Ident }}, {{ $httpResponse }})
+                {{ if $.HasFeature "api/error" -}}
+                    {{ if $.HasFeature "api/nort" -}}
+                        {{ $newResponseErrorFunc }}({{ quote $method.Ident }}, {{ $httpResponse }})
+                    {{ else -}}
+                        __rt.NewFutureResponseError({{ quote $method.Ident }}, {{ $httpResponse }})
+                    {{ end -}}
                 {{ else -}}
-                    __rt.NewFutureResponseError({{ quote $method.Ident }}, {{ $httpResponse }})
+                    fmt.Errorf("response status code %d for '{{ $method.Ident }}'", {{ $httpResponse }}.StatusCode)
                 {{ end -}}
-            {{ else -}}
-                fmt.Errorf("response status code %d for '{{ $method.Ident }}'", {{ $httpResponse }}.StatusCode)
-            {{ end -}}
-            }
+                }
+            {{ end }}
 
             if {{ $err }} = {{ $response }}.FromResponse({{ quote $method.Ident }}, {{ $httpResponse }}); {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}
@@ -376,22 +378,24 @@ var (
             {{ $httpResponse }}.Body.Close()
             }
 
-            if {{ $httpResponse }}.StatusCode < 200 || {{ $httpResponse }}.StatusCode > 299 {
-            return {{ range $index, $type := $method.Out -}}
-                {{- if lt $index (sub (len $method.Out) 1) -}}
-                    v{{- $index -}}{{- $method.Ident }},
+            {{ if not ( $.HasFeature "api/ignore-status" ) }}
+                if {{ $httpResponse }}.StatusCode < 200 || {{ $httpResponse }}.StatusCode > 299 {
+                return {{ range $index, $type := $method.Out -}}
+                    {{- if lt $index (sub (len $method.Out) 1) -}}
+                        v{{- $index -}}{{- $method.Ident }},
+                    {{- end -}}
                 {{- end -}}
-            {{- end -}}
-            {{ if $.HasFeature "api/error" -}}
-                {{ if $.HasFeature "api/nort" -}}
-                    {{ $newResponseErrorFunc }}({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+                {{ if $.HasFeature "api/error" -}}
+                    {{ if $.HasFeature "api/nort" -}}
+                        {{ $newResponseErrorFunc }}({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+                    {{ else -}}
+                        __rt.NewResponseError({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+                    {{ end -}}
                 {{ else -}}
-                    __rt.NewResponseError({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+                    fmt.Errorf("response status code %d for '{{ $method.Ident }}' with body: \n\n%s\n\n", {{ $httpResponse }}.StatusCode, {{ $responseBody }}.String())
                 {{ end -}}
-            {{ else -}}
-                fmt.Errorf("response status code %d for '{{ $method.Ident }}' with body: \n\n%s\n\n", {{ $httpResponse }}.StatusCode, {{ $responseBody }}.String())
-            {{ end -}}
-            }
+                }
+            {{ end }}
 
             if {{ $err }} = {{ $response }}.FromBytes({{ quote $method.Ident }}, {{ $responseBody }}.Bytes()); {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}

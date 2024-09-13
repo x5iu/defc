@@ -5,17 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/BurntSushi/toml"
-	"github.com/spf13/cobra"
-	"github.com/x5iu/defc/gen"
-	runtime "github.com/x5iu/defc/runtime"
 	"go/format"
-	goimport "golang.org/x/tools/imports"
-	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/BurntSushi/toml"
+	"github.com/spf13/cobra"
+	"github.com/x5iu/defc/gen"
+	runtime "github.com/x5iu/defc/runtime"
+	goimport "golang.org/x/tools/imports"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -37,6 +38,7 @@ var (
 		gen.FeatureApiError,
 		gen.FeatureApiNoRt,
 		gen.FeatureApiFuture,
+		gen.FeatureApiIgnoreStatus,
 		gen.FeatureSqlxIn,
 		gen.FeatureSqlxLog,
 		gen.FeatureSqlxRebind,
@@ -106,7 +108,7 @@ generate. Through go generate, we can approximately provide macro functionality,
 Based on the above background, I wanted to implement a code generation tool. By defining the Schema of a query or 
 request, it is possible to automatically generate code for the related CRUD operations or HTTP requests, which includes 
 parameter construction, error handling, result mapping, and log recording logic. defc is my experimental attempt at 
-such a schema-to-code generation; "def" stands for "define," indicating the behavior of setting up a Schema. Currently, 
+such a schema-to-code generation; "def" stands for "define", indicating the behavior of setting up a Schema. Currently, 
 defc provides the following two scenarios of code generation features:
 
 * CRUD code generation based on sqlx for databases
