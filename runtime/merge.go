@@ -120,16 +120,16 @@ func BindVars(data any) string {
 		n = 1
 	}
 
-	bindVars := make([]string, n)
+	bindvars := make([]string, n)
 	for i := 0; i < n; i++ {
-		bindVars[i] = "?"
+		bindvars[i] = "?"
 	}
 
-	return strings.Join(bindVars, ", ")
+	return strings.Join(bindvars, ", ")
 }
 
 func In[S ~[]any](query string, args S) (string, S, error) {
-	tokens := splitTokens(query)
+	tokens := SplitTokens(query)
 	targetArgs := make(S, 0, len(args))
 	targetQuery := make([]string, 0, len(tokens))
 	n := 0
@@ -137,7 +137,7 @@ func In[S ~[]any](query string, args S) (string, S, error) {
 		switch token {
 		case "?":
 			if n >= len(args) {
-				return "", nil, errors.New("number of BindVars exceeds arguments")
+				return "", nil, errors.New("number of bind-vars exceeds arguments")
 			}
 			nested := MergeArgs(args[n])
 			if len(nested) == 0 {
@@ -151,7 +151,7 @@ func In[S ~[]any](query string, args S) (string, S, error) {
 		}
 	}
 	if n < len(args) {
-		return "", nil, errors.New("number of bindVars less than number arguments")
+		return "", nil, errors.New("number of bind-vars less than number arguments")
 	}
 	return strings.Join(targetQuery, " "), targetArgs, nil
 }

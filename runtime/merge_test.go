@@ -311,7 +311,7 @@ func TestIn(t *testing.T) {
 				t.Errorf("errors: expects errors, got nil")
 				return
 			}
-			if err.Error() != "number of BindVars exceeds arguments" {
+			if err.Error() != "number of bind-vars exceeds arguments" {
 				t.Errorf("errors: unexpected error message => %q", err.Error())
 				return
 			}
@@ -322,7 +322,7 @@ func TestIn(t *testing.T) {
 				t.Errorf("errors: expects errors, got nil")
 				return
 			}
-			if err.Error() != "number of bindVars less than number arguments" {
+			if err.Error() != "number of bind-vars less than number arguments" {
 				t.Errorf("errors: unexpected error message => %q", err.Error())
 				return
 			}
