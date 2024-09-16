@@ -7,6 +7,4 @@ require (
 	github.com/x5iu/defc v0.0.0
 )
 
-replace (
-	github.com/x5iu/defc => ../../..
-)
+replace github.com/x5iu/defc => ../../..

@@ -89,24 +89,31 @@ func TestSqlx(t *testing.T) {
 			return
 		}
 		defer os.Remove(testGenFile)
-		var (
-			stdout bytes.Buffer
-			stderr bytes.Buffer
-		)
-		cmd := exec.Command("go", "run",
-			"-tags",
-			"test",
-			filepath.Join(pwd, testDir))
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-		if err = cmd.Run(); err != nil {
-			t.Errorf("run: %s\n%s", err, stderr.String())
+		if !runCommand(t, "go", "mod", "tidy") {
 			return
 		}
-		if stdout.Len() > 0 {
-			t.Logf("output: \n%s", stdout.String())
+		if !runCommand(t, "go", "run", "-tags", "test", filepath.Join(pwd, testDir)) {
+			return
 		}
 	}
 	t.Run("rt", func(t *testing.T) { runTest(t) })
 	t.Run("nort", func(t *testing.T) { runTest(t, gen.FeatureSqlxNoRt) })
+}
+
+func runCommand(t *testing.T, name string, args ...string) (success bool) {
+	var (
+		stdout bytes.Buffer
+		stderr bytes.Buffer
+	)
+	cmd := exec.Command(name, args...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Errorf("run %s %s: \n%s", name, strings.Join(args, " "), err)
+		return false
+	}
+	if stdout.Len() > 0 {
+		t.Logf("output: \n%s", stdout.String())
+	}
+	return true
 }
