@@ -23,5 +23,6 @@ var (
 
 type (
 	DB  = sqlx.DB
+	Tx  = sqlx.Tx
 	Row = sqlx.IRow
 )
