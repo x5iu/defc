@@ -3,6 +3,8 @@ package defc
 import (
 	"reflect"
 	"testing"
+
+	"github.com/x5iu/defc/runtime/token"
 )
 
 func TestCount(t *testing.T) {
@@ -85,10 +87,28 @@ func TestSplit(t *testing.T) {
 		},
 		{
 			Name:  "comment_query",
-			Input: "/* sqlcomment */ select id, name from user where id = :id and name = :name;",
+			Input: "/* sqlcomment */ select id, name from user where id = :id and name = :name; -- comment; // comment;",
 			Sep:   ";",
 			Expect: []string{
 				"/* sqlcomment */ select id , name from user where id = :id and name = :name ;",
+				"-- comment ;",
+				"// comment ;",
+			},
+		},
+		{
+			Name:  "at_query",
+			Input: "select id, name from user where id = @id and name = @name;",
+			Sep:   ";",
+			Expect: []string{
+				"select id , name from user where id = @id and name = @name ;",
+			},
+		},
+		{
+			Name:  "dollar_query",
+			Input: "select id, name from user where id = $1 and name = $2;",
+			Sep:   ";",
+			Expect: []string{
+				"select id , name from user where id = $1 and name = $2 ;",
 			},
 		},
 	}
@@ -144,7 +164,7 @@ func TestSplitTokens(t *testing.T) {
 	}
 	for _, testcase := range testcases {
 		t.Run(testcase.Name, func(t *testing.T) {
-			if tokens := SplitTokens(testcase.Input); !reflect.DeepEqual(tokens, testcase.Expect) {
+			if tokens := token.SplitTokens(testcase.Input); !reflect.DeepEqual(tokens, testcase.Expect) {
 				t.Errorf("tokens: %v != %v", tokens, testcase.Expect)
 				return
 			}

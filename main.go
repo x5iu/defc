@@ -345,26 +345,24 @@ manually specify the type that defc should handle using the '--type/-T' paramete
 )
 
 func save(name string, code []byte) (err error) {
+	oriCode := code
 	code, err = format.Source(code)
 	if err != nil {
-		return fmt.Errorf("format.Source: \n\n%s\n\n%w", code, err)
+		return fmt.Errorf("format.Source: \n\n%s\n\n%w", oriCode, err)
 	}
-
 	if err = os.WriteFile(name, code, 0644); err != nil {
 		return fmt.Errorf("os.WriteFile(%q, 0644): %w", name, err)
 	}
-
 	if !disableAutoImport {
 		code, err = goimport.Process(name, code, nil)
 		if err != nil {
-			return fmt.Errorf("imports.Process: \n\n%s\n\n%w", code, err)
+			return fmt.Errorf("imports.Process: \n\n%s\n\n%w", oriCode, err)
 		}
 
 		if err = os.WriteFile(name, code, 0644); err != nil {
 			return fmt.Errorf("os.WriteFile(%q, 0644): %w", name, err)
 		}
 	}
-
 	return nil
 }
 
@@ -420,12 +418,14 @@ func init() {
 	defc.AddCommand(generate)
 	defc.SetHelpCommand(&cobra.Command{Hidden: true})
 
-	defc.PersistentFlags().StringVarP(&mode, "mode", "m", "", fmt.Sprintf("mode=[%s]", printStrings(validModes)))
-	defc.PersistentFlags().StringVarP(&output, "output", "o", "", "output file name")
-	defc.PersistentFlags().StringSliceVarP(&features, "features", "f", nil, fmt.Sprintf("features=[%s]", printStrings(validFeatures)))
-	defc.PersistentFlags().StringArrayVar(&imports, "import", nil, "additional imports")
-	defc.PersistentFlags().BoolVar(&disableAutoImport, "disable-auto-import", false, "disable auto import and import packages manually by '--import' option")
-	defc.PersistentFlags().StringArrayVar(&funcs, "func", nil, "additional funcs")
+	flags := defc.PersistentFlags()
+	flags.StringVarP(&mode, "mode", "m", "", fmt.Sprintf("mode=[%s]", printStrings(validModes)))
+	flags.StringVarP(&output, "output", "o", "", "output file name")
+	flags.StringSliceVarP(&features, "features", "f", nil, fmt.Sprintf("features=[%s]", printStrings(validFeatures)))
+	flags.StringArrayVar(&imports, "import", nil, "additional imports")
+	flags.BoolVar(&disableAutoImport, "disable-auto-import", false, "disable auto import and import packages manually by '--import' option")
+	flags.StringArrayVar(&funcs, "func", nil, "additional funcs")
+	flags.StringArrayVar(&funcs, "function", nil, "additional funcs")
 
 	// [2024-04-07]
 	// Since we use the `checkFlags` function to validate required parameters,
@@ -435,10 +435,14 @@ func init() {
 		defc.MarkPersistentFlagRequired("output")
 	*/
 
-	generate.PersistentFlags().StringVarP(&targetType, "type", "T", "", "the type representing the schema definition")
+	genFlags := generate.PersistentFlags()
+	genFlags.StringVarP(&targetType, "type", "T", "", "the type representing the schema definition")
 	// --template/-t is an experimental parameter, during the experimental phase
 	// it will only be applied to the generate command.
-	generate.PersistentFlags().StringVarP(&template, "template", "t", "", "only applicable to additional template content under the sqlx mode")
+	genFlags.StringVarP(&template, "template", "t", "", "only applicable to additional template content under the sqlx mode")
+
+	defc.MarkPersistentFlagFilename("output")
+	defc.MarkFlagsMutuallyExclusive("func", "function")
 }
 
 func main() {

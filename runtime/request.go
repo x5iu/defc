@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"unsafe"
+
+	"github.com/x5iu/defc/runtime/token"
 )
 
 // JSONBody is a shortcut type used for quickly constructing an io.Reader.
@@ -224,12 +226,12 @@ func (s *fieldScanner) Exported() bool {
 }
 
 func getTag(tag string) string {
-	tag, _, _ = strings.Cut(tag, ",")
+	tag, _, _ = strings.Cut(tag, token.Comma)
 	return tag
 }
 
 func tagContains(tag string, option string) bool {
-	parts := strings.Split(tag, ",")
+	parts := strings.Split(tag, token.Comma)
 	if len(parts) <= 1 {
 		return false
 	}

@@ -41,20 +41,21 @@ func (builder *CliBuilder) buildSqlx(w io.Writer) error {
 }
 
 type sqlxContext struct {
-	Package       string
-	BuildTags     []string
-	Ident         string
-	Methods       []*Method
-	Embeds        []ast.Expr
-	WithTx        bool
-	WithTxContext bool
-	Features      []string
-	Imports       []string
-	Funcs         []string
-	Pwd           string
-	Doc           Doc
-	Schema        string
-	Template      string
+	Package         string
+	BuildTags       []string
+	Ident           string
+	Methods         []*Method
+	Embeds          []ast.Expr
+	WithTx          bool
+	WithTxContext   bool
+	WithTxIsolation string
+	Features        []string
+	Imports         []string
+	Funcs           []string
+	Pwd             string
+	Doc             Doc
+	Schema          string
+	Template        string
 }
 
 func (ctx *sqlxContext) Build(w io.Writer) error {
@@ -81,6 +82,7 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 		if method.Ident == sqlxMethodWithTx {
 			ctx.WithTx = true
 			ctx.WithTxContext = method.HasContext()
+			ctx.WithTxIsolation = method.TxIsolationLv()
 			fixedMethods = make([]*Method, 0, len(ctx.Methods)-1)
 			fixedMethods = append(fixedMethods, ctx.Methods[:i]...)
 			fixedMethods = append(fixedMethods, ctx.Methods[i+1:]...)
@@ -94,9 +96,20 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 		ctx.Methods = fixedMethods
 	}
 
-	// Small hack: When the --template/-t option is enabled, the Bind option is enabled by default.
-	if ctx.Template != "" {
-		const bindOption = "BIND"
+	var bindInvoked bool
+	// Since the text/template standard library does not provide a specific error type, we can only determine whether
+	// the bind function has been invoked in the template through this rudimentary way.
+	if _, err := template.New("detect_bind_function").Parse(ctx.Template); err != nil {
+		bindInvoked = strings.Contains(err.Error(), `function "bind" not defined`)
+	}
+
+	// Small hack: When the --template/-t option is enabled, and "bind" function has been invoked, the Bind option
+	// is enabled by default for all methods.
+	if ctx.Template != "" && bindInvoked {
+		const (
+			bindOption  = "BIND"
+			namedOption = "NAMED"
+		)
 		// [2024-05-07]
 		// Eventually, it was realized that arbitrarily adding a Bind option to each method was a foolish act.
 		// Bind would require parsing the template content every time the method is called, which is very slow.
@@ -117,7 +130,9 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 		}
 		if useBind {
 			for _, method := range ctx.Methods {
-				method.Meta += " " + bindOption
+				if !hasOption(method.SqlxOptions(), bindOption) && !hasOption(method.SqlxOptions(), namedOption) {
+					method.Meta += " " + bindOption
+				}
 			}
 		}
 	}
@@ -394,7 +409,7 @@ func hasOption(opts []string, opt string) bool {
 	return false
 }
 
-//go:embed templates/sqlx.tmpl
+//go:embed template/sqlx.tmpl
 var sqlxTemplate string
 
 func (ctx *sqlxContext) genSqlxCode(w io.Writer) error {

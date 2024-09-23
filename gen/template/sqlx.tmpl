@@ -37,6 +37,8 @@ __core: core,
 }
 
 {{ $coreInterface := (printf "%sCoreInterface" $.Ident) }}
+{{ $coreTxInterface := (printf "%sCoreTxInterface" $.Ident) }}
+{{ $coreBeginTxInterface := (printf "%sCoreBeginTxInterface" $.Ident) }}
 func New{{ $.Ident }}FromCore(core {{ $coreInterface }}{{ range $index, $embed := $.Embeds }}, {{ getRepr (deselect $embed) }} {{ getRepr $embed }}{{ end }}) {{ $.Ident }} {
 return &{{ $impName }}{
 {{ range $index, $embed := $.Embeds -}}
@@ -105,7 +107,6 @@ return nil
 {{ $templateVar := (printf "__%sTemplate" $.Ident) }}
 {{ $additionalFuncs := $.AdditionalFuncs }}
 var (
-_ = (*template.Template)(nil)
 {{ if $.Template }} {{ $templateVar }} = {{ $.Template }} {{ end }}
 
 {{ $hasGlobalTemplate := false }}
@@ -219,7 +220,17 @@ _ = (*template.Template)(nil)
     {{- $start := printf "start%s" $method.Ident }}
 
     {{- $tx := printf "tx%s" $method.Ident }}
-    {{ $tx }}, {{ $err }} := __imp.__core.Begin{{ if $method.HasContext }}Tx{{ end }}x({{ if $method.HasContext }}ctx, nil{{ end }})
+    {{- $coreBeginTx := printf "coreBeginTx%s" $method.Ident }}
+    {{- $isolationLv := $method.IsolationLv }}
+    var {{ $tx }} {{ $coreTxInterface }}
+    if {{ $coreBeginTx }}, {{ $ok }} := __imp.__core.({{ $coreBeginTxInterface }}); {{ $ok }} {
+    {{ $tx }}, {{ $err }} = {{ $coreBeginTx }}.CoreBeginTx({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ if $isolationLv }}&sql.TxOptions{Isolation: {{ $isolationLv }}}{{ else }}nil{{ end }})
+    } else {
+    {{ $sqlxTx := printf "sqlxTx%s" $method.Ident -}}
+    var {{ $sqlxTx }} *sqlx.Tx
+    {{ $sqlxTx }}, {{ $err }} = __imp.__core.BeginTxx({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ if $isolationLv }}&sql.TxOptions{Isolation: {{ $isolationLv }}}{{ else }}nil{{ end }})
+    {{ $tx }} = {{ $sqlxTx }}
+    }
     if {{ $err }} != nil {
     return {{ range $index, $type := $method.Out -}}
         {{- if lt $index (sub (len $method.Out) 1) -}}
@@ -304,12 +315,12 @@ _ = (*template.Template)(nil)
         {{- end -}}
 
         {{ if isExec $method.SqlxOperation }}
-            {{ if gt (len $method.Out) 1 }}{{ $execResult }}{{ else }}_{{ end }}, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $argList }}...)
+            {{ if gt (len $method.Out) 1 }}{{ $execResult }}{{ else }}_{{ end }}, {{ $err }} = {{ $tx }}.ExecContext({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ $splitSql }}, {{ $argList }}...)
         {{ else if isQuery $method.SqlxOperation }}
             if {{ $i }} < len({{ $sqlSlice }})-1 {
-            _, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $argList }}...)
+            _, {{ $err }} = {{ $tx }}.ExecContext({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ $splitSql }}, {{ $argList }}...)
             } else {
-            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if $wrapFunc }}{{ $wrapFunc }}({{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}{{ if $wrapFunc }}){{ end }}, {{ $splitSql }}, {{ $argList }}...)
+            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}Context({{if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ if $wrapFunc }}{{ $wrapFunc }}({{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}{{ if $wrapFunc }}){{ end }}, {{ $splitSql }}, {{ $argList }}...)
             }
         {{ end }}
 
@@ -329,12 +340,12 @@ _ = (*template.Template)(nil)
         {{- end -}}
 
         {{ if isExec $method.SqlxOperation }}
-            {{ if gt (len $method.Out) 1 }}{{ $execResult }}{{ else }}_{{ end }}, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
+            {{ if gt (len $method.Out) 1 }}{{ $execResult }}{{ else }}_{{ end }}, {{ $err }} = {{ $tx }}.ExecContext({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
         {{ else if isQuery $method.SqlxOperation }}
             if {{ $i }} < len({{ $sqlSlice }})-1 {
-            _, {{ $err }} = {{ $tx }}.Exec{{ if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
+            _, {{ $err }} = {{ $tx }}.ExecContext({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
             } else {
-            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}{{if $method.HasContext }}Context{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ if $wrapFunc }}{{ $wrapFunc }}({{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}{{ if $wrapFunc }}){{ end }}, {{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
+            {{ $err }} = {{ $tx }}.{{ if hasOption ($method.SqlxOptions) "MANY" }}Select{{ else if hasOption ($method.SqlxOptions) "ONE" }}Get{{ else }}{{ if isSlice (index $method.Out 0) }}Select{{ else }}Get{{ end }}{{ end }}Context({{if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ if $wrapFunc }}{{ $wrapFunc }}({{ end }}{{ if $singleScan  }}{{ $singleScan }}{{ else }}{{ if not (isPointer (index $method.Out 0)) }}&{{ end }}v0{{ $method.Ident }}{{ end }}{{ if $wrapFunc }}){{ end }}, {{ $splitSql }}, {{ $args }}[{{ $offset }}:{{ $offset }}+{{ $count }}]...)
             }
         {{ end }}
 
@@ -406,9 +417,9 @@ _ = (*template.Template)(nil)
 {{ if $.WithTx }}
     {{ $tx := printf "tx%s" $.Ident }}
 
-    func New{{ $.Ident }}FromTx{{ if $.HasFeature "sqlx/log" }}AndLog{{ end }}(core *sqlx.Tx{{ if $.HasFeature "sqlx/log" }}, log interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) } {{ end }}{{ range $index, $embed := $.Embeds }}, {{ getRepr (deselect $embed) }} {{ getRepr $embed }}{{ end }}) {{ $.Ident }} {
+    func New{{ $.Ident }}FromTx{{ if $.HasFeature "sqlx/log" }}AndLog{{ end }}(core {{ $coreTxInterface }}{{ if $.HasFeature "sqlx/log" }}, log interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) } {{ end }}{{ range $index, $embed := $.Embeds }}, {{ getRepr (deselect $embed) }} {{ getRepr $embed }}{{ end }}) {{ $.Ident }} {
     tx :=  &{{ $tx }}{
-    Tx: core,
+    {{ $coreTxInterface }}: core,
     {{ if $.HasFeature "sqlx/log" -}}
         log: log,
     {{- end }}
@@ -431,7 +442,7 @@ _ = (*template.Template)(nil)
     }
 
     type {{ $tx }} struct {
-    *sqlx.Tx
+    {{ $coreTxInterface }}
     {{ if $.HasFeature "sqlx/log" -}}
         log interface {
         Log(ctx context.Context, caller string, query string, args any, elapse time.Duration)
@@ -439,12 +450,12 @@ _ = (*template.Template)(nil)
     {{ end }}
     }
 
-    func (tx *{{ $tx }}) Beginx() (*sqlx.Tx, error) {
-    return tx.Tx, nil
+    func (tx *{{ $tx }}) BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error) {
+    panic("unreachable: `CoreBeginTx` should be used")
     }
 
-    func (tx *{{ $tx }}) BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error) {
-    return tx.Tx, nil
+    func (tx *{{ $tx }}) CoreBeginTx(ctx context.Context, opts *sql.TxOptions) ({{ $coreTxInterface }}, error) {
+    return tx.{{ $coreTxInterface }}, nil
     }
 
     {{ if $.HasFeature "sqlx/log" -}}
@@ -455,85 +466,62 @@ _ = (*template.Template)(nil)
         }
     {{- end }}
 
-    {{ if $.WithTxContext }}
-        func (__imp *{{ $receiver }}) WithTx(ctx context.Context, f func({{ $.Ident }}) error) error {
-        inner, err := __imp.__core.BeginTxx(ctx, nil)
-        if err != nil {
-        return fmt.Errorf("error creating transaction in %s: %w", strconv.Quote("WithTx"), err)
-        }
+    func (__imp *{{ $receiver }}) WithTx({{ if $.WithTxContext }}ctx context.Context, {{ end }}f func({{ $.Ident }}) error) (err error) {
+    var inner {{ $coreTxInterface }}
+    if coreBeginTx, ok := __imp.__core.({{ $coreBeginTxInterface }}); ok {
+    inner, err = coreBeginTx.CoreBeginTx({{ if $.WithTxContext }}ctx{{ else }}context.Background(){{ end }}, {{ if $.WithTxIsolation }}&sql.TxOptions{Isolation: {{ $.WithTxIsolation }}}{{ else }}nil{{ end }})
+    } else {
+    var sqlxTx *sqlx.Tx
+    sqlxTx, err = __imp.__core.BeginTxx({{ if $.WithTxContext }}ctx{{ else }}context.Background(){{ end }}, {{ if $.WithTxIsolation }}&sql.TxOptions{Isolation: {{ $.WithTxIsolation }}}{{ else }}nil{{ end }})
+    inner = sqlxTx
+    }
+    if err != nil {
+    return fmt.Errorf("error creating transaction in %s: %w", strconv.Quote("WithTx"), err)
+    }
 
-        defer inner.Rollback()
+    defer inner.Rollback()
 
-        core := &{{ $tx }}{
-        Tx: inner,
-        }
+    core := &{{ $tx }}{
+    {{ $coreTxInterface }}: inner,
+    }
 
-        {{ if $.HasFeature "sqlx/log" -}}
-            if log, ok := __imp.__core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); ok {
-            core.log = log
-            }
-        {{ end }}
-
-        tx := __imp.Clone()
-        tx.(interface{ SetWithTx(withTx bool) }).SetWithTx(true)
-        tx.(interface{ SetCore(core any) }).SetCore(core)
-
-        if err = f(tx); err != nil {
-        return err
-        }
-
-        if err = inner.Commit(); err != nil {
-        return fmt.Errorf("error committing transaction in %s: %w", strconv.Quote("WithTx"), err)
-        }
-
-        return nil
-        }
-    {{ else }}
-        func (__imp *{{ $receiver }}) WithTx(f func({{ $.Ident }}) error) error {
-        inner, err := __imp.__core.Beginx()
-        if err != nil {
-        return fmt.Errorf("error creating transaction in %s: %w", strconv.Quote("WithTx"), err)
-        }
-
-        defer inner.Rollback()
-
-        core := &{{ $tx }}{
-        Tx: inner,
-        }
-
-        {{ if $.HasFeature "sqlx/log" -}}
-            if log, ok := __imp.__core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); ok {
-            core.log = log
-            }
-        {{ end }}
-
-        tx := __imp.Clone()
-        tx.(interface{ SetWithTx(withTx bool) }).SetWithTx(true)
-        tx.(interface{ SetCore(core any) }).SetCore(core)
-
-        if err = f(tx); err != nil {
-        return err
-        }
-
-        if err = inner.Commit(); err != nil {
-        return fmt.Errorf("error committing transaction in %s: %w", strconv.Quote("WithTx"), err)
-        }
-
-        return nil
+    {{ if $.HasFeature "sqlx/log" -}}
+        if log, ok := __imp.__core.(interface{ Log(ctx context.Context, caller string, query string, args any, elapse time.Duration) }); ok {
+        core.log = log
         }
     {{ end }}
+
+    tx := __imp.Clone()
+    tx.(interface{ SetWithTx(withTx bool) }).SetWithTx(true)
+    tx.(interface{ SetCore(core any) }).SetCore(core)
+
+    if err = f(tx); err != nil {
+    return err
+    }
+
+    if err = inner.Commit(); err != nil {
+    return fmt.Errorf("error committing transaction in %s: %w", strconv.Quote("WithTx"), err)
+    }
+
+    return nil
+    }
 {{ end }}
 
 type {{ $coreInterface }} interface {
 {{ if $.HasFeature "sqlx/rebind" }} Rebind(query string) string {{ end }}
-Beginx() (*sqlx.Tx, error)
 BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error)
-Exec(query string, args ...interface{}) (sql.Result, error)
-ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-Get(dest interface{}, query string, args ...interface{}) error
-GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
-Select(dest interface{}, query string, args ...interface{}) error
-SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+}
+
+type {{ $coreTxInterface }} interface {
+ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+GetContext(ctx context.Context, dest any, query string, args ...any) error
+SelectContext(ctx context.Context, dest any, query string, args ...any) error
+Rollback() error
+Commit() error
+}
+
+type {{ $coreBeginTxInterface }} interface {
+CoreBeginTx(ctx context.Context, opts *sql.TxOptions) ({{ $coreTxInterface }}, error)
 }
 
 {{ if $.HasFeature "sqlx/nort" }}

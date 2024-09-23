@@ -4,7 +4,8 @@ import (
 	"database/sql/driver"
 	"errors"
 	"reflect"
-	"strings"
+
+	tok "github.com/x5iu/defc/runtime/token"
 )
 
 type NotAnArg interface {
@@ -119,23 +120,30 @@ func BindVars(data any) string {
 	default:
 		n = 1
 	}
-
-	bindvars := make([]string, n)
-	for i := 0; i < n; i++ {
-		bindvars[i] = "?"
+	maxInt := func(a, b int) int {
+		if a > b {
+			return a
+		}
+		return b
 	}
-
-	return strings.Join(bindvars, ", ")
+	bindvars := make([]string, 0, maxInt(2*n-1, 2))
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			bindvars = append(bindvars, tok.Comma)
+		}
+		bindvars = append(bindvars, tok.Question)
+	}
+	return tok.MergeSqlTokens(bindvars)
 }
 
 func In[S ~[]any](query string, args S) (string, S, error) {
-	tokens := SplitTokens(query)
+	tokens := tok.SplitTokens(query)
 	targetArgs := make(S, 0, len(args))
 	targetQuery := make([]string, 0, len(tokens))
 	n := 0
 	for _, token := range tokens {
 		switch token {
-		case "?":
+		case tok.Question:
 			if n >= len(args) {
 				return "", nil, errors.New("number of bind-vars exceeds arguments")
 			}
@@ -153,7 +161,13 @@ func In[S ~[]any](query string, args S) (string, S, error) {
 	if n < len(args) {
 		return "", nil, errors.New("number of bind-vars less than number arguments")
 	}
-	return strings.Join(targetQuery, " "), targetArgs, nil
+	return tok.MergeSqlTokens(targetQuery), targetArgs, nil
+}
+
+// in is a special function designed to allow the sqlx package to reference it without using import,
+// but instead through go:linkname, in order to avoid circular references.
+func in(query string, args ...any) (string, []any, error) {
+	return In[[]any](query, args)
 }
 
 type Arguments []any

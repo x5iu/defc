@@ -194,6 +194,32 @@ func (method *Method) WrapFunc() string {
 	return ""
 }
 
+// IsolationLv should only be used with '--mode=sqlx' arg
+func (method *Method) IsolationLv() string {
+	const prefix = "ISOLATION="
+	if args := method.MetaArgs(); len(args) >= 3 {
+		for _, opt := range args[2:] {
+			if len(opt) > len(prefix) && toUpper(opt[:len(prefix)]) == prefix {
+				return opt[len(prefix):]
+			}
+		}
+	}
+	return ""
+}
+
+// TxIsolationLv should only be used with '--mode=sqlx' arg
+func (method *Method) TxIsolationLv() string {
+	const prefix = "ISOLATION="
+	if args := method.MetaArgs(); len(args) >= 2 {
+		for _, opt := range args[1:] {
+			if len(opt) > len(prefix) && toUpper(opt[:len(prefix)]) == prefix {
+				return opt[len(prefix):]
+			}
+		}
+	}
+	return ""
+}
+
 // ArgumentsVar should only be used with '--mode=sqlx' arg
 func (method *Method) ArgumentsVar() string {
 	const prefix = "ARGUMENTS="

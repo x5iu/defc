@@ -19,7 +19,7 @@ func TestSqlx(t *testing.T) {
 		testPk      = "main"
 		testDir     = "sqlx"
 		testFile    = "main.go"
-		testGenFile = "main.gen.go"
+		testGenFile = "executor.gen.go"
 	)
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -36,24 +36,38 @@ func TestSqlx(t *testing.T) {
 		t.Errorf("chdir: %s", err)
 		return
 	}
+	defer os.Remove(testGenFile)
 	doc, err := os.ReadFile(testFile)
 	if err != nil {
 		t.Errorf("read %s: %s", testFile, err)
 		return
 	}
 	var (
-		pos      int
-		features []string
+		featReg = regexp.MustCompile(`--features(?:\s|=)([\w,/]+)`)
+		tmplReg = regexp.MustCompile(`--template(?:\s|=)([\w:]+)`)
+		funcReg = regexp.MustCompile(`--function(?:\s|=)([\w=]+)`)
+
+		pos       int
+		features  []string
+		template  string
+		functions []string
 	)
 	lineScanner := bufio.NewScanner(bytes.NewReader(doc))
 	for i := 1; lineScanner.Scan(); i++ {
 		text := lineScanner.Text()
 		if strings.HasPrefix(text, "//go:generate") {
 			pos = i
-			featReg := regexp.MustCompile(`--features(?:\s|=)([\w,/]+)`)
 			featureList := featReg.FindAllStringSubmatch(text, -1)
 			for _, sublist := range featureList {
 				features = append(features, strings.Split(sublist[1], ",")...)
+			}
+			templateList := tmplReg.FindAllStringSubmatch(text, -1)
+			for _, sublist := range templateList {
+				template = strings.TrimPrefix(sublist[1], ":")
+			}
+			functionList := funcReg.FindAllStringSubmatch(text, -1)
+			for _, sublist := range functionList {
+				functions = append(functions, sublist[1])
 			}
 			break
 		}
@@ -69,7 +83,9 @@ func TestSqlx(t *testing.T) {
 			WithFile(testFile, doc).
 			WithPos(pos).
 			WithImports(nil, true).
-			WithFeats(append(features, feats...))
+			WithFeats(append(features, feats...)).
+			WithTemplate(template).
+			WithFuncs(functions)
 		var buf bytes.Buffer
 		if err = generator.Build(&buf); err != nil {
 			t.Errorf("build: %s", err)
@@ -88,7 +104,6 @@ func TestSqlx(t *testing.T) {
 			t.Errorf("write %s: %s", testGenFile, err)
 			return
 		}
-		defer os.Remove(testGenFile)
 		if !runCommand(t, "go", "mod", "tidy") {
 			return
 		}
@@ -109,11 +124,14 @@ func runCommand(t *testing.T, name string, args ...string) (success bool) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Errorf("run %s %s: \n%s", name, strings.Join(args, " "), err)
+		t.Logf("the integration test program encountered an error, "+
+			"some information is shown below: \n%s\n", stdout.String())
+		t.Errorf("run `%s %s`: \n%s", name, strings.Join(args, " "), stderr.String())
 		return false
 	}
 	if stdout.Len() > 0 {
-		t.Logf("output: \n%s", stdout.String())
+		t.Logf("the integration test program has been successfully completed, "+
+			"with detailed information as follows: \n%s\n", stdout.String())
 	}
 	return true
 }

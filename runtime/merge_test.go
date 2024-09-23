@@ -218,7 +218,7 @@ func TestBindVars(t *testing.T) {
 		var bf strings.Builder
 		for i := 0; i < testcase.N; i++ {
 			if i > 0 {
-				bf.WriteString(", ")
+				bf.WriteString(" , ")
 			}
 			bf.WriteString("?")
 		}
@@ -283,7 +283,7 @@ func TestIn(t *testing.T) {
 				[2]bool{true, false},
 				&implToArgs{},
 			},
-			Expect: "( ? ) ( ?, ? ) ( ?, ?, ? )",
+			Expect: "( ? ) ( ? , ? ) ( ? , ? , ? )",
 			N:      6,
 		},
 	}
@@ -344,7 +344,7 @@ func TestIn(t *testing.T) {
 func TestArguments(t *testing.T) {
 	var arguments = make(Arguments, 0, 2)
 	bindvars := arguments.Add([]int{1, 2, 3})
-	if bindvars != "?, ?, ?" {
+	if bindvars != "? , ? , ?" {
 		t.Errorf("arguments: %q != \"?, ?, ?\"", bindvars)
 		return
 	}

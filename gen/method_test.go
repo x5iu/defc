@@ -27,17 +27,25 @@ func TestMethod(t *testing.T) {
 		t.Errorf("method: %q != \"\"", wrapFn)
 		return
 	}
+	if isoLv := m.IsolationLv(); isoLv != "" {
+		t.Errorf("method: %q != \"\"", isoLv)
+		return
+	}
 	if argVar := m.ArgumentsVar(); argVar != "" {
 		t.Errorf("method: %q != \"\"", argVar)
 		return
 	}
-	m = &Method{Meta: "Test Query One Scan(obj) wrap=fn arguments=sqlArguments"}
+	m = &Method{Meta: "Test Query One Scan(obj) wrap=fn isolation=sql.LevelDefault arguments=sqlArguments"}
 	if exScan := m.ExtraScan(); !reflect.DeepEqual(exScan, []string{"obj"}) {
 		t.Errorf("method: %v != [obj]", exScan)
 		return
 	}
 	if wrapFn := m.WrapFunc(); wrapFn != "fn" {
 		t.Errorf("method: %q != \"fn\"", wrapFn)
+		return
+	}
+	if isoLv := m.IsolationLv(); isoLv != "sql.LevelDefault" {
+		t.Errorf("method: %q != \"sql.LevelDefault\"", isoLv)
 		return
 	}
 	if rtnSlice := m.ReturnSlice(); rtnSlice != false {

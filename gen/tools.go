@@ -243,12 +243,10 @@ func trimSlash(comment string) string {
 		comment = trimPrefix(comment, "//")
 	} else if hasPrefix(comment, "/*") {
 		comment = trimPrefix(comment, "/*")
+		if hasSuffix(comment, "*/") {
+			comment = trimSuffix(comment, "*/")
+		}
 	}
-
-	if hasSuffix(comment, "*/") {
-		comment = trimSuffix(comment, "*/")
-	}
-
 	return trimSpace(comment)
 }
 

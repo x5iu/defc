@@ -105,6 +105,12 @@ func (ctx *apiContext) Build(w io.Writer) error {
 		ctx.Features = append(ctx.Features, FeatureApiError)
 	}
 
+	// We do not allow the use of api/ignore-status without enabling the api/future feature, as this would
+	// cause callers to miss out on determining exceptional response codes.
+	if in(ctx.Features, FeatureApiIgnoreStatus) && !in(ctx.Features, FeatureApiFuture) {
+		return fmt.Errorf("api/ignore-status feature requires api/future feature to be enabled")
+	}
+
 	if err := ctx.genApiCode(w); err != nil {
 		return fmt.Errorf("genApiCode: %w", err)
 	}
@@ -444,7 +450,7 @@ func headerHasBody(header string) bool {
 	return false
 }
 
-//go:embed templates/api.tmpl
+//go:embed template/api.tmpl
 var apiTemplate string
 
 func (ctx *apiContext) genApiCode(w io.Writer) error {

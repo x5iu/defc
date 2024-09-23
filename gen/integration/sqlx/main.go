@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"reflect"
 	"strings"
 	"time"
 
-	"github.com/x5iu/defc/sqlx"
-
 	_ "github.com/mattn/go-sqlite3"
+	defc "github.com/x5iu/defc/runtime"
 )
 
 var executor Executor
@@ -27,23 +27,46 @@ func init() {
 
 func main() {
 	ctx := context.Background()
-	db := sqlx.MustOpen("sqlite3", ":memory:")
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+	db := defc.MustOpen("sqlite3", ":memory:")
 	defer db.Close()
 	executor = NewExecutorFromCore(&sqlc{db})
 	defer executor.(io.Closer).Close()
 	if err := executor.InitTable(ctx); err != nil {
 		log.Fatalln(err)
 	}
-	r, err := executor.CreateUser(ctx,
-		&User{name: "defc_test_0001"},
-		&User{name: "defc_test_0002"},
-		&User{name: "defc_test_0003"},
-		&User{name: "defc_test_0004"},
-	)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	id, err := r.LastInsertId()
+	var id int64
+	err := executor.WithTx(func(tx Executor) error {
+		r, errTx := tx.CreateUser(ctx,
+			&User{name: "defc_test_0001"},
+			&User{name: "defc_test_0002"},
+		)
+		if errTx != nil {
+			return errTx
+		}
+		r, errTx = tx.CreateUser(ctx,
+			&User{name: "defc_test_0003"},
+			&User{name: "defc_test_0004"},
+		)
+		if errTx != nil {
+			return errTx
+		}
+		r, errTx = tx.CreateUser(ctx, &User{
+			name: "defc_test_0005",
+			projects: []*Project{
+				{name: "defc_test_0005_project_01"},
+				{name: "defc_test_0005_project_02"},
+			},
+		})
+		if errTx != nil {
+			return errTx
+		}
+		if id, errTx = r.LastInsertId(); errTx != nil {
+			return errTx
+		}
+		return nil
+	})
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -56,7 +79,16 @@ func main() {
 			user.id,
 			user.name)
 	}
-	users, err := executor.QueryUsers(ctx, "defc_test_0001", "defc_test_0004")
+	if len(user.projects) != 2 {
+		log.Fatalf("unexpected projects: %v\n", user.projects)
+	}
+	if !reflect.DeepEqual(user.projects, []*Project{
+		{id: 1, name: "defc_test_0005_project_01", userID: 5},
+		{id: 2, name: "defc_test_0005_project_02", userID: 5},
+	}) {
+		log.Fatalf("unexpected projects: %v\n", user.projects)
+	}
+	users, err := executor.QueryUsers("defc_test_0001", "defc_test_0004")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -77,11 +109,11 @@ func main() {
 }
 
 type sqlc struct {
-	*sqlx.DB
+	*defc.DB
 }
 
 func (c *sqlc) Log(
-	ctx context.Context,
+	_ context.Context,
 	name string,
 	query string,
 	args any,
@@ -96,49 +128,91 @@ func (c *sqlc) Log(
 	)
 }
 
-//go:generate defc generate -T Executor --features sqlx/future,sqlx/log
+var cmTemplate = `{{ define "sqlcomment" }}{{ sqlcomment . }}{{ end }}`
+
+//go:generate defc generate -T Executor -o executor.gen.go --features sqlx/future,sqlx/log,sqlx/callback --template :cmTemplate --function sqlcomment=sqlComment
 type Executor interface {
-	// InitTable exec const
+	// WithTx isolation=7
+	WithTx(func(Executor) error) error
+
+	// InitTable exec
 	/*
+		{{ template "sqlcomment" .ctx }}
 		create table if not exists user
 		(
 			id   integer not null
-				constraint users_pk
-					primary key autoincrement,
+					constraint user_pk
+						primary key autoincrement,
 			name text not null
+		);
+		{{ template "sqlcomment" .ctx }}
+		create table if not exists project
+		(
+			id      integer not null
+						constraint project_pk
+							primary key autoincrement,
+			name    text not null,
+			user_id integer not null
 		);
 	*/
 	InitTable(ctx context.Context) error
 
-	// CreateUser exec bind
+	// CreateUser exec bind isolation=sql.LevelLinearizable
 	/*
-		insert into user ( name ) values
+		{{ $context := .ctx }}
 		{{ range $index, $user := .users }}
-			{{ if $index }},{{ end }}
-			( {{ bind $user.Name }} )
+			{{ if $user.Projects }}
+				{{ template "sqlcomment" $context }}
+				insert into project ( name, user_id ) values
+				{{ range $index, $project := $user.Projects }}
+					{{ if gt $index 0 }},{{ end }}
+					(
+							{{ bind $project.Name }},
+							0
+					)
+				{{ end }}
+				;
+			{{ end }}
+			{{ template "sqlcomment" $context }}
+			insert into user ( name ) values ( {{ bind $user.Name }} );
+			{{ if $user.Projects }}
+				update project set user_id = last_insert_rowid() where user_id = 0;
+			{{ end }}
 		{{ end }}
-		;
 	*/
 	CreateUser(ctx context.Context, users ...*User) (sql.Result, error)
 
-	// GetUserByID query named const
+	// GetUserByID query named
+	// {{ template "sqlcomment" .ctx }}
 	// select id, name from user where id = :id;
 	GetUserByID(ctx context.Context, id int64) (*User, error)
 
 	// QueryUsers query named const
+	// /* {"name": "defc", "action": "test"} */
 	// select id, name from user where name in (:names);
-	QueryUsers(ctx context.Context, names ...string) ([]*User, error)
+	QueryUsers(names ...string) ([]*User, error)
+
+	// GetProjectsByUserID query const
+	// /* {"name": "defc", "action": "test"} */
+	// select id, name, user_id from project where user_id = ? order by id asc;
+	GetProjectsByUserID(userID int64) ([]*Project, error)
 }
 
 type User struct {
-	id   int64
-	name string
+	id       int64
+	name     string
+	projects []*Project
 }
 
-func (user *User) ID() int64    { return user.id }
-func (user *User) Name() string { return user.name }
+func (user *User) Name() string         { return user.name }
+func (user *User) Projects() []*Project { return user.projects }
 
-func (user *User) FromRow(row sqlx.IRow) error {
+func (user *User) Callback(ctx context.Context, e Executor) (err error) {
+	user.projects, err = e.GetProjectsByUserID(user.id)
+	return err
+}
+
+func (user *User) FromRow(row defc.Row) error {
 	const (
 		FieldID   = "id"
 		FieldName = "name"
@@ -162,4 +236,24 @@ func (user *User) FromRow(row sqlx.IRow) error {
 		return err
 	}
 	return nil
+}
+
+type Project struct {
+	id     int64
+	name   string
+	userID int64
+}
+
+func (project *Project) Name() string { return project.name }
+
+func (project *Project) FromRow(row defc.Row) error {
+	return defc.ScanRow(row,
+		"id", &project.id,
+		"name", &project.name,
+		"user_id", &project.userID,
+	)
+}
+
+func sqlComment(context.Context) string {
+	return `/* {"name": "defc", "action": "test"} */`
 }

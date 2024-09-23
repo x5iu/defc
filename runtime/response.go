@@ -3,7 +3,9 @@ package defc
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 )
 
 type Response interface {
@@ -89,9 +91,25 @@ func (e *implFutureResponseError) Response() *http.Response {
 // please implement a custom Response handler.
 type JSON struct {
 	Raw json.RawMessage
+	Res *http.Response
 }
 
-func (j *JSON) Err() error {
+func (j *JSON) Err() (err error) {
+	if j.Res != nil {
+		if j.Res.StatusCode != http.StatusOK {
+			defer j.Res.Body.Close()
+			var body []byte
+			if len(j.Raw) > 0 {
+				body = j.Raw
+			} else {
+				body, err = io.ReadAll(j.Res.Body)
+				if err != nil {
+					return fmt.Errorf("error reading response body: %w", err)
+				}
+			}
+			return fmt.Errorf("response status code %d with body: \n\n%s\n\n", j.Res.StatusCode, string(body))
+		}
+	}
 	return nil
 }
 
@@ -101,9 +119,23 @@ func (j *JSON) FromBytes(_ string, bytes []byte) error {
 }
 
 func (j *JSON) FromResponse(_ string, r *http.Response) error {
-	defer r.Body.Close()
-	decoder := json.NewDecoder(r.Body)
-	return decoder.Decode(&j.Raw)
+	j.Res = r
+	var (
+		ctt = r.Header.Get("Content-Type")
+		idx = -1
+	)
+	if idx = strings.IndexByte(ctt, ';'); idx < 0 {
+		idx = len(ctt)
+	}
+	if ctt = strings.TrimSpace(ctt[:idx]); ctt == "application/json" {
+		defer r.Body.Close()
+		decoder := json.NewDecoder(r.Body)
+		return decoder.Decode(&j.Raw)
+	}
+	if r.StatusCode == http.StatusOK {
+		return fmt.Errorf("response content type %q is not %q", ctt, "application/json")
+	}
+	return nil
 }
 
 func (j *JSON) ScanValues(vs ...any) error {
