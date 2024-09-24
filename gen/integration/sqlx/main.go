@@ -126,6 +126,9 @@ func (c *sqlc) Log(
 		string(argsjson),
 		elapse,
 	)
+	if !strings.HasPrefix(strings.TrimSpace(query), `/* {"name": "defc", "action": "test"} */`) {
+		log.Fatalf("%q query not starts with sqlcomment header\n", name)
+	}
 }
 
 var cmTemplate = `{{ define "sqlcomment" }}{{ sqlcomment . }}{{ end }}`
@@ -176,6 +179,7 @@ type Executor interface {
 			{{ template "sqlcomment" $context }}
 			insert into user ( name ) values ( {{ bind $user.Name }} );
 			{{ if $user.Projects }}
+				{{ template "sqlcomment" $context }}
 				update project set user_id = last_insert_rowid() where user_id = 0;
 			{{ end }}
 		{{ end }}
@@ -188,7 +192,7 @@ type Executor interface {
 	GetUserByID(ctx context.Context, id int64) (*User, error)
 
 	// QueryUsers query named const
-	// /* {"name": "defc", "action": "test"} */
+	// /* {"name":: "defc", "action":: "test"} */
 	// select id, name from user where name in (:names);
 	QueryUsers(names ...string) ([]*User, error)
 

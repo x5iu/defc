@@ -300,7 +300,6 @@ func compileNamedQuery(query string, bindType int) (string, []string, error) {
 				switch next := tokens[i+1]; next {
 				case token:
 					i++
-					rebound = append(rebound, token)
 				default:
 					if r, _ := utf8.DecodeRuneInString(next); string(r) == tok.Underline || unicode.IsLetter(r) {
 						i++
