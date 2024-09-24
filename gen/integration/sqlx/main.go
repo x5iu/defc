@@ -194,7 +194,7 @@ type Executor interface {
 
 	// GetProjectsByUserID query const
 	// /* {"name": "defc", "action": "test"} */
-	// select id, name, user_id from project where user_id = ? order by id asc;
+	// select id, name, user_id from project where user_id = ? and id != 0 order by id asc;
 	GetProjectsByUserID(userID int64) ([]*Project, error)
 }
 

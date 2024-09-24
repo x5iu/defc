@@ -3,8 +3,6 @@ package token
 import (
 	"strings"
 	"sync"
-	"unicode"
-	"unicode/utf8"
 )
 
 const (
@@ -25,17 +23,19 @@ const (
 
 type Lexer struct {
 	Raw string
-	idx int
-	tok string
+
+	index int
+	atsep bool
+	token string
 }
 
 func (l *Lexer) Next() (next bool) {
-	l.tok, next = l.parse()
+	l.token, next = l.parse()
 	return next
 }
 
 func (l *Lexer) Token() string {
-	return l.tok
+	return l.token
 }
 
 func (l *Lexer) parse() (string, bool) {
@@ -48,53 +48,93 @@ func (l *Lexer) parse() (string, bool) {
 		arg          []byte
 	)
 
-	for ; l.idx < len(line); l.idx++ {
-		switch ch := line[l.idx]; ch {
+	for ; l.index < len(line); l.index++ {
+		switch ch := line[l.index]; ch {
 		case ':', ';', ',', '(', ')', '[', ']', '{', '}', '.', '=', '?', '+', '-', '*', '/', '>', '<', '!', '~', '%', '@', '&', '|':
 			if doubleQuoted || singleQuoted || backQuoted {
+				if l.atsep {
+					panic("in various quotation marks, `atsep` should not be set")
+				}
 				arg = append(arg, ch)
 			} else {
 				if len(arg) > 0 {
+					if l.atsep {
+						panic("when the symbol is immediately adjacent to other tokens, `atsep` should not be set")
+					}
 					return string(arg), true
 				}
-				l.idx++
+				if l.atsep {
+					l.atsep = false
+					return Space, true
+				}
+				l.index++
 				return string(ch), true
 			}
 		case ' ', '\t', '\n', '\r':
 			if doubleQuoted || singleQuoted || backQuoted {
+				if l.atsep {
+					panic("in various quotation marks, `atsep` should not be set")
+				}
 				arg = append(arg, ch)
 			} else if len(arg) > 0 {
-				l.idx++
+				if l.atsep {
+					panic("this is the first encounter with a space, `atsep` should not be set")
+				}
+				l.atsep = true
 				return string(arg), true
+			} else {
+				l.atsep = true
 			}
 		case '"':
-			if !(l.idx > 0 && line[l.idx-1] == '\\' || singleQuoted || backQuoted) {
+			if !(l.index > 0 && line[l.index-1] == '\\' || singleQuoted || backQuoted) {
+				if !doubleQuoted {
+					if l.atsep {
+						l.atsep = false
+						return Space, true
+					}
+				}
 				doubleQuoted = !doubleQuoted
 			}
 			arg = append(arg, ch)
 			if !doubleQuoted {
-				l.idx++
+				l.index++
 				return string(arg), true
 			}
 		case '\'':
-			if !(l.idx > 0 && line[l.idx-1] == '\\' || doubleQuoted || backQuoted) {
+			if !(l.index > 0 && line[l.index-1] == '\\' || doubleQuoted || backQuoted) {
+				if !singleQuoted {
+					if l.atsep {
+						l.atsep = false
+						return Space, true
+					}
+				}
 				singleQuoted = !singleQuoted
 			}
 			arg = append(arg, ch)
 			if !singleQuoted {
-				l.idx++
+				l.index++
 				return string(arg), true
 			}
 		case '`':
-			if !(l.idx > 0 && line[l.idx-1] == '\\' || singleQuoted || doubleQuoted) {
+			if !(l.index > 0 && line[l.index-1] == '\\' || singleQuoted || doubleQuoted) {
+				if !backQuoted {
+					if l.atsep {
+						l.atsep = false
+						return Space, true
+					}
+				}
 				backQuoted = !backQuoted
 			}
 			arg = append(arg, ch)
 			if !backQuoted {
-				l.idx++
+				l.index++
 				return string(arg), true
 			}
 		default:
+			if l.atsep {
+				l.atsep = false
+				return Space, true
+			}
 			arg = append(arg, ch)
 		}
 	}
@@ -109,53 +149,12 @@ func (l *Lexer) parse() (string, bool) {
 func MergeSqlTokens(tokens []string) string {
 	n := 0
 	for _, token := range tokens {
-		n += len(token) + 1
+		n += len(token)
 	}
 	var merged strings.Builder
-	if n > 0 {
-		merged.Grow(n - 1)
-	}
-	for i := 0; i < len(tokens); i++ {
-		token := tokens[i]
+	merged.Grow(n)
+	for _, token := range tokens {
 		merged.WriteString(token)
-		if i < len(tokens)-1 {
-			func() {
-				switch token {
-				case Colon, At, Dollar:
-					if i < len(tokens)-1 {
-						if r, _ := utf8.DecodeRuneInString(tokens[i+1]); string(r) == Underline || unicode.IsLetter(r) {
-							return
-						}
-					}
-				case Dash:
-					if i < len(tokens)-1 {
-						switch next := tokens[i+1]; next {
-						case Dash:
-							return
-						default:
-						}
-					}
-				case Div:
-					if i < len(tokens)-1 {
-						switch next := tokens[i+1]; next {
-						case Mul, Div:
-							return
-						default:
-						}
-					}
-				case Mul:
-					if i < len(tokens)-1 {
-						switch next := tokens[i+1]; next {
-						case Div:
-							return
-						default:
-						}
-					}
-				default:
-				}
-				merged.WriteString(Space)
-			}()
-		}
 	}
 	return merged.String()
 }

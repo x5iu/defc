@@ -45,9 +45,9 @@ func TestSplit(t *testing.T) {
 			Input: "part1;\r\n \\'part2;\r\n \"\\\"part3\";",
 			Sep:   ";",
 			Expect: []string{
-				"part1 ;",
-				"\\' part2 ;",
-				"\"\\\"part3\" ;",
+				"part1;",
+				" \\'part2;",
+				" \"\\\"part3\";",
 			},
 		},
 		{
@@ -55,9 +55,9 @@ func TestSplit(t *testing.T) {
 			Input: "part1, part2, part3",
 			Sep:   ",",
 			Expect: []string{
-				"part1 ,",
-				"part2 ,",
-				"part3",
+				"part1,",
+				" part2,",
+				" part3",
 			},
 		},
 		{
@@ -65,7 +65,7 @@ func TestSplit(t *testing.T) {
 			Input: "(autoincrement,\n\t\t\tname);insert",
 			Sep:   ";",
 			Expect: []string{
-				"( autoincrement , name ) ;",
+				"(autoincrement, name);",
 				"insert",
 			},
 		},
@@ -74,7 +74,7 @@ func TestSplit(t *testing.T) {
 			Input: "select id, name from user where name in (?, ?);",
 			Sep:   ";",
 			Expect: []string{
-				"select id , name from user where name in ( ? , ? ) ;",
+				"select id, name from user where name in (?, ?);",
 			},
 		},
 		{
@@ -82,7 +82,7 @@ func TestSplit(t *testing.T) {
 			Input: "select id, name from user where id = :id and name = :name;",
 			Sep:   ";",
 			Expect: []string{
-				"select id , name from user where id = :id and name = :name ;",
+				"select id, name from user where id = :id and name = :name;",
 			},
 		},
 		{
@@ -90,9 +90,9 @@ func TestSplit(t *testing.T) {
 			Input: "/* sqlcomment */ select id, name from user where id = :id and name = :name; -- comment; // comment;",
 			Sep:   ";",
 			Expect: []string{
-				"/* sqlcomment */ select id , name from user where id = :id and name = :name ;",
-				"-- comment ;",
-				"// comment ;",
+				"/* sqlcomment */ select id, name from user where id = :id and name = :name;",
+				" -- comment;",
+				" // comment;",
 			},
 		},
 		{
@@ -100,7 +100,7 @@ func TestSplit(t *testing.T) {
 			Input: "select id, name from user where id = @id and name = @name;",
 			Sep:   ";",
 			Expect: []string{
-				"select id , name from user where id = @id and name = @name ;",
+				"select id, name from user where id = @id and name = @name;",
 			},
 		},
 		{
@@ -108,7 +108,7 @@ func TestSplit(t *testing.T) {
 			Input: "select id, name from user where id = $1 and name = $2;",
 			Sep:   ";",
 			Expect: []string{
-				"select id , name from user where id = $1 and name = $2 ;",
+				"select id, name from user where id = $1 and name = $2;",
 			},
 		},
 	}
@@ -135,6 +135,7 @@ func TestSplitTokens(t *testing.T) {
 			Expect: []string{
 				"autoincrement",
 				",",
+				" ",
 				"name",
 			},
 		},
@@ -149,7 +150,7 @@ func TestSplitTokens(t *testing.T) {
 			Name:  "comment_token",
 			Input: "# // -- /* */",
 			Expect: []string{
-				"#", "/", "/", "-", "-", "/", "*", "*", "/",
+				"#", " ", "/", "/", " ", "-", "-", " ", "/", "*", " ", "*", "/",
 			},
 		},
 		{
@@ -157,7 +158,7 @@ func TestSplitTokens(t *testing.T) {
 			Input: ":id, :name",
 			Expect: []string{
 				":", "id",
-				",",
+				",", " ",
 				":", "name",
 			},
 		},
