@@ -456,6 +456,15 @@ type IRow interface {
 	Scan(dest ...any) error
 }
 
+type FromRows interface {
+	FromRows(rows IRows) error
+}
+
+type IRows interface {
+	IRow
+	Next() bool
+}
+
 // ColScanner is an interface used by MapScan and SliceScan
 type ColScanner interface {
 	Columns() ([]string, error)
@@ -1102,6 +1111,14 @@ func scanAll(rows rowsi, dest any, structOnly bool) error {
 	if value.IsNil() {
 		return errors.New("nil pointer passed to StructScan destination")
 	}
+
+	if fromRows, ok := dest.(FromRows); ok {
+		if err := fromRows.FromRows(rows); err != nil {
+			return err
+		}
+		return rows.Err()
+	}
+
 	direct := reflect.Indirect(value)
 
 	slice, err := baseType(value.Type(), reflect.Slice)

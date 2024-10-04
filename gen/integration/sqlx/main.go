@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -106,6 +107,13 @@ func main() {
 		msg.WriteString("]")
 		log.Fatalln(msg.String())
 	}
+	userIDs, err := executor.QueryUserIDs("defc_test_0001", "defc_test_0004")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if !reflect.DeepEqual(userIDs, UserIDs{{1}, {4}}) {
+		log.Fatalf("unexpected userIDs: %v\n", userIDs)
+	}
 }
 
 type sqlc struct {
@@ -196,10 +204,35 @@ type Executor interface {
 	// select id, name from user where name in (:names);
 	QueryUsers(names ...string) ([]*User, error)
 
+	// QueryUserIDs query many named const
+	// /* {"name":: "defc", "action":: "test"} */
+	// select id, name from user where name in (:names) order by id asc;
+	QueryUserIDs(names ...string) (UserIDs, error)
+
 	// GetProjectsByUserID query const
 	// /* {"name": "defc", "action": "test"} */
 	// select id, name, user_id from project where user_id = ? and id != 0 order by id asc;
 	GetProjectsByUserID(userID int64) ([]*Project, error)
+}
+
+type UserID struct {
+	UserID int64
+}
+
+type UserIDs []UserID
+
+func (ids *UserIDs) FromRows(rows defc.Rows) error {
+	if ids == nil {
+		return errors.New("UserIDs.FromRows: nil pointer")
+	}
+	for rows.Next() {
+		var id UserID
+		if err := defc.ScanRow(rows, "id", &id.UserID); err != nil {
+			return err
+		}
+		*ids = append(*ids, id)
+	}
+	return nil
 }
 
 type User struct {

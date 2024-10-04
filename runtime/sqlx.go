@@ -22,7 +22,8 @@ var (
 )
 
 type (
-	DB  = sqlx.DB
-	Tx  = sqlx.Tx
-	Row = sqlx.IRow
+	DB   = sqlx.DB
+	Tx   = sqlx.Tx
+	Row  = sqlx.IRow
+	Rows = sqlx.IRows
 )
