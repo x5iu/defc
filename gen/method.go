@@ -2,6 +2,7 @@ package gen
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"net/http"
 	"regexp"
@@ -28,6 +29,30 @@ type Method struct {
 
 	// Source represents the raw file content
 	Source []byte
+}
+
+func (method *Method) TxType() (ast.Expr, error) {
+	var lastType ast.Expr
+	if len(method.OrderedIn) > 0 {
+		lastIn := method.OrderedIn[len(method.OrderedIn)-1]
+		lastType = method.In[lastIn]
+	} else if len(method.UnnamedIn) > 0 {
+		lastType = method.UnnamedIn[len(method.UnnamedIn)-1]
+	} else {
+		return nil, fmt.Errorf("method %s expects at least one argument", method.Ident)
+	}
+	if funcType, ok := lastType.(*ast.FuncType); ok {
+		if len(funcType.Params.List) != 1 {
+			return nil, fmt.Errorf(
+				"method %s expects an *ast.FuncType as arguments, who has and only has one argument",
+				method.Ident,
+			)
+		}
+		fnIn := funcType.Params.List[0]
+		return fnIn.Type, nil
+	} else {
+		return nil, fmt.Errorf("method %s expects a function as the last argument", method.Ident)
+	}
 }
 
 func (method *Method) SortIn() []string {

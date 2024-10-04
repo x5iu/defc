@@ -466,7 +466,7 @@ var (
         }
     {{- end }}
 
-    func (__imp *{{ $receiver }}) WithTx({{ if $.WithTxContext }}ctx context.Context, {{ end }}f func({{ $.Ident }}) error) (err error) {
+    func (__imp *{{ $receiver }}) WithTx({{ if $.WithTxContext }}ctx context.Context, {{ end }}f func({{ getRepr $.WithTxType }}) error) (err error) {
     var inner {{ $coreTxInterface }}
     if coreBeginTx, ok := __imp.__core.({{ $coreBeginTxInterface }}); ok {
     inner, err = coreBeginTx.CoreBeginTx({{ if $.WithTxContext }}ctx{{ else }}context.Background(){{ end }}, {{ if $.WithTxIsolation }}&sql.TxOptions{Isolation: {{ $.WithTxIsolation }}}{{ else }}nil{{ end }})

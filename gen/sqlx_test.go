@@ -88,6 +88,23 @@ func TestBuildSqlx(t *testing.T) {
 			return
 		}
 	})
+	t.Run("success_named_tx", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		if err := runTest(genFile, builder); err != nil {
+			t.Errorf("build: %s", err)
+			return
+		}
+		builder = builder.WithFeats([]string{FeatureSqlxFuture, FeatureSqlxLog}).
+			WithImports([]string{"C", "json encoding/json"}, false).
+			WithFuncs([]string{"marshal: json.Marshal"})
+		if err := runTest(genFile, builder); err != nil {
+			t.Errorf("build: %s", err)
+			return
+		}
+	})
 	t.Run("fail_no_error", func(t *testing.T) {
 		builder, ok := newBuilder(t)
 		if !ok {

@@ -47,6 +47,7 @@ type sqlxContext struct {
 	Methods         []*Method
 	Embeds          []ast.Expr
 	WithTx          bool
+	WithTxType      ast.Expr
 	WithTxContext   bool
 	WithTxIsolation string
 	Features        []string
@@ -80,7 +81,12 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 		}
 
 		if method.Ident == sqlxMethodWithTx {
+			txType, err := method.TxType()
+			if err != nil {
+				return err
+			}
 			ctx.WithTx = true
+			ctx.WithTxType = txType
 			ctx.WithTxContext = method.HasContext()
 			ctx.WithTxIsolation = method.TxIsolationLv()
 			fixedMethods = make([]*Method, 0, len(ctx.Methods)-1)

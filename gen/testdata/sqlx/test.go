@@ -32,6 +32,25 @@ type Success interface {
 	C(c *C.char) (struct{}, error)
 }
 
+//go:generate defc [mode] [output] [features...] TestBuildSqlx/success_named_tx
+type SuccessNamedTx interface {
+	gofmt.GoStringer
+	WithTx(ctx context.Context, f func(tx Success) error) error
+
+	// Run exec bind
+	// #include "test.sql"
+	/*
+		#script cat
+		 "test.sql"
+	*/
+	// {{ $.query }}
+	Run(ctx context.Context, query gofmt.Stringer) error
+
+	// C query one bind
+	// SELECT * FROM C WHERE type = {{ bind $.c }};
+	C(c *C.char) (struct{}, error)
+}
+
 //go:generate defc [mode] [output] [features...] TestBuildSqlx/fail_no_error
 type FailNoError interface {
 	// Run exec bind
