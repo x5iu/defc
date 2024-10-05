@@ -424,12 +424,15 @@ func toSnakeCase(s string) string {
 	return to.String()
 }
 
+var _byteType = reflect.TypeOf([]byte(nil))
+
 // isScannable takes the reflect.Type and the actual dest value and returns
 // whether or not it's Scannable.  Something is scannable if:
 //   - it doesn't implement FromRow
-//   - it is not a struct
 //   - it implements sql.Scanner
-//   - it has no exported fields
+//   - it is []byte or convertible to []byte
+//   - it is a struct who has no exported fields
+//   - it is not a chan, func, interface, map, slice, array, complex64, complex128
 func isScannable(t reflect.Type) bool {
 	p := reflect.PointerTo(t)
 	if p.Implements(_fromRowInterface) {
@@ -438,13 +441,23 @@ func isScannable(t reflect.Type) bool {
 	if p.Implements(_scannerInterface) {
 		return true
 	}
-	if t.Kind() != reflect.Struct {
+	if t == _byteType || t.ConvertibleTo(_byteType) {
 		return true
 	}
-
-	// it's not important that we use the right mapper for this particular object,
-	// we're only concerned on how many exported fields this struct has
-	return len(mapper().TypeMap(t).Index) == 0
+	switch t.Kind() {
+	case reflect.Struct:
+		// it's not important that we use the right mapper for this particular object,
+		// we're only concerned on how many exported fields this struct has
+		return len(mapper().TypeMap(t).Index) == 0
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Slice:
+		return false
+	case reflect.Array:
+		return false
+	case reflect.Complex64, reflect.Complex128:
+		return false
+	default:
+		return true
+	}
 }
 
 type FromRow interface {
