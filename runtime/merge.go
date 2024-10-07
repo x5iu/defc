@@ -172,8 +172,13 @@ func in(query string, args ...any) (string, []any, error) {
 
 type Arguments []any
 
-func (arguments *Arguments) Add(argument any) string {
+func (arguments *Arguments) add(argument any) string {
 	merged := MergeArgs(argument)
 	*arguments = append(*arguments, merged...)
 	return BindVars(len(merged))
 }
+
+func (arguments *Arguments) Add(argument any) string    { return arguments.add(argument) }
+func (arguments *Arguments) Bind(argument any) string   { return arguments.add(argument) }
+func (arguments *Arguments) Push(argument any) string   { return arguments.add(argument) }
+func (arguments *Arguments) Append(argument any) string { return arguments.add(argument) }
