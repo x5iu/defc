@@ -127,10 +127,9 @@ func (j *JSON) FromResponse(_ string, r *http.Response) error {
 	if idx = strings.IndexByte(ctt, ';'); idx < 0 {
 		idx = len(ctt)
 	}
+	defer r.Body.Close()
 	if ctt = strings.TrimSpace(ctt[:idx]); ctt == "application/json" {
-		defer r.Body.Close()
-		decoder := json.NewDecoder(r.Body)
-		return decoder.Decode(&j.Raw)
+		return json.NewDecoder(r.Body).Decode(&j.Raw)
 	} else {
 		return fmt.Errorf("response content type %q is not %q", ctt, "application/json")
 	}

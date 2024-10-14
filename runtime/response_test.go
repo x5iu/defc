@@ -54,6 +54,9 @@ func TestJSON(t *testing.T) {
 	body := []byte(`{"code": 200}`)
 	r := &http.Response{
 		Body: io.NopCloser(bytes.NewReader(body)),
+		Header: http.Header{
+			"Content-Type": []string{"application/json; charset=utf-8"},
+		},
 	}
 	j := new(JSON)
 	if err := j.Err(); err != nil {
