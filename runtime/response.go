@@ -131,11 +131,9 @@ func (j *JSON) FromResponse(_ string, r *http.Response) error {
 		defer r.Body.Close()
 		decoder := json.NewDecoder(r.Body)
 		return decoder.Decode(&j.Raw)
-	}
-	if r.StatusCode == http.StatusOK {
+	} else {
 		return fmt.Errorf("response content type %q is not %q", ctt, "application/json")
 	}
-	return nil
 }
 
 func (j *JSON) ScanValues(vs ...any) error {
