@@ -30,12 +30,13 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
-
-	_ "unsafe"
+	"unsafe"
 
 	tok "github.com/x5iu/defc/runtime/token"
 	"github.com/x5iu/defc/sqlx/reflectx"
 )
+
+var _ = unsafe.Pointer(uintptr(0))
 
 // Bindvar types supported by Rebind, BindMap and BindStruct.
 const (
@@ -87,18 +88,18 @@ func Rebind(bindType int, query string) string {
 	}
 	tokens := tok.SplitTokens(query)
 	targetQuery := make([]string, 0, len(tokens))
-	var j int
+	var n int
 	for _, token := range tokens {
-		j++
 		switch token {
 		case tok.Question:
+			n++
 			switch bindType {
 			case DOLLAR:
-				targetQuery = append(targetQuery, "$"+strconv.Itoa(j))
+				targetQuery = append(targetQuery, "$"+strconv.Itoa(n))
 			case NAMED:
-				targetQuery = append(targetQuery, ":arg"+strconv.Itoa(j))
+				targetQuery = append(targetQuery, ":arg"+strconv.Itoa(n))
 			case AT:
-				targetQuery = append(targetQuery, "@p"+strconv.Itoa(j))
+				targetQuery = append(targetQuery, "@p"+strconv.Itoa(n))
 			default:
 				panic("unknown bind type")
 			}
