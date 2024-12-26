@@ -1,6 +1,11 @@
 package defc
 
-import "github.com/x5iu/defc/sqlx"
+import (
+	"context"
+	"database/sql"
+
+	"github.com/x5iu/defc/sqlx"
+)
 
 var (
 	Open           = sqlx.Open
@@ -22,8 +27,18 @@ var (
 )
 
 type (
-	DB   = sqlx.DB
-	Tx   = sqlx.Tx
-	Row  = sqlx.IRow
-	Rows = sqlx.IRows
+	DB       = sqlx.DB
+	Tx       = sqlx.Tx
+	Row      = sqlx.IRow
+	Rows     = sqlx.IRows
+	FromRow  = sqlx.FromRow
+	FromRows = sqlx.FromRows
 )
+
+type TxInterface interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	GetContext(ctx context.Context, dest any, query string, args ...any) error
+	SelectContext(ctx context.Context, dest any, query string, args ...any) error
+	Rollback() error
+	Commit() error
+}
