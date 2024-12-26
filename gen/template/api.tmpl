@@ -337,6 +337,20 @@ var (
         fmt.Errorf("error sending '{{ $method.Ident }}' request: %w", {{ $err }})
         }
 
+        {{ if $.HasFeature "api/gzip" }}
+        func() {
+            for _, contentEncoding := range {{ $httpResponse }}.Header.Values("Content-Encoding") {
+                if commaIndex := strings.IndexByte(contentEncoding, ','); commaIndex >= 0 {
+                    contentEncoding = contentEncoding[:commaIndex]
+                }
+                if strings.TrimSpace(contentEncoding) == "gzip" {
+                    {{ $httpResponse }}.Body = &__rt.GzipReadCloser{R: {{ $httpResponse }}.Body}
+                    return
+                }
+            }
+        }()
+        {{ end }}
+
         {{ if $.HasFeature "api/future" }}
             {{ if not ( $.HasFeature "api/ignore-status" ) }}
                 if {{ $httpResponse }}.StatusCode < 200 || {{ $httpResponse }}.StatusCode > 299 {

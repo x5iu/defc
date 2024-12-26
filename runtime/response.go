@@ -1,6 +1,7 @@
 package defc
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -146,4 +147,29 @@ func (j *JSON) ScanValues(vs ...any) error {
 
 func (j *JSON) Break() bool {
 	panic("JSON is not well-suited for pagination query requests")
+}
+
+type GzipReadCloser struct {
+	R          io.ReadCloser
+	gzipReader *gzip.Reader
+}
+
+func (r *GzipReadCloser) Read(p []byte) (n int, err error) {
+	if r.gzipReader == nil {
+		r.gzipReader, err = gzip.NewReader(r.R)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return r.gzipReader.Read(p)
+}
+
+func (r *GzipReadCloser) Close() error {
+	if r.gzipReader != nil {
+		if err := r.gzipReader.Close(); err != nil {
+			r.R.Close()
+			return err
+		}
+	}
+	return r.R.Close()
 }

@@ -13,10 +13,11 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
-	"github.com/x5iu/defc/gen"
-	runtime "github.com/x5iu/defc/runtime"
 	goimport "golang.org/x/tools/imports"
 	"gopkg.in/yaml.v3"
+
+	"github.com/x5iu/defc/gen"
+	runtime "github.com/x5iu/defc/runtime"
 )
 
 const (
@@ -39,6 +40,7 @@ var (
 		gen.FeatureApiNoRt,
 		gen.FeatureApiFuture,
 		gen.FeatureApiIgnoreStatus,
+		gen.FeatureApiGzip,
 		gen.FeatureSqlxIn,
 		gen.FeatureSqlxLog,
 		gen.FeatureSqlxRebind,

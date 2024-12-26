@@ -28,6 +28,7 @@ const (
 	FeatureApiNoRt         = "api/nort"
 	FeatureApiFuture       = "api/future"
 	FeatureApiIgnoreStatus = "api/ignore-status"
+	FeatureApiGzip         = "api/gzip"
 )
 
 func (builder *CliBuilder) buildApi(w io.Writer) error {
@@ -109,6 +110,10 @@ func (ctx *apiContext) Build(w io.Writer) error {
 	// cause callers to miss out on determining exceptional response codes.
 	if in(ctx.Features, FeatureApiIgnoreStatus) && !in(ctx.Features, FeatureApiFuture) {
 		return fmt.Errorf("api/ignore-status feature requires api/future feature to be enabled")
+	}
+
+	if in(ctx.Features, FeatureApiGzip) && in(ctx.Features, FeatureApiNoRt) {
+		return fmt.Errorf("api/gzip feature requires api/nort feature to be disabled")
 	}
 
 	if err := ctx.genApiCode(w); err != nil {
