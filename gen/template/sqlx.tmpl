@@ -521,7 +521,11 @@ Rollback() error
 Commit() error
 }
 {{ else }}
-type {{ $coreTxInterface }} = __rt.TxInterface
+    {{ if $.HasFeature "sqlx/rebind" }}
+        type {{ $coreTxInterface }} = __rt.TxRebindInterface
+    {{ else }}
+        type {{ $coreTxInterface }} = __rt.TxInterface
+    {{ end }}
 {{ end }}
 
 type {{ $coreBeginTxInterface }} interface {

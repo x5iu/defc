@@ -42,3 +42,8 @@ type TxInterface interface {
 	Rollback() error
 	Commit() error
 }
+
+type TxRebindInterface interface {
+	TxInterface
+	Rebind(query string) string
+}
