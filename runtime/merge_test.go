@@ -286,6 +286,27 @@ func TestIn(t *testing.T) {
 			Expect: "(?) (?,?) (?,?,?)",
 			N:      6,
 		},
+		{
+			Name:   "issue:2025-03-23-part-1",
+			Query:  "INSERT INTO migrate (version) VALUES (?);",
+			Args:   []any{"2025-03-23.sql"},
+			Expect: "INSERT INTO migrate (version) VALUES (?);",
+			N:      1,
+		},
+		{
+			Name:   "issue:2025-03-23-part-2",
+			Query:  "INSERT INTO migrate (version) VALUES (:version);",
+			Args:   []any{},
+			Expect: "INSERT INTO migrate (version) VALUES (:version);",
+			N:      0,
+		},
+		{
+			Name:   "issue:2025-03-23-part-3",
+			Query:  "INSERT INTO migrate (version) VALUES (?);",
+			Args:   []any{"2025-03-23.sql"},
+			Expect: "INSERT INTO migrate (version) VALUES (?);",
+			N:      1,
+		},
 	}
 	for _, testcase := range testcases {
 		t.Run(testcase.Name, func(t *testing.T) {

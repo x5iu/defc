@@ -161,11 +161,6 @@ func MergeSqlTokens(tokens []string) string {
 
 var (
 	splitTokensCache = &sync.Map{}
-	stringSlicePool  = &sync.Pool{
-		New: func() any {
-			return make([]string, 0, 16)
-		},
-	}
 )
 
 func getSplitTokensCache(line string) ([]string, bool) {
@@ -180,22 +175,11 @@ func setSplitTokensCache(line string, tokens []string) {
 	splitTokensCache.Store(line, tokens)
 }
 
-func getStringSlice() []string {
-	return stringSlicePool.Get().([]string)
-}
-
-func putStringSlice(s []string) {
-	s = s[:0]
-	stringSlicePool.Put(s)
-}
-
 func SplitTokens(line string) (tokens []string) {
 	tokens, exists := getSplitTokensCache(line)
 	if exists {
 		return tokens
 	}
-	tokens = getStringSlice()
-	defer putStringSlice(tokens)
 	l := Lexer{Raw: line}
 	for l.Next() {
 		tokens = append(tokens, l.Token())
