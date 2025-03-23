@@ -1240,6 +1240,12 @@ func StructScan(rows rowsi, dest any) error {
 
 }
 
+type ignored struct{}
+
+func (*ignored) Scan(any) error {
+	return nil
+}
+
 func ScanRow(row IRow, destKv ...any) error {
 	if len(destKv) == 0 {
 		return nil
@@ -1268,7 +1274,7 @@ func ScanRow(row IRow, destKv ...any) error {
 		if dest, ok := fieldMap[column]; ok {
 			scanner = append(scanner, dest)
 		} else {
-			scanner = append(scanner, new(sql.RawBytes))
+			scanner = append(scanner, new(ignored))
 		}
 	}
 	if err = row.Scan(scanner...); err != nil {
