@@ -1,3 +1,3 @@
 package defc
 
-const Version = "v1.35.1"
+const Version = "v1.36.0"

@@ -23,6 +23,10 @@ var (
 	Named      = sqlx.Named
 	StructScan = sqlx.StructScan
 	ScanStruct = sqlx.StructScan
+	MapScan    = sqlx.MapScan
+	ScanMap    = sqlx.MapScan
+	SliceScan  = sqlx.SliceScan
+	ScanSlice  = sqlx.SliceScan
 	ScanRow    = sqlx.ScanRow
 )
 

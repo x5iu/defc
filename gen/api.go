@@ -16,7 +16,12 @@ import (
 )
 
 const (
-	apiMethodInner    = "INNER"
+	apiMethodOptions         = "OPTIONS"
+	apiMethodResponseHandler = "RESPONSEHANDLER"
+
+	// Deprecated: use apiMethodOptions instead
+	apiMethodInner = "INNER"
+	// Deprecated: use apiMethodResponseHandler instead
 	apiMethodResponse = "RESPONSE"
 
 	FeatureApiCache        = "api/cache"
@@ -427,11 +432,13 @@ func importContext(methods []*Method) bool {
 }
 
 func isResponse(ident string) bool {
-	return toUpper(ident) == apiMethodResponse
+	ident = toUpper(ident)
+	return ident == apiMethodResponse || ident == apiMethodResponseHandler
 }
 
 func isInner(ident string) bool {
-	return toUpper(ident) == apiMethodInner
+	ident = toUpper(ident)
+	return ident == apiMethodInner || ident == apiMethodOptions
 }
 
 func httpMethodHasBody(method string) bool {

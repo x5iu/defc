@@ -575,8 +575,7 @@ func DetectTargetDecl(file string, src []byte, target string) (string, Mode, int
 								if len(field.Names) > 0 {
 									if funcName := field.Names[0]; funcName.String() == sqlxMethodWithTx {
 										return f.Name.String(), ModeSqlx, fset.Position(typeSpec.Pos()).Line - 1, nil
-									} else if upperName := toUpper(funcName.String()); upperName == apiMethodInner ||
-										upperName == apiMethodResponse {
+									} else if funcNameString := funcName.String(); isInner(funcNameString) || isResponse(funcNameString) {
 										return f.Name.String(), ModeApi, fset.Position(typeSpec.Pos()).Line - 1, nil
 									}
 								}
