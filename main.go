@@ -58,6 +58,7 @@ func init() {
 		modeMap[m.String()] = m
 		validModes = append(validModes, m.String())
 	}
+	cobra.OnInitialize(onInitialize)
 }
 
 var (
