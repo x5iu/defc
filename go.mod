@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/BurntSushi/toml v1.4.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/spf13/cobra v1.8.1
 	golang.org/x/tools v0.17.0
 	gopkg.in/yaml.v3 v3.0.1

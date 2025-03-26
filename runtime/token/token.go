@@ -1,8 +1,10 @@
 package token
 
 import (
+	"fmt"
 	"strings"
-	"sync"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 const (
@@ -159,24 +161,17 @@ func MergeSqlTokens(tokens []string) string {
 	return merged.String()
 }
 
-var (
-	splitTokensCache = &sync.Map{}
-)
+var splitTokensCache *lru.TwoQueueCache[string, []string]
 
-func getSplitTokensCache(line string) ([]string, bool) {
-	value, exists := splitTokensCache.Load(line)
-	if !exists {
-		return nil, false
+func init() {
+	var err error
+	if splitTokensCache, err = lru.New2Q[string, []string](1024); err != nil {
+		panic(fmt.Errorf("failed to init lru cache: %w", err))
 	}
-	return value.([]string), true
-}
-
-func setSplitTokensCache(line string, tokens []string) {
-	splitTokensCache.Store(line, tokens)
 }
 
 func SplitTokens(line string) (tokens []string) {
-	tokens, exists := getSplitTokensCache(line)
+	tokens, exists := splitTokensCache.Get(line)
 	if exists {
 		return tokens
 	}
@@ -184,6 +179,6 @@ func SplitTokens(line string) (tokens []string) {
 	for l.Next() {
 		tokens = append(tokens, l.Token())
 	}
-	setSplitTokensCache(line, tokens)
+	splitTokensCache.Add(line, tokens)
 	return tokens
 }
