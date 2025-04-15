@@ -41,6 +41,7 @@ var (
 		gen.FeatureApiFuture,
 		gen.FeatureApiIgnoreStatus,
 		gen.FeatureApiGzip,
+		gen.FeatureApiRetry,
 		gen.FeatureSqlxIn,
 		gen.FeatureSqlxLog,
 		gen.FeatureSqlxRebind,

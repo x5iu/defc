@@ -48,7 +48,60 @@ var (
 {{ $newResponseErrorFunc := (printf "__%sNewResponseError" $.Ident) }}
 {{ range $index, $method := $.Methods }}
     {{ $sortIn := $method.SortIn }}
-    func ({{ if not (isResponse $method.Ident) }} __imp {{ end }} *{{ $receiver }}) {{ $method.Ident }}(
+    {{- $httpMethod := $method.MethodHTTP }}
+    {{ $shouldRetry := and ($.HasFeature "api/future") ($.HasFeature "api/retry") (not (isResponse $method.Ident)) (not (isInner $method.Ident)) (or (not (httpMethodHasBody $httpMethod)) (headerHasBody $method.TmplHeader)) }}
+    {{ if $shouldRetry }}
+        func ({{ if not (isResponse $method.Ident) }} __imp {{ end }} *{{ $receiver }}) {{ $method.Ident }}(
+        {{- range $index, $ident := $sortIn -}}
+            {{- $ident }} {{ getRepr (index $method.In $ident) }},
+        {{- end -}}
+        )
+        {{- if gt (len $method.Out) 0 -}}
+            (
+            {{- range $index, $type := $method.Out -}}
+                {{- getRepr $type }},
+            {{- end -}}
+            )
+        {{- end -}}
+        {
+        __retryCount := 0
+        __RETRY:
+        var (
+        {{ range $index, $type := $method.Out -}}
+            {{ if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }} {{ getRepr $type }}
+            {{ end -}}
+        {{- end -}}
+        {{- $err := printf "err%s" $method.Ident }}
+        {{- $err }} error
+        )
+        {{ range $index, $type := $method.Out -}}
+            {{- if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }},
+            {{- end -}}
+        {{- end -}} {{ $err }} = __imp.__{{ $method.Ident }}(
+        {{- range $index, $ident := $sortIn -}}
+            {{- $ident }}{{ if isEllipsis (index $method.In $ident) }}...{{ end }},
+        {{- end -}}
+        )
+        if {{ $err }} != nil {
+        if __getResponse, ok := {{ $err }}.(__rt.FutureResponseError); ok {
+        __getResponse.Response().Body.Close()
+        }
+        if __retryCount < {{ $method.MaxRetry }} {
+        __retryCount++
+        goto __RETRY
+        }
+        }
+        return {{ range $index, $type := $method.Out -}}
+            {{- if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }},
+            {{- end -}}
+        {{- end -}} {{ $err }}
+        }
+    {{ end }}
+
+    func ({{ if not (isResponse $method.Ident) }} __imp {{ end }} *{{ $receiver }}) {{ if $shouldRetry }}__{{ end }}{{ $method.Ident }}(
     {{- range $index, $ident := $sortIn -}}
         {{- $ident }} {{ getRepr (index $method.In $ident) }},
     {{- end -}}
@@ -251,7 +304,6 @@ var (
         {{ $url := printf "url%s" $method.Ident -}}
         {{ $url }} := {{ $addr }}.String()
         {{- $request := printf "request%s" $method.Ident -}}
-        {{- $httpMethod := $method.MethodHTTP }}
         {{- if httpMethodHasBody $httpMethod }}
             {{- if headerHasBody $method.TmplHeader }}
                 {{- if $.HasFeature "api/logx" }}

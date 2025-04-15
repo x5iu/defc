@@ -273,6 +273,20 @@ func (method *Method) ReturnSlice() bool {
 	return len(method.Out) > 1 && isSlice(method.Out[0])
 }
 
+// MaxRetry should only be used with '--mode=api' arg
+func (method *Method) MaxRetry() string {
+	const prefix = "RETRY="
+	if args := method.MetaArgs(); len(args) >= 3 {
+		for _, arg := range args[2:] {
+			if len(arg) > len(prefix) && toUpper(arg[:len(prefix)]) == prefix {
+				return arg[len(prefix):]
+			}
+		}
+	}
+	// defaults to 2
+	return "2"
+}
+
 func inspectMethod(node *ast.Field, source []byte) (method *Method) {
 	field := node
 	method = new(Method)

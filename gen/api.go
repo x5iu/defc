@@ -34,6 +34,7 @@ const (
 	FeatureApiFuture       = "api/future"
 	FeatureApiIgnoreStatus = "api/ignore-status"
 	FeatureApiGzip         = "api/gzip"
+	FeatureApiRetry        = "api/retry"
 )
 
 func (builder *CliBuilder) buildApi(w io.Writer) error {
@@ -475,6 +476,7 @@ func (ctx *apiContext) genApiCode(w io.Writer) error {
 			"importContext":     importContext,
 			"sub":               func(x, y int) int { return x - y },
 			"getRepr":           func(node ast.Node) string { return ctx.Doc.Repr(node) },
+			"isEllipsis":        func(node ast.Node) bool { return hasPrefix(ctx.Doc.Repr(node), "...") },
 			"methodResp":        ctx.MethodResponse,
 			"methodInner":       ctx.MethodInner,
 			"isResponse":        isResponse,
