@@ -7,4 +7,6 @@ require (
 	github.com/x5iu/defc v0.0.0
 )
 
+require github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+
 replace github.com/x5iu/defc => ../../..

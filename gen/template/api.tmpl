@@ -351,6 +351,10 @@ var (
             }
         {{- end }}
 
+        {{ if $.HasFeature "api/gzip" }}
+            {{ $request }}.Header.Add("Accept-Encoding", "gzip")
+        {{ end }}
+
         {{- $log := printf "log%s" $method.Ident }}
         {{ $start := printf "start%s" $method.Ident }}
         {{ if or ($.HasFeature "api/log") ($.HasFeature "api/logx") }}
