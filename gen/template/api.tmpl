@@ -17,7 +17,7 @@ import (
 
 const (
 {{ range $index, $method := $.Methods }}{{ if and (not (isInner $method.Ident)) (not (isResponse $method.Ident)) }}
-    Caller{{ $method.Ident }} = "{{ $method.Ident }}"{{ end }}{{ end }}
+    {{ $.Ident }}Method{{ $method.Ident }} = "{{ $method.Ident }}"{{ end }}{{ end }}
 )
 
 {{ $impName := (printf "impl%s" $.Ident) }}
@@ -37,8 +37,8 @@ type {{ $impName }}{{ $.GenericsRepr true }} struct{
 {{ $additionalFuncs := $.AdditionalFuncs }}
 var (
 {{ range $index, $method := $.Methods }} {{ if and (not (and $method.ReturnSlice ($.HasFeature "api/page"))) (not (isInner $method.Ident)) (not (isResponse $method.Ident)) }}
-    {{ printf "addrTmpl%s" $method.Ident }} = template.Must(template.New("Address{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote ($method.TmplURL) }})) {{ if ne $method.Header "" }}
-        {{ printf "headerTmpl%s" $method.Ident }} = template.Must(template.New("Header{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote $method.TmplHeader }})) {{ end }} {{ end }} {{ end }}
+    {{ printf "addr%sTmpl%s" $.Ident $method.Ident }} = template.Must(template.New("Address{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote ($method.TmplURL) }})) {{ if ne $method.Header "" }}
+        {{ printf "header%sTmpl%s" $.Ident $method.Ident }} = template.Must(template.New("Header{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote $method.TmplHeader }})) {{ end }} {{ end }} {{ end }}
 )
 
 {{ $getBufferFunc := (printf "__%sGetBuffer" $.Ident) }}
@@ -161,8 +161,8 @@ var (
         {{- $values := printf "values%s" $method.Ident -}}
         {{- $n := printf "n%s" $method.Ident -}}
         {{- $page := printf "page%s" $method.Ident -}}
-        {{- $addrTmpl := printf "addrTmpl%s" $method.Ident -}}
-        {{- $headerTmpl := printf "headerTmpl%s" $method.Ident -}}
+        {{- $addrTmpl := printf "addr%sTmpl%s" $.Ident $method.Ident -}}
+        {{- $headerTmpl := printf "header%sTmpl%s" $.Ident $method.Ident -}}
         {{- if $method.ReturnSlice }}
             var (
             {{ if gt (len $method.Out) 1 -}}
@@ -511,7 +511,7 @@ var (
         {{ if $method.ReturnSlice }}
             {{ if gt (len $method.Out) 1 }}
                 {{ $values }} = append({{ $values }}, {{ range $index, $type := $method.Out -}}
-                    {{- if and (eq $index 0) (lt $index (sub (len $method.Out) 1)) }}
+                    {{- if and (eq $index 0) (lt $index (sub (len $method.Out) 1)) -}}
                         v{{ $index }}{{- $method.Ident }}...
                     {{- end -}}
                 {{- end -}})
