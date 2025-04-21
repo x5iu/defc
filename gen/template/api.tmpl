@@ -237,16 +237,19 @@ var (
             {{ end }}
         {{ end }}
 
-        {{ if $method.ReturnSlice -}}
-            loop:
-            for {
-        {{ end -}}
         var (
         {{ range $index, $type := $method.Out -}}
             {{ if lt $index (sub (len $method.Out) 1) -}}
                 v{{- $index -}}{{- $method.Ident }}={{ if isPointer $type }}new({{ getRepr (indirect $type) }}){{ else }}{{ if $.HasFeature "api/nort" }}{{ $newFunc }}{{ else }}__rt.New{{ end }}[{{ getRepr $type }}](){{ end }}
             {{ end -}}
         {{- end -}}
+        )
+
+        {{ if $method.ReturnSlice -}}
+            loop:
+            for {
+        {{ end -}}
+        var (
         {{- $err := printf "err%s" $method.Ident }}
         {{- $err }} error
         {{ $httpResponse := printf "httpResponse%s" $method.Ident -}}
