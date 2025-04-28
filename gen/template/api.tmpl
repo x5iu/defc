@@ -425,6 +425,7 @@ var (
                         __rt.NewFutureResponseError({{ quote $method.Ident }}, {{ $httpResponse }})
                     {{ end -}}
                 {{ else -}}
+                    {{ $httpResponse }}.Body.Close()
                     fmt.Errorf("response status code %d for '{{ $method.Ident }}'", {{ $httpResponse }}.StatusCode)
                 {{ end -}}
                 }
