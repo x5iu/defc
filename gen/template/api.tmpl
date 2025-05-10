@@ -85,10 +85,10 @@ var (
         {{- end -}}
         )
         if {{ $err }} != nil {
+        if __retryCount < {{ $method.MaxRetry }} {
         if __getResponse, ok := {{ $err }}.(__rt.FutureResponseError); ok {
         __getResponse.Response().Body.Close()
         }
-        if __retryCount < {{ $method.MaxRetry }} {
         __retryCount++
         goto __RETRY
         }
