@@ -287,6 +287,18 @@ func (method *Method) MaxRetry() string {
 	return "2"
 }
 
+// RequestOptions should only be used with '--mode=api' arg
+func (method *Method) RequestOptions() string {
+	if args := method.MetaArgs(); len(args) >= 3 {
+		for _, arg := range args[2:] {
+			if len(arg) > 9 && toUpper(arg[0:8]) == "OPTIONS(" && arg[len(arg)-1] == ')' {
+				return arg[8 : len(arg)-1]
+			}
+		}
+	}
+	return ""
+}
+
 func inspectMethod(node *ast.Field, source []byte) (method *Method) {
 	field := node
 	method = new(Method)

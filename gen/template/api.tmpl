@@ -358,6 +358,13 @@ var (
             {{ $request }}.Header.Add("Accept-Encoding", "gzip")
         {{ end }}
 
+        {{ $requestOptions := $method.RequestOptions }}
+        {{ if $requestOptions }}
+            for _, opt := range {{ $requestOptions }} {
+            opt({{ $request }})
+            }
+        {{ end }}
+
         {{- $log := printf "log%s" $method.Ident }}
         {{ $start := printf "start%s" $method.Ident }}
         {{ if or ($.HasFeature "api/log") ($.HasFeature "api/logx") }}

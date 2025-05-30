@@ -35,7 +35,7 @@ func TestMethod(t *testing.T) {
 		t.Errorf("method: %q != \"\"", argVar)
 		return
 	}
-	m = &Method{Meta: "Test Query One Scan(obj) wrap=fn isolation=sql.LevelDefault arguments=sqlArguments retry=3"}
+	m = &Method{Meta: "Test Query One Scan(obj) wrap=fn isolation=sql.LevelDefault arguments=sqlArguments retry=3 options(reqOpts)"}
 	if exScan := m.ExtraScan(); !reflect.DeepEqual(exScan, []string{"obj"}) {
 		t.Errorf("method: %v != [obj]", exScan)
 		return
@@ -58,6 +58,10 @@ func TestMethod(t *testing.T) {
 	}
 	if maxRetry := m.MaxRetry(); maxRetry != "3" {
 		t.Errorf("method: %q != \"3\"", maxRetry)
+		return
+	}
+	if options := m.RequestOptions(); options != "reqOpts" {
+		t.Errorf("method: %q != \"reqOpts\"", options)
 		return
 	}
 }
