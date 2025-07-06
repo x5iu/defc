@@ -14,12 +14,12 @@ import (
 	"github.com/x5iu/defc/gen"
 )
 
-func TestSqlx(t *testing.T) {
+func TestApi(t *testing.T) {
 	var (
 		testPk      = "main"
-		testDir     = "sqlx"
+		testDir     = "api"
 		testFile    = "main.go"
-		testGenFile = "executor.gen.go"
+		testGenFile = "client.gen.go"
 	)
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -44,12 +44,10 @@ func TestSqlx(t *testing.T) {
 	}
 	var (
 		featReg = regexp.MustCompile(`--features(?:\s|=)([\w,/]+)`)
-		tmplReg = regexp.MustCompile(`--template(?:\s|=)([\w:]+)`)
 		funcReg = regexp.MustCompile(`--function(?:\s|=)([\w=]+)`)
 
 		pos       int
 		features  []string
-		template  string
 		functions []string
 	)
 	lineScanner := bufio.NewScanner(bytes.NewReader(doc))
@@ -60,10 +58,6 @@ func TestSqlx(t *testing.T) {
 			featureList := featReg.FindAllStringSubmatch(text, -1)
 			for _, sublist := range featureList {
 				features = append(features, strings.Split(sublist[1], ",")...)
-			}
-			templateList := tmplReg.FindAllStringSubmatch(text, -1)
-			for _, sublist := range templateList {
-				template = strings.TrimPrefix(sublist[1], ":")
 			}
 			functionList := funcReg.FindAllStringSubmatch(text, -1)
 			for _, sublist := range functionList {
@@ -77,14 +71,13 @@ func TestSqlx(t *testing.T) {
 		return
 	}
 	runTest := func(t *testing.T, feats ...string) {
-		generator := gen.NewCliBuilder(gen.ModeSqlx).
+		generator := gen.NewCliBuilder(gen.ModeApi).
 			WithPkg(testPk).
 			WithPwd(pwd).
 			WithFile(testFile, doc).
 			WithPos(pos).
 			WithImports(nil, true).
 			WithFeats(append(features, feats...)).
-			WithTemplate(template).
 			WithFuncs(functions)
 		var buf bytes.Buffer
 		if err = generator.Build(&buf); err != nil {
@@ -112,5 +105,5 @@ func TestSqlx(t *testing.T) {
 		}
 	}
 	t.Run("rt", func(t *testing.T) { runTest(t) })
-	t.Run("nort", func(t *testing.T) { runTest(t, gen.FeatureSqlxNoRt) })
+	t.Run("nort", func(t *testing.T) { runTest(t, gen.FeatureApiNoRt) })
 }

@@ -46,10 +46,11 @@ var (
 {{ $newFunc := (printf "__%sNew" $.Ident) }}
 {{ $responseInterface := (printf "%sResponseInterface" $.Ident) }}
 {{ $newResponseErrorFunc := (printf "__%sNewResponseError" $.Ident) }}
+{{ $responseErrorInterface := (printf "%sResponseErrorInterface" $.Ident) }}
 {{ range $index, $method := $.Methods }}
     {{ $sortIn := $method.SortIn }}
     {{- $httpMethod := $method.MethodHTTP }}
-    {{ $shouldRetry := and ($.HasFeature "api/future") ($.HasFeature "api/retry") (not (isResponse $method.Ident)) (not (isInner $method.Ident)) (or (not (httpMethodHasBody $httpMethod)) (headerHasBody $method.TmplHeader)) }}
+    {{ $shouldRetry := and ($.HasFeature "api/future") ($.HasFeature "api/retry") (not (isResponse $method.Ident)) (not (isInner $method.Ident)) }}
     {{ if $shouldRetry }}
         func ({{ if not (isResponse $method.Ident) }} __imp {{ end }} *{{ $receiver }}) {{ $method.Ident }}(
         {{- range $index, $ident := $sortIn -}}
@@ -64,6 +65,21 @@ var (
             )
         {{- end -}}
         {
+        __maxRetry := {{ $method.MaxRetry }}
+        {{ if (and (httpMethodHasBody $httpMethod) (not (headerHasBody $method.TmplHeader))) }}
+            var (
+            __reader = {{- range $index, $ident := $sortIn -}}
+                {{- if eq $index (sub (len $sortIn) 1) }}
+                    {{- $ident }}
+                {{- end }}
+            {{- end }}
+            __reset interface{ Reset() error }
+            __readerCanReset bool
+            )
+            if __reset, __readerCanReset = any(__reader).(interface{ Reset() error }); !__readerCanReset {
+            __maxRetry = 0
+            }
+        {{ end }}
         __retryCount := 0
         __RETRY:
         var (
@@ -75,6 +91,17 @@ var (
         {{- $err := printf "err%s" $method.Ident }}
         {{- $err }} error
         )
+        {{ if (and (httpMethodHasBody $httpMethod) (not (headerHasBody $method.TmplHeader))) }}
+            if __readerCanReset {
+            if {{ $err }} := __reset.Reset(); {{ $err }} != nil {
+            return {{ range $index, $type := $method.Out -}}
+                {{- if lt $index (sub (len $method.Out) 1) -}}
+                    v{{- $index -}}{{- $method.Ident }},
+                {{- end -}}
+            {{- end -}} {{ $err }}
+            }
+            }
+        {{ end }}
         {{ range $index, $type := $method.Out -}}
             {{- if lt $index (sub (len $method.Out) 1) -}}
                 v{{- $index -}}{{- $method.Ident }},
@@ -85,8 +112,8 @@ var (
         {{- end -}}
         )
         if {{ $err }} != nil {
-        if __retryCount < {{ $method.MaxRetry }} {
-        if __getResponse, ok := {{ $err }}.(__rt.FutureResponseError); ok {
+        if __retryCount < __maxRetry {
+        if __getResponse, ok := {{ $err }}.({{ if $.HasFeature "api/nort" }}{{ $responseErrorInterface }}{{ else }}__rt.FutureResponseError{{ end }}); ok {
         __getResponse.Response().Body.Close()
         }
         __retryCount++
@@ -664,7 +691,6 @@ var (
     }
 
     {{ if $.HasFeature "api/error" }}
-        {{ $responseErrorInterface := (printf "%sResponseErrorInterface" $.Ident) }}
         {{ $implResponseError := (printf "__%sImplResponseError" $.Ident) }}
         {{ if $.HasFeature "api/future" }}
             // {{ $responseErrorInterface }} represents future Response error interface which would
