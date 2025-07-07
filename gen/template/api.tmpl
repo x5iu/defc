@@ -70,7 +70,10 @@ var (
             var (
             __reader = {{- range $index, $ident := $sortIn -}}
                 {{- if eq $index (sub (len $sortIn) 1) }}
-                    {{- $ident }}
+                    {{ if isEllipsis (index $method.In $ident) }}
+                        {{ $index = sub $index 1}}
+                    {{ end }}
+                    {{- index $sortIn $index -}}
                 {{- end }}
             {{- end }}
             __reset interface{ Reset() error }
@@ -357,7 +360,7 @@ var (
                         {{ if isEllipsis (index $method.In $ident) }}
                             {{ $index = sub $index 1}}
                         {{ end }}
-                        {{- index $sortIn $index }}
+                        {{- index $sortIn $index -}}
                     {{- end }}
                 {{- end -}})
             {{ end -}}

@@ -176,9 +176,9 @@ type Client interface {
 	// GetUserWithRetry GET RETRY=3 https://localhost:443/v1/users/{{ $.username }}
 	GetUserWithRetry(ctx context.Context, username string) (*User, error)
 
-	// CreateUserWithRetry POST RETRY=3 https://localhost:443/v1/users/
+	// CreateUserWithRetry POST RETRY=3 OPTIONS(opts) https://localhost:443/v1/users/
 	// Content-Type: application/json
-	CreateUserWithRetry(ctx context.Context, reader *ResetReader) (*User, error)
+	CreateUserWithRetry(ctx context.Context, reader *ResetReader, opts ...func(*http.Request)) (*User, error)
 
 	// UpdateUserWithOptions PUT OPTIONS(opts) https://localhost:443/v1/users/
 	// Content-Type: application/json
