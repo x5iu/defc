@@ -69,16 +69,17 @@ var (
         {{ if (and (httpMethodHasBody $httpMethod) (not (headerHasBody $method.TmplHeader))) }}
             var (
             __reader = any({{- range $index, $ident := $sortIn -}}
-                {{- if eq $index (sub (len $sortIn) 1) }}
-                    {{ if isEllipsis (index $method.In $ident) }}
-                        {{ $index = sub $index 1}}
-                    {{ end }}
+                {{- if eq $index (sub (len $sortIn) 1) -}}
+                    {{- if isEllipsis (index $method.In $ident) -}}
+                        {{- $index = sub $index 1 -}}
+                    {{- end -}}
                     {{- index $sortIn $index -}}
-                {{- end }}
-            {{- end }})
+                {{- end -}}
+            {{- end -}})
             __reset interface{ Reset() error }
             __readerCanReset bool
             )
+
             if __reset, __readerCanReset = __reader.(interface{ Reset() error }); !__readerCanReset {
             __maxRetry = 0
             }
@@ -356,12 +357,12 @@ var (
                 {{ end -}}
             {{ else }}
                 {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, {{- range $index, $ident := $sortIn -}}
-                    {{- if eq $index (sub (len $sortIn) 1) }}
-                        {{ if isEllipsis (index $method.In $ident) }}
-                            {{ $index = sub $index 1}}
-                        {{ end }}
+                    {{- if eq $index (sub (len $sortIn) 1) -}}
+                        {{- if isEllipsis (index $method.In $ident) -}}
+                            {{- $index = sub $index 1 -}}
+                        {{- end -}}
                         {{- index $sortIn $index -}}
-                    {{- end }}
+                    {{- end -}}
                 {{- end -}})
             {{ end -}}
         {{ else }}
