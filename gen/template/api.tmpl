@@ -68,18 +68,18 @@ var (
         __maxRetry := {{ $method.MaxRetry }}
         {{ if (and (httpMethodHasBody $httpMethod) (not (headerHasBody $method.TmplHeader))) }}
             var (
-            __reader = {{- range $index, $ident := $sortIn -}}
+            __reader = any({{- range $index, $ident := $sortIn -}}
                 {{- if eq $index (sub (len $sortIn) 1) }}
                     {{ if isEllipsis (index $method.In $ident) }}
                         {{ $index = sub $index 1}}
                     {{ end }}
                     {{- index $sortIn $index -}}
                 {{- end }}
-            {{- end }}
+            {{- end }})
             __reset interface{ Reset() error }
             __readerCanReset bool
             )
-            if __reset, __readerCanReset = any(__reader).(interface{ Reset() error }); !__readerCanReset {
+            if __reset, __readerCanReset = __reader.(interface{ Reset() error }); !__readerCanReset {
             __maxRetry = 0
             }
         {{ end }}
