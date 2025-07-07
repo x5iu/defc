@@ -93,7 +93,7 @@ var (
         )
         {{ if (and (httpMethodHasBody $httpMethod) (not (headerHasBody $method.TmplHeader))) }}
             if __readerCanReset {
-            if {{ $err }} := __reset.Reset(); {{ $err }} != nil {
+            if {{ $err }} = __reset.Reset(); {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}
                 {{- if lt $index (sub (len $method.Out) 1) -}}
                     v{{- $index -}}{{- $method.Ident }},
@@ -354,7 +354,10 @@ var (
             {{ else }}
                 {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, {{- range $index, $ident := $sortIn -}}
                     {{- if eq $index (sub (len $sortIn) 1) }}
-                        {{- $ident }}
+                        {{ if isEllipsis (index $method.In $ident) }}
+                            {{ $index = sub $index 1}}
+                        {{ end }}
+                        {{- index $sortIn $index }}
                     {{- end }}
                 {{- end -}})
             {{ end -}}
@@ -388,7 +391,9 @@ var (
         {{ $requestOptions := $method.RequestOptions }}
         {{ if $requestOptions }}
             for _, opt := range {{ $requestOptions }} {
+            if opt != nil {
             opt({{ $request }})
+            }
             }
         {{ end }}
 

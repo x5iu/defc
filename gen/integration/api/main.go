@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -35,20 +36,31 @@ func main() {
 	if user.ID != 1 || user.Name != "defc_test_0001" {
 		log.Fatalf("unexpected user: User(id=%d, name=%q)\n", user.ID, user.Name)
 	}
-	user, err = client.GetUserWithRetry(ctx, "defc_test_002")
+	user, err = client.GetUserWithRetry(ctx, "defc_test_0002")
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if user.ID != 2 || user.Name != "defc_test_002" {
+	if user.ID != 2 || user.Name != "defc_test_0002" {
 		log.Fatalf("unexpected user with retry=3: User(id=%d, name=%q)\n", user.ID, user.Name)
 	}
-	resetReader := NewResetReader(`{"name":"defc_test_003"}`)
+	resetReader := NewResetReader(`{"name":"defc_test_0003"}`)
 	user, err = client.CreateUserWithRetry(ctx, resetReader)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if user.ID != 3 || user.Name != "defc_test_003" {
+	if user.ID != 3 || user.Name != "defc_test_0003" {
 		log.Fatalf("unexpected user with create retry=3: User(id=%d, name=%q)\n", user.ID, user.Name)
+	}
+	reader := strings.NewReader(`{"name":"defc_test_0004"}`)
+	user, err = client.UpdateUserWithOptions(ctx, reader,
+		func(r *http.Request) { r.URL.RawQuery = "id=4" },
+		nil,
+	)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if user.ID != 4 || user.Name != "defc_test_0004" {
+		log.Fatalf("unexpected user with update options: User(id=%d, name=%q)\n", user.ID, user.Name)
 	}
 }
 
@@ -57,21 +69,21 @@ type Transport struct {
 }
 
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	key := req.URL.Path
+	method, path := req.Method, req.URL.Path
 
 	// Increment request count (including the first request)
-	t.retryCount[key]++
-	count := t.retryCount[key]
+	t.retryCount[path]++
+	count := t.retryCount[path]
 
-	log.Printf("Request to %s (attempt %d)", key, count)
+	log.Printf("Request to %s (attempt %d)", path, count)
 
-	switch key {
+	switch path {
 	case "/v1/users/defc_test_0001":
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(bytes.NewBufferString(`{"code":200,"message":"","data":{"id":1,"name":"defc_test_0001"}}`)),
 		}, nil
-	case "/v1/users/defc_test_002":
+	case "/v1/users/defc_test_0002":
 		// Simulate failure for first 3 attempts, success on 4th attempt
 		// RETRY=3 means maximum 3 retries, total maximum 4 requests (1 original + 3 retries)
 		if count <= 3 {
@@ -82,33 +94,56 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(bytes.NewBufferString(`{"code":200,"message":"","data":{"id":2,"name":"defc_test_002"}}`)),
+			Body:       io.NopCloser(bytes.NewBufferString(`{"code":200,"message":"","data":{"id":2,"name":"defc_test_0002"}}`)),
 		}, nil
 	case "/v1/users/":
-		// Verify request body is correct
-		if req.Body != nil {
-			body, err := io.ReadAll(req.Body)
-			if err != nil {
-				panic(fmt.Sprintf("Failed to read request body: %v", err))
+		switch method {
+		case "POST":
+			// Verify request body is correct
+			if req.Body != nil {
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					panic(fmt.Sprintf("Failed to read request body: %v", err))
+				}
+				req.Body.Close()
+				expectedBody := `{"name":"defc_test_0003"}`
+				if string(body) != expectedBody {
+					panic(fmt.Sprintf("Request body mismatch: expected %q, got %q", expectedBody, string(body)))
+				}
 			}
-			req.Body.Close()
-			expectedBody := `{"name":"defc_test_003"}`
-			if string(body) != expectedBody {
-				panic(fmt.Sprintf("Request body mismatch: expected %q, got %q", expectedBody, string(body)))
+			// Simulate failure for first 3 attempts, success on 4th attempt
+			// RETRY=3 means maximum 3 retries, total maximum 4 requests (1 original + 3 retries)
+			if count <= 3 {
+				return &http.Response{
+					StatusCode: http.StatusBadRequest,
+					Body:       io.NopCloser(bytes.NewBufferString(`{"code":400,"message":"Bad Request","data":null}`)),
+				}, nil
 			}
-		}
-		// Simulate failure for first 3 attempts, success on 4th attempt
-		// RETRY=3 means maximum 3 retries, total maximum 4 requests (1 original + 3 retries)
-		if count <= 3 {
 			return &http.Response{
-				StatusCode: http.StatusBadRequest,
-				Body:       io.NopCloser(bytes.NewBufferString(`{"code":400,"message":"Bad Request","data":null}`)),
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"code":200,"message":"","data":{"id":3,"name":"defc_test_0003"}}`)),
 			}, nil
+		case "PUT":
+			if req.Body != nil {
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					panic(fmt.Sprintf("Failed to read request body: %v", err))
+				}
+				req.Body.Close()
+				expectedBody := `{"name":"defc_test_0004"}`
+				if string(body) != expectedBody {
+					panic(fmt.Sprintf("Request body mismatch: expected %q, got %q", expectedBody, string(body)))
+				}
+			}
+			if query := req.URL.Query(); query.Get("id") == "4" {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(`{"code":200,"message":"","data":{"id":4,"name":"defc_test_0004"}}`)),
+				}, nil
+			} else {
+				panic("Request contains an invalid ID")
+			}
 		}
-		return &http.Response{
-			StatusCode: http.StatusCreated,
-			Body:       io.NopCloser(bytes.NewBufferString(`{"code":200,"message":"","data":{"id":3,"name":"defc_test_003"}}`)),
-		}, nil
 	}
 	panic("unreachable")
 }
@@ -144,6 +179,10 @@ type Client interface {
 	// CreateUserWithRetry POST RETRY=3 https://localhost:443/v1/users/
 	// Content-Type: application/json
 	CreateUserWithRetry(ctx context.Context, reader *ResetReader) (*User, error)
+
+	// UpdateUserWithOptions PUT OPTIONS(opts) https://localhost:443/v1/users/
+	// Content-Type: application/json
+	UpdateUserWithOptions(ctx context.Context, reader io.Reader, opts ...func(*http.Request)) (*User, error)
 }
 
 type User struct {
