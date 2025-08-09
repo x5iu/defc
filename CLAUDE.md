@@ -13,7 +13,7 @@ automatically generating implementation code.
 ### Testing
 
 ```bash
-# Run all tests with coverage
+# Run all tests with coverage (primary test command)
 ./test.sh
 
 # Run specific module tests
@@ -22,8 +22,13 @@ go test -cover ./runtime
 go test -cover ./sqlx
 go test -tags=test ./gen/integration
 
+# Run individual test functions
+go test -run TestRunCommand ./gen
+go test -run TestSplitArgs ./gen
+
 # Code quality checks
 go vet ./...
+go vet ./gen
 ```
 
 ### Building
@@ -56,20 +61,24 @@ defc --mode=api --output=service.go
 ### Core Components
 
 1. **Main CLI (`main.go`)**: Command-line interface built with Cobra, handles argument parsing and delegates to
-   generation logic
+   generation logic. Uses `goimports` for automatic import formatting unless disabled with `--disable-auto-import`
 2. **Generator (`gen/` package)**: Core code generation engine with two main modes:
     - `sqlx` mode: Database CRUD operations using enhanced sqlx
     - `api` mode: HTTP client code generation
 3. **Runtime (`runtime/` package)**: Runtime utilities and helpers for generated code
 4. **Templates (`gen/template/`)**: Go templates for code generation
+    - `sqlx.tmpl`: Template for database operations
+    - `api.tmpl`: Template for HTTP client operations
 
 ### Code Generation Flow
 
-1. Parse Go interface definitions from source files
+1. Parse Go interface definitions from source files using `go/ast` and `go/parser`
 2. Extract method signatures and comments containing SQL or HTTP specifications
-3. Use templates to generate implementation code
-4. Apply Go formatting and import management
-5. Write generated code to output file
+3. Use `DetectTargetDecl` to automatically detect generation mode based on interface patterns
+4. Build context with `CliBuilder` pattern containing imports, features, functions, and templates
+5. Use Go templates (`sqlx.tmpl` or `api.tmpl`) to generate implementation code
+6. Apply Go formatting with `go/format` and import management with `goimports`
+7. Write generated code to output file
 
 ### Key Features
 
@@ -95,3 +104,22 @@ defc --mode=api --output=service.go
 - Legacy mode available with `legacy` build tag
 - Code generation is deterministic and includes proper error handling
 - The `generate` command only accepts `.go` files as input (configuration file support was removed)
+
+### Key Development Patterns
+
+- **Builder Pattern**: The `CliBuilder` struct chains method calls like `WithFeats()`, `WithImports()`, `WithFuncs()`
+- **Mode Detection**: Uses `DetectTargetDecl` to automatically determine if an interface is for `sqlx` or `api` mode
+- **Template Processing**: Comments in interface methods are parsed as templates for SQL queries or HTTP requests
+- **AST Analysis**: Heavy use of Go's AST parsing to inspect interface definitions and method signatures
+- **Feature Flags**: Modular architecture where features are enabled/disabled via string flags
+- **Test Integration**: Integration tests in `gen/integration/` use real database connections and HTTP servers
+
+### Code Structure Patterns
+
+- Generated code follows naming convention: `New{Interface}()` and `New{Interface}FromCore()`
+- Interface methods with special names have semantic meaning:
+    - `WithTx()`: Automatic transaction support in sqlx mode
+    - `Options()`: Configuration provider in api mode
+    - `ResponseHandler()`: Response processing in api mode
+- Template functions like `bind`, `bindvars`, `getRepr` are available in SQL templates
+- Test files use `runTest()` helper function for consistent integration testing

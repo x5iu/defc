@@ -81,7 +81,7 @@ func TestBuildSqlx(t *testing.T) {
 			return
 		}
 		builder = builder.WithFeats([]string{FeatureSqlxFuture, FeatureSqlxLog}).
-			WithImports([]string{"C", "json encoding/json"}, false).
+			WithImports([]string{"C", "json encoding/json"}).
 			WithFuncs([]string{"marshal: json.Marshal"})
 		if err := runTest(genFile, builder); err != nil {
 			t.Errorf("build: %s", err)
@@ -98,7 +98,7 @@ func TestBuildSqlx(t *testing.T) {
 			return
 		}
 		builder = builder.WithFeats([]string{FeatureSqlxFuture, FeatureSqlxLog}).
-			WithImports([]string{"C", "json encoding/json"}, false).
+			WithImports([]string{"C", "json encoding/json"}).
 			WithFuncs([]string{"marshal: json.Marshal"})
 		if err := runTest(genFile, builder); err != nil {
 			t.Errorf("build: %s", err)

@@ -3,14 +3,9 @@ package gen
 import (
 	"errors"
 	"fmt"
-	"go/importer"
-	"go/token"
-	"go/types"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
-	"unsafe"
 )
 
 func TestRunCommand(t *testing.T) {
@@ -163,78 +158,6 @@ func TestSplitArgs(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestImporter(t *testing.T) {
-	testImporter := &Importer{
-		imported:      map[string]*types.Package{},
-		tokenFileSet:  token.NewFileSet(),
-		defaultImport: importer.Default(),
-	}
-	t.Run("unsafe", func(t *testing.T) {
-		if pkg, err := testImporter.Import("unsafe"); err != nil {
-			t.Errorf("import: %s", err)
-			return
-		} else if pkg == nil {
-			t.Errorf("import: expects non-nil *types.Package, got nil")
-			return
-		}
-	})
-	t.Run("C", func(t *testing.T) {
-		if pkg, err := testImporter.Import("C"); err == nil || pkg != nil {
-			t.Errorf("import: expects errors, got nil")
-			return
-		} else if err.Error() != "unreachable: import \"C\"" {
-			t.Errorf("import: expects unreachable error, got => %s", err)
-			return
-		}
-	})
-	t.Run("twice", func(t *testing.T) {
-		pkg1, err := testImporter.Import("github.com/x5iu/defc/runtime")
-		if err != nil {
-			t.Errorf("import: %s", err)
-			return
-		} else if pkg1 == nil {
-			t.Errorf("import: expects non-nil *types.Package, got nil")
-			return
-		}
-		pkg2, err := testImporter.Import("github.com/x5iu/defc/runtime")
-		if err != nil {
-			t.Errorf("import: %s", err)
-			return
-		} else if pkg2 == nil {
-			t.Errorf("import: expects non-nil *types.Package, got nil")
-			return
-		}
-		if uintptr(unsafe.Pointer(pkg1)) != uintptr(unsafe.Pointer(pkg2)) {
-			t.Errorf("import: cache not effective")
-			return
-		}
-	})
-	t.Run("cycle_import", func(t *testing.T) {
-		for _, dir := range [][]string{
-			{"testdata", "cycle", "a"},
-			{"testdata", "cycle", "b"},
-		} {
-			cycleImporter := &Importer{
-				imported:      map[string]*types.Package{},
-				tokenFileSet:  token.NewFileSet(),
-				defaultImport: importer.Default(),
-			}
-			_, err := cycleImporter.ImportFrom(
-				"github.com/x5iu/defc/gen/"+strings.Join(dir, "/"),
-				filepath.Join(dir...),
-				0,
-			)
-			if err == nil {
-				t.Errorf("import: expects errors, got nil")
-				return
-			} else if !strings.Contains(err.Error(), "cycle importing ") {
-				t.Errorf("import: expects CycleImporting error, got => %s", err)
-				return
-			}
-		}
-	})
 }
 
 func TestDetectTargetDecl(t *testing.T) {

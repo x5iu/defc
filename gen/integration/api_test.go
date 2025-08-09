@@ -76,7 +76,7 @@ func TestApi(t *testing.T) {
 			WithPwd(pwd).
 			WithFile(testFile, doc).
 			WithPos(pos).
-			WithImports(nil, true).
+			WithImports(nil).
 			WithFeats(append(features, feats...)).
 			WithFuncs(functions)
 		var buf bytes.Buffer

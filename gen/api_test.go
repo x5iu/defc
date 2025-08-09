@@ -80,7 +80,7 @@ func TestBuildApi(t *testing.T) {
 			return
 		}
 		builder = builder.WithFeats([]string{FeatureApiLogx}).
-			WithImports([]string{"url net/url"}, false).
+			WithImports([]string{"url net/url"}).
 			WithFuncs([]string{"escape=url.QueryEscape"})
 		if err := runTest(genFile, builder); err != nil {
 			t.Errorf("build: %s", err)

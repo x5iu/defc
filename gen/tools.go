@@ -6,11 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/build"
-	"go/importer"
 	"go/parser"
 	"go/token"
-	"go/types"
 	"net/http"
 	"os"
 	"os/exec"
@@ -32,7 +29,6 @@ const (
 
 var (
 	sprintf    = fmt.Sprintf
-	errorf     = fmt.Errorf
 	quote      = strconv.Quote
 	trimPrefix = strings.TrimPrefix
 	trimSuffix = strings.TrimSuffix
@@ -48,8 +44,6 @@ var (
 	join       = filepath.Join
 	isAbs      = filepath.IsAbs
 	glob       = filepath.Glob
-	base       = filepath.Base
-	stat       = os.Stat
 	read       = os.ReadFile
 	list       = os.ReadDir
 )
@@ -354,149 +348,6 @@ func runCommand(args []string) (string, error) {
 		return "", err
 	}
 	return trimSpace(output.String()), nil
-}
-
-type Import struct {
-	Name string
-	Path string
-}
-
-func getImports(pkg string, dir string, name string, isIt func(ast.Node) bool) (imports []*Import, err error) {
-	imports = make([]*Import, 0, 8)
-
-	var (
-		fset   = token.NewFileSet()
-		files  = make([]*ast.File, 0, 8)
-		target *ast.File
-	)
-
-	filenames, err := glob(join(dir, "*.go"))
-	if err != nil {
-		return nil, err
-	}
-
-	for _, filename := range filenames {
-		file, err := parser.ParseFile(fset, filename, nil, 0)
-		if err != nil {
-			return nil, err
-		}
-		files = append(files, file)
-		if base(name) == base(filename) {
-			target = file
-		}
-	}
-
-	conf := types.Config{
-		IgnoreFuncBodies: true,
-		FakeImportC:      true,
-		Importer: &Importer{
-			imported:      map[string]*types.Package{},
-			tokenFileSet:  fset,
-			defaultImport: importer.Default(),
-		},
-	}
-
-	info := &types.Info{
-		Types:      map[ast.Expr]types.TypeAndValue{},
-		Instances:  map[*ast.Ident]types.Instance{},
-		Defs:       map[*ast.Ident]types.Object{},
-		Uses:       map[*ast.Ident]types.Object{},
-		Implicits:  map[ast.Node]types.Object{},
-		Selections: map[*ast.SelectorExpr]*types.Selection{},
-		Scopes:     map[ast.Node]*types.Scope{},
-		InitOrder:  []*types.Initializer{},
-	}
-
-	_, err = conf.Check(pkg, fset, files, info)
-	if err != nil {
-		return nil, err
-	}
-
-	if target != nil {
-		ast.Inspect(target, func(x ast.Node) bool {
-			if x != nil && isIt(x) {
-				ast.Inspect(x, func(n ast.Node) bool {
-					switch node := n.(type) {
-					case ast.Expr:
-						if named, ok := info.TypeOf(node).(*types.Named); ok {
-							if objPkg := named.Obj().Pkg(); objPkg != nil {
-								imports = append(imports, &Import{
-									Name: objPkg.Name(),
-									Path: objPkg.Path(),
-								})
-							}
-						}
-					}
-					return true
-				})
-			}
-			return true
-		})
-	}
-
-	return imports, nil
-}
-
-type Importer struct {
-	imported      map[string]*types.Package
-	tokenFileSet  *token.FileSet
-	defaultImport types.Importer
-}
-
-var importing types.Package
-
-func (importer *Importer) ImportFrom(path, dir string, _ types.ImportMode) (*types.Package, error) {
-	if path == "unsafe" {
-		return types.Unsafe, nil
-	}
-	if path == "C" {
-		return nil, errorf("unreachable: %s", "import \"C\"")
-	}
-	goroot := join(build.Default.GOROOT, "src")
-	if _, err := stat(join(goroot, path)); err != nil {
-		if os.IsNotExist(err) {
-			target := importer.imported[path]
-			if target != nil {
-				if target == &importing {
-					return nil, errors.New("cycle importing " + path)
-				}
-				return target, nil
-			}
-			importer.imported[path] = &importing
-			pkg, err := build.Import(path, dir, 0)
-			if err != nil {
-				return nil, err
-			}
-			var files []*ast.File
-			for _, name := range append(pkg.GoFiles, pkg.CgoFiles...) {
-				name = join(pkg.Dir, name)
-				file, err := parser.ParseFile(importer.tokenFileSet, name, nil, 0)
-				if err != nil {
-					return nil, err
-				}
-				files = append(files, file)
-			}
-			conf := types.Config{
-				Importer:         importer,
-				FakeImportC:      true,
-				IgnoreFuncBodies: true,
-			}
-			target, err = conf.Check(path, importer.tokenFileSet, files, nil)
-			if err != nil {
-				return nil, err
-			}
-			importer.imported[path] = target
-			return target, nil
-		}
-	}
-	if importerFrom, ok := importer.defaultImport.(types.ImporterFrom); ok {
-		return importerFrom.ImportFrom(path, dir, 0)
-	}
-	return importer.defaultImport.Import(path)
-}
-
-func (importer *Importer) Import(path string) (*types.Package, error) {
-	return importer.ImportFrom(path, "", 0)
 }
 
 var ErrNoTargetDeclFound = errors.New("no target decl found")

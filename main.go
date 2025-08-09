@@ -171,7 +171,7 @@ defc provides the following two scenarios of code generation features:
 				// use the auto-import feature.
 				//
 				// disableAutoImport = true
-				WithImports(imports, true).
+				WithImports(imports).
 				WithFuncs(funcs).
 				WithPkg(os.Getenv(EnvGoPackage)).
 				WithPwd(pwd).
@@ -290,7 +290,7 @@ type defc should handle using the '--type/-T' parameter to avoid generating inco
 				}
 				builder := gen.NewCliBuilder(mod).
 					WithFeats(features).
-					WithImports(imports, true).
+					WithImports(imports).
 					WithFuncs(funcs).
 					WithPkg(pkg).
 					WithPwd(pwd).

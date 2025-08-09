@@ -82,7 +82,7 @@ func TestSqlx(t *testing.T) {
 			WithPwd(pwd).
 			WithFile(testFile, doc).
 			WithPos(pos).
-			WithImports(nil, true).
+			WithImports(nil).
 			WithFeats(append(features, feats...)).
 			WithTemplate(template).
 			WithFuncs(functions)

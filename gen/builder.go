@@ -64,9 +64,6 @@ type CliBuilder struct {
 	// imports
 	imports []string
 
-	// disableAutoImport
-	disableAutoImport bool
-
 	// funcs
 	funcs []string
 
@@ -94,9 +91,8 @@ func (builder *CliBuilder) WithFeats(feats []string) *CliBuilder {
 	return builder
 }
 
-func (builder *CliBuilder) WithImports(imports []string, disableAutoImport bool) *CliBuilder {
+func (builder *CliBuilder) WithImports(imports []string) *CliBuilder {
 	builder.imports = imports
-	builder.disableAutoImport = disableAutoImport
 	return builder
 }
 

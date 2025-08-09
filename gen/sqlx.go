@@ -105,7 +105,7 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 	// Since the text/template standard library does not provide a specific error type, we can only determine whether
 	// the bind function has been invoked in the template through this rudimentary way.
 	if _, err := template.New("detect_bind_function").Parse(ctx.Template); err != nil {
-		bindInvoked = strings.Contains(err.Error(), `function "bind" not defined`)
+		bindInvoked = contains(err.Error(), `function "bind" not defined`)
 	}
 
 	// Small hack: When the --template/-t option is enabled, and "bind" function has been invoked, the Bind option
@@ -260,35 +260,6 @@ inspectType:
 			"no available 'Interface' type declaration (*ast.InterfaceType) found, "+
 				"available *ast.GenDecl are: \n\n"+
 				"%s\n\n", concat(nodeMap(f.Decls, fmtNode), "\n"))
-	}
-
-	if !builder.disableAutoImport {
-		imports, err := getImports(builder.pkg, builder.pwd, builder.file, func(node ast.Node) bool {
-			switch x := node.(type) {
-			case *ast.TypeSpec:
-				return x.Name.Name == typeSpec.Name.Name
-			}
-			return false
-		})
-
-		if err != nil {
-			return nil, err
-		}
-
-		for _, spec := range f.Imports {
-			path := spec.Path.Value[1 : len(spec.Path.Value)-1]
-			for _, imported := range imports {
-				if path == imported.Path {
-					var name string
-					if spec.Name != nil {
-						name = spec.Name.Name
-					}
-					if importRepr := strings.TrimSpace(name + " " + path); !in(builder.imports, importRepr) {
-						builder.imports = append(builder.imports, importRepr)
-					}
-				}
-			}
-		}
 	}
 
 	var (
