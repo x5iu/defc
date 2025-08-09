@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"go/format"
@@ -11,10 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 	goimport "golang.org/x/tools/imports"
-	"gopkg.in/yaml.v3"
 
 	"github.com/x5iu/defc/gen"
 	runtime "github.com/x5iu/defc/runtime"
@@ -196,12 +193,16 @@ defc provides the following two scenarios of code generation features:
 	generate = &cobra.Command{
 		Use:   "generate FILE",
 		Short: "Generate code from schema file",
-		Long: `When the target file is a .go file, defc will analyze the file content, automatically determine the type 
-representing the schema, and match the corresponding mode. This means you don't have to specify the corresponding mode 
-using the '--mode/-m' parameter. You can also ignore the '--output' parameter, and defc will use the current file's name
-with a .gen suffix as the generated code file's name. This allows you to generate the corresponding code by only 
-providing a filename without any flags. If your .go file contains multiple types that meet the criteria, you can also 
-manually specify the type that defc should handle using the '--type/-T' parameter to avoid generating incorrect code.`,
+		Long: `The generate command accepts Go source files (.go) containing interface definitions with special method comments.
+defc will analyze the file content, automatically determine the interface type representing the schema, and match the 
+corresponding generation mode (sqlx or api). This means you don't have to specify the mode using the '--mode/-m' parameter. 
+
+You can also omit the '--output' parameter, and defc will use the source file's name with a .gen.go suffix as the 
+generated code file's name. This allows you to generate the corresponding code by only providing a Go filename without 
+any additional flags. 
+
+If your Go file contains multiple interface types that meet the criteria, you can manually specify which interface 
+type defc should handle using the '--type/-T' parameter to avoid generating incorrect code.`,
 		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -214,8 +215,7 @@ manually specify the type that defc should handle using the '--type/-T' paramete
 			} else {
 				return fmt.Errorf("unable to retrieve schema file from the $GOFILE environment variable or positional arguments")
 			}
-			ext := filepath.Ext(file)
-			if ext == ".go" {
+			if ext := filepath.Ext(file); ext == ".go" {
 				var (
 					pwd = os.Getenv(EnvPWD)
 					doc []byte
@@ -306,43 +306,7 @@ manually specify the type that defc should handle using the '--type/-T' paramete
 				}
 				return save(output, buffer.Bytes())
 			} else {
-				if err = checkFlags(); err != nil {
-					return err
-				}
-
-				schema, err := os.ReadFile(file)
-				if err != nil {
-					return fmt.Errorf("os.ReadFile(%s): %w", args[0], err)
-				}
-
-				var cfg gen.Config
-				switch ext := filepath.Ext(file); ext {
-				case ".json":
-					if err = json.Unmarshal(schema, &cfg); err != nil {
-						return fmt.Errorf("json.Unmarshal: %w", err)
-					}
-				case ".toml":
-					if err = toml.Unmarshal(schema, &cfg); err != nil {
-						return fmt.Errorf("toml.Unmarshal: %w", err)
-					}
-				case ".yaml", ".yml":
-					if err = yaml.Unmarshal(schema, &cfg); err != nil {
-						return fmt.Errorf("yaml.Unmarshal: %w", err)
-					}
-				default:
-					return fmt.Errorf("%s currently does not support schema extension %q", cmd.Root().Name(), ext)
-				}
-
-				cfg.Features = append(cfg.Features, features...)
-				cfg.Imports = append(cfg.Imports, imports...)
-				cfg.Funcs = append(cfg.Funcs, funcs...)
-
-				var buffer bytes.Buffer
-				if err = gen.Generate(&buffer, modeMap[mode], &cfg); err != nil {
-					return err
-				}
-
-				return save(output, buffer.Bytes())
+				return fmt.Errorf("generate command only supports .go files, got %q", ext)
 			}
 		},
 	}

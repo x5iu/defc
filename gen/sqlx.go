@@ -55,7 +55,6 @@ type sqlxContext struct {
 	Funcs           []string
 	Pwd             string
 	Doc             Doc
-	Schema          string
 	Template        string
 }
 
@@ -439,12 +438,6 @@ func (ctx *sqlxContext) genSqlxCode(w io.Writer) error {
 
 	if err != nil {
 		return err
-	}
-
-	if ctx.Schema != "" {
-		if tmpl, err = tmpl.Parse(sprintf(`{{ define "schema" }} %s {{ end }}`, ctx.Schema)); err != nil {
-			return err
-		}
 	}
 
 	return tmpl.Execute(w, ctx)

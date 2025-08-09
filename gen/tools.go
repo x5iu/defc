@@ -73,37 +73,25 @@ func afterLine(fset *token.FileSet, node ast.Node, line int) bool {
 }
 
 func indirect(node ast.Node) ast.Node {
-	if ptr, ok := getNode(node).(*ast.StarExpr); ok {
-		// hack for compatibility
-		return &Expr{
-			Expr: ptr.X,
-			// `ptr` may come from parser.ParseExpr, so we calculate offset by field offsets
-			Offset: int(node.Pos() + (ptr.X.Pos() - ptr.Star) - 1),
-		}
+	if ptr, ok := node.(*ast.StarExpr); ok {
+		return ptr.X
 	}
 	return node
 }
 
 func deselect(node ast.Node) ast.Node {
-	if sel, ok := getNode(node).(*ast.SelectorExpr); ok {
-		// hack for compatibility
-		return &Expr{
-			Expr: sel.Sel,
-			// `sel` may come from parser.ParseExpr, so we calculate offset by field offsets
-			Offset: int(node.Pos() + (sel.Sel.Pos() - sel.X.Pos()) - 1),
-		}
+	if sel, ok := node.(*ast.SelectorExpr); ok {
+		return sel.Sel
 	}
 	return node
 }
 
 func isPointer(node ast.Node) bool {
-	node = getNode(node)
 	_, ok := node.(*ast.StarExpr)
 	return ok
 }
 
 func isSlice(node ast.Node) bool {
-	node = getNode(node)
 	typ, ok := node.(*ast.ArrayType)
 	if !ok {
 		return false
@@ -128,7 +116,6 @@ func checkInput(method *ast.FuncType) bool {
 }
 
 func checkErrorType(node ast.Node) bool {
-	node = getNode(node)
 	ident, ok := node.(*ast.Ident)
 	return ok && ident.Name == ExprErrorIdent
 }
@@ -282,39 +269,17 @@ var seps = []rune{
 }
 
 func cutkv(kv string) (string, string, bool) {
+	kv = trimSpace(kv)
 	for _, ch := range kv {
 		if in(seps, ch) {
 			k, v, ok := cut(kv, string(ch))
 			if !ok {
-				return kv, "", false
+				return "", "", false
 			}
 			return trimSpace(k), trimSpace(v), true
 		}
 	}
-	return kv, "", false
-}
-
-func getIdent(s string) string {
-	if i := index(s, " "); i >= 0 {
-		return s[:i]
-	}
-	return s
-}
-
-func parseExpr(input string) (expr ast.Expr, err error) {
-	return parser.ParseExpr(input)
-}
-
-func getNode(node ast.Node) ast.Node {
-	// NOTE: compatible with `defc generate` command
-	for {
-		if wrapper, ok := node.(interface{ Unwrap() ast.Node }); ok {
-			node = wrapper.Unwrap()
-			continue
-		}
-		break
-	}
-	return node
+	return kv, kv, false
 }
 
 const (

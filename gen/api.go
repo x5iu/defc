@@ -55,7 +55,6 @@ type apiContext struct {
 	Imports   []string
 	Funcs     []string
 	Doc       Doc
-	Schema    string
 }
 
 func (ctx *apiContext) Build(w io.Writer) error {
@@ -405,7 +404,6 @@ func checkResponse(methods []*Method) bool {
 }
 
 func checkResponseType(node ast.Node) bool {
-	node = getNode(node)
 	switch node.(type) {
 	case *ast.Ident, *ast.StarExpr, *ast.SelectorExpr, *ast.IndexExpr, *ast.IndexListExpr:
 		return true
@@ -488,12 +486,6 @@ func (ctx *apiContext) genApiCode(w io.Writer) error {
 
 	if err != nil {
 		return err
-	}
-
-	if ctx.Schema != "" {
-		if tmpl, err = tmpl.Parse(sprintf(`{{ define "schema" }} %s {{ end }}`, ctx.Schema)); err != nil {
-			return err
-		}
 	}
 
 	return tmpl.Execute(w, ctx)

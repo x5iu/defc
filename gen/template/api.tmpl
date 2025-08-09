@@ -13,8 +13,6 @@ import (
 {{ end }}
 )
 
-{{ block "schema" $ }}{{ end }}
-
 const (
 {{ range $index, $method := $.Methods }}{{ if and (not (isInner $method.Ident)) (not (isResponse $method.Ident)) }}
     {{ $.Ident }}Method{{ $method.Ident }} = "{{ $method.Ident }}"{{ end }}{{ end }}

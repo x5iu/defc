@@ -13,8 +13,6 @@ import (
 {{ end }}
 )
 
-{{ block "schema" $ }}{{ end }}
-
 {{ $impName := (printf "impl%s" $.Ident) }}
 {{ $receiver := $impName }}
 

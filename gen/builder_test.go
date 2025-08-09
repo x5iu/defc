@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	goformat "go/format"
+
 	goimport "golang.org/x/tools/imports"
 )
 
-func runTest(path string, builder Builder) (err error) {
+func runTest(path string, builder *CliBuilder) (err error) {
 	var bf bytes.Buffer
 	if err = builder.Build(&bf); err != nil {
 		return err
