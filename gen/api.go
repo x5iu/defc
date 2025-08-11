@@ -34,6 +34,7 @@ const (
 	FeatureApiIgnoreStatus = "api/ignore-status"
 	FeatureApiGzip         = "api/gzip"
 	FeatureApiRetry        = "api/retry"
+	FeatureApiGetBody      = "api/get-body"
 )
 
 func (builder *CliBuilder) buildApi(w io.Writer) error {
@@ -61,7 +62,12 @@ func (ctx *apiContext) Build(w io.Writer) error {
 		return fmt.Errorf("checkResponse: no '%s() T' method found in Interface", apiMethodResponse)
 	}
 
+	var declHasInner bool
 	for _, method := range ctx.Methods {
+		if isInner(method.Ident) {
+			declHasInner = true
+		}
+
 		if !isResponse(method.Ident) && !isInner(method.Ident) {
 			if l := len(method.Out); l == 0 || !checkErrorType(method.Out[l-1]) {
 				return fmt.Errorf("checkErrorType: no 'error' found in method %s returned values",
@@ -101,6 +107,13 @@ func (ctx *apiContext) Build(w io.Writer) error {
 					len(method.Out))
 			}
 		*/
+	}
+
+	if !declHasInner &&
+		(in(ctx.Features, FeatureApiCache) ||
+			in(ctx.Features, FeatureApiLog) || in(ctx.Features, FeatureApiLogx) ||
+			in(ctx.Features, FeatureApiClient)) {
+		return fmt.Errorf("api/cache, api/log, api/logx and api/client features require an `Options` method")
 	}
 
 	// When using the api/future feature without enabling the api/error feature, it may cause connections

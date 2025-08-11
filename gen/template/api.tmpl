@@ -338,7 +338,7 @@ var (
         {{- $request := printf "request%s" $method.Ident -}}
         {{- if httpMethodHasBody $httpMethod }}
             {{- if headerHasBody $method.TmplHeader }}
-                {{- if $.HasFeature "api/logx" }}
+                {{- if or ($.HasFeature "api/logx") ($.HasFeature "api/get-body") }}
                     {{- $body := printf "requestBody%s" $method.Ident }}
                     {{ $body }}, {{ $err }} := io.ReadAll({{ $bufReader }})
                     if {{ $err }} != nil {

@@ -208,4 +208,41 @@ func TestBuildApi(t *testing.T) {
 			return
 		}
 	})
+	t.Run("success_get_body", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		builder = builder.WithFeats([]string{FeatureApiGetBody, FeatureApiNoRt, FeatureApiFuture})
+		if err := runTest(genFile, builder); err != nil {
+			t.Errorf("build: %s", err)
+			return
+		}
+	})
+	t.Run("fail_requires_options", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		builder = builder.WithFeats([]string{FeatureApiLog, FeatureApiNoRt, FeatureApiFuture})
+		if err := runTest(genFile, builder); err == nil {
+			t.Errorf("build: expects errors, got nil")
+			return
+		} else if !strings.Contains(err.Error(),
+			"api/cache, api/log, api/logx and api/client features require an `Options` method") {
+			t.Errorf("build: expects Options method requirement error, got => %s", err)
+			return
+		}
+	})
+	t.Run("success_with_options", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		builder = builder.WithFeats([]string{FeatureApiLog, FeatureApiNoRt, FeatureApiFuture})
+		if err := runTest(genFile, builder); err != nil {
+			t.Errorf("build: %s", err)
+			return
+		}
+	})
 }

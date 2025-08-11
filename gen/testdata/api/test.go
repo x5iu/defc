@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	gofmt "fmt"
+
 	defc "github.com/x5iu/defc/runtime"
 
 	_ "unsafe"
@@ -111,5 +112,39 @@ var FailNoTypeDecl struct{}
 
 //go:generate defc [mode] [output] [features...] TestBuildApi/fail_no_iface_type
 type FailNoIfaceType struct{}
+
+//go:generate defc [mode] [output] [features...] TestBuildApi/success_get_body
+type SuccessGetBody interface {
+	Response() Generic[defc.Response, defc.FutureResponse]
+
+	// Run POST https://localhost:port/path
+	// Content-Type: application/json
+	//
+	// { "data": "test" }
+	Run(ctx context.Context) error
+}
+
+//go:generate defc [mode] [output] [features...] TestBuildApi/fail_requires_options
+type FailRequiresOptions interface {
+	Response() Generic[defc.Response, defc.FutureResponse]
+
+	// Run POST https://localhost:port/path
+	// Content-Type: application/json
+	//
+	// { "data": "test" }
+	Run(ctx context.Context) error
+}
+
+//go:generate defc [mode] [output] [features...] TestBuildApi/success_with_options
+type SuccessWithOptions[O any] interface {
+	Options() O
+	Response() Generic[defc.Response, defc.FutureResponse]
+
+	// Run POST https://localhost:port/path
+	// Content-Type: application/json
+	//
+	// { "data": "test" }
+	Run(ctx context.Context) error
+}
 
 type Generic[T any, U any] struct{}

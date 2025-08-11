@@ -229,6 +229,7 @@ legacy behavior, build with the `legacy` tag: `go build -tags=legacy`.
 - `api/page`: Automatic pagination support
 - `api/error`: Enhanced error handling with HTTP status codes
 - `api/future`: Use enhanced response handling with `FromResponse()` method *(enabled by default since v1.37.0)*
+- `api/get-body`: Enable access to request body copy via `http.Request.GetBody()` for debugging and logging
 - `api/nort`: Generate code without runtime dependencies
 
 ### Schema Definition
