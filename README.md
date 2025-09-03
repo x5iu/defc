@@ -104,9 +104,9 @@ ResponseHandler() *Response
 // CreateUser POST {{ $.Service.Host }}/user
 // Content-Type: application/json
 //
-// { 
-//   "name": {{ $.name }}, 
-//   "age": {{ $.age }} 
+// {
+//   "name": {{ $.name }},
+//   "age": {{ $.age }}
 // }
 CreateUser(ctx context.Context, name string, age int) (*User, error)
 
@@ -365,7 +365,7 @@ can't evaluate field invalid_function in type map[string]interface {}
 ```go
 type UserQuery interface {
 // GetUsers QUERY MANY
-// SELECT * FROM users 
+// SELECT * FROM users
 // WHERE 1=1
 // {{if $.name}} AND name = {{ bind $.name }}{{end}}
 // {{if $.age}} AND age >= {{ bind $.age }}{{end}}
@@ -382,7 +382,7 @@ type UserQuery interface {
 GetUsersByIDs(ctx context.Context, ids []int64) ([]*User, error)
 
 // BulkInsertUsers EXEC
-// INSERT INTO users (name, email) VALUES 
+// INSERT INTO users (name, email) VALUES
 // {{range $i, $user := $.users}}
 //   {{if $i}},{{end}}({{ bind $user.Name }}, {{ bind $user.Email }})
 // {{end}}
@@ -438,7 +438,7 @@ Use in your schema:
 type UserQuery interface {
 // GetUsers QUERY MANY
 // {{ template "audit_header" . }}
-// SELECT * FROM users 
+// SELECT * FROM users
 // {{ template "where_active" }}
 // ORDER BY created_at DESC
 // {{ template "pagination" . }}
@@ -543,7 +543,7 @@ WithTx(ctx context.Context, fn func (UserQuery) error) error
 // INSERT INTO users (name, email) VALUES (?, ?);
 CreateUser(ctx context.Context, name, email string) error
 
-// CreateProfile EXEC  
+// CreateProfile EXEC
 // INSERT INTO profiles (user_id, bio) VALUES (?, ?);
 CreateProfile(ctx context.Context, userID int64, bio string) error
 }
@@ -575,8 +575,8 @@ GetUsers(ctx context.Context) ([]*User, error)
 }
 
 type User struct {
-ID       int64     `db:"id"`
-Name     string    `db:"name"`
+ID       int64      `db:"id"`
+Name     string     `db:"name"`
 Projects []*Project // Will be populated by callback
 }
 
@@ -672,9 +672,9 @@ APIKey string
 }
 
 type Response struct {
-Data   any `json:"data"`
-Error  string      `json:"error"`
-Status int         `json:"status"`
+Data   any   `json:"data"`
+Error  string `json:"error"`
+Status int    `json:"status"`
 }
 
 func (r *Response) Err() error {
@@ -768,7 +768,7 @@ return c.client
 
 // Usage
 config := &Config{
-Host: "https://api.example.com",
+Host:   "https://api.example.com",
 client: &http.Client{Timeout: 30 * time.Second},
 }
 service := NewService(config)
@@ -820,11 +820,6 @@ response.StatusCode, elapse)
 config := &Config{Host: "https://api.example.com"}
 service := NewUserService(config)
 ```
-
-**API Log Features:**
-
-- `api/log`: Basic HTTP request logging with URL and timing
-- `api/logx`: Enhanced HTTP logging with full request/response objects
 
 ## License
 
