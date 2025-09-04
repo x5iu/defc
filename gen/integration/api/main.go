@@ -62,6 +62,14 @@ func main() {
 	if user.ID != 4 || user.Name != "defc_test_0004" {
 		log.Fatalf("unexpected user with update options: User(id=%d, name=%q)\n", user.ID, user.Name)
 	}
+	longDesc := strings.Repeat("x", 10000)
+	user, err = client.MakeUpdateUserRequest(ctx, &User{ID: 4, Name: "defc_test_0004", Description: longDesc})
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if user.ID != 4 || user.Name != "defc_test_0004" {
+		log.Fatalf("unexpected user with MakeUpdateUserRequest: User(id=%d, name=%q)\n", user.ID, user.Name)
+	}
 }
 
 type Transport struct {
@@ -96,6 +104,30 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(bytes.NewBufferString(`{"code":200,"message":"","data":{"id":2,"name":"defc_test_0002"}}`)),
 		}, nil
+	case "/v1/users/4":
+		if method == "PUT" {
+			if ct := req.Header.Get("Content-Type"); ct != "application/json" {
+				panic(fmt.Sprintf("Invalid Content-Type: %q", ct))
+			}
+			if req.Body != nil {
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					panic(fmt.Sprintf("Failed to read request body: %v", err))
+				}
+				req.Body.Close()
+				var u User
+				if err := json.Unmarshal(body, &u); err != nil {
+					panic(fmt.Sprintf("Failed to unmarshal request body: %v", err))
+				}
+				if u.ID != 4 || u.Name != "defc_test_0004" || u.Description != strings.Repeat("x", 10000) {
+					panic(fmt.Sprintf("Invalid request payload: %+v (desc_len=%d)", u, len(u.Description)))
+				}
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"code":200,"message":"","data":{"id":4,"name":"defc_test_0004"}}`)),
+			}, nil
+		}
 	case "/v1/users/":
 		switch method {
 		case "POST":
@@ -165,7 +197,7 @@ func (TestOptions) Log(
 	fmt.Printf("=== %s %s\nelapse: %s\n", method, url, elapse)
 }
 
-//go:generate defc generate -T Client -o client.gen.go --features api/future,api/client,api/log,api/retry
+//go:generate defc generate -T Client -o client.gen.go --features api/future,api/ignore-status,api/client,api/log,api/retry --function encodejson
 type Client interface {
 	Options() *TestOptions
 	ResponseHandler() *TestResponseHandler
@@ -183,11 +215,18 @@ type Client interface {
 	// UpdateUserWithOptions PUT OPTIONS(opts) https://localhost:443/v1/users/
 	// Content-Type: application/json
 	UpdateUserWithOptions(ctx context.Context, reader io.Reader, opts ...func(*http.Request)) (*User, error)
+
+	// MakeUpdateUserRequest PUT https://localhost:443/v1/users/{{ .req.ID }}
+	// Content-Type: application/json
+	//
+	// {{ encodejson .req }}
+	MakeUpdateUserRequest(ctx context.Context, req *User) (*User, error)
 }
 
 type User struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 type TestResponseHandler struct {
@@ -244,4 +283,12 @@ func (r *ResetReader) Read(p []byte) (n int, err error) {
 
 func NewResetReader(data string) *ResetReader {
 	return &ResetReader{rd: bytes.NewReader([]byte(data))}
+}
+
+func encodejson(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }

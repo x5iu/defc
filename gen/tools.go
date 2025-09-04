@@ -273,7 +273,7 @@ func cutkv(kv string) (string, string, bool) {
 			return trimSpace(k), trimSpace(v), true
 		}
 	}
-	return kv, kv, false
+	return kv, kv, true
 }
 
 const (

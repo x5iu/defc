@@ -43,7 +43,7 @@ func TestApi(t *testing.T) {
 		return
 	}
 	var (
-		featReg = regexp.MustCompile(`--features(?:\s|=)([\w,/]+)`)
+		featReg = regexp.MustCompile(`--features(?:\s|=)([\w-,/]+)`)
 		funcReg = regexp.MustCompile(`--function(?:\s|=)([\w=]+)`)
 
 		pos       int
