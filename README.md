@@ -15,15 +15,16 @@ boilerplate code for database operations and HTTP requests, including parameter 
 mapping, and logging logic.
 
 The name "defc" is a combination of "def" (define) and "c" (CLI - command line interface), reflecting its nature as a
-command-line tool for defining and generating code schemas. Currently, defc provides two main code generation scenarios:
+command-line tool for defining and generating code schemas. Currently, defc provides three main code generation scenarios:
 
 - **Database CRUD**: Code generation based on an enhanced fork of [sqlx](https://github.com/jmoiron/sqlx) for database
   operations
 - **HTTP Client**: Request code generation based on Go's standard `net/http` package
+- **RPC**: Client and server wrappers generation based on Go's standard `net/rpc` package
 
 ## Features
 
-- 🚀 **Automatic Code Generation**: Generate database CRUD and HTTP client code from interface definitions
+- 🚀 **Automatic Code Generation**: Generate database CRUD, HTTP client, and net/rpc wrappers from interface definitions
 - 📊 **SQL Query Support**: Full support for complex SQL queries with template functionality
 - 🌐 **HTTP Client Generation**: Generate HTTP client code with request/response handling
 - 🔧 **Template Engine**: Built-in template support for dynamic SQL and HTTP requests
@@ -132,6 +133,37 @@ service := NewService(config)
 user, err := service.CreateUser(context.Background(), "John", 25)
 ```
 
+### RPC (rpc mode)
+
+1. Define your RPC schema:
+
+```go
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=rpc --output=arith.gen.go
+// Methods must have exactly 1 input and 2 outputs (second is error)
+type Arith interface {
+    Multiply(args chan int) (int, error)
+}
+```
+
+2. Run code generation:
+
+```bash
+go generate
+```
+
+3. Use the generated code:
+
+```go
+// Client side
+cli := rpc.NewClient(conn)
+arith := NewArith(cli)
+res, err := arith.Multiply(make(chan int))
+
+// Server side (wrap implementation)
+srv := rpc.NewServer()
+srv.RegisterName("Arith", NewArithServer(&arithImpl{}))
+```
+
 ## Documentation
 
 ### Quick Usage
@@ -154,11 +186,13 @@ defc generate --features=sqlx/log,sqlx/rebind schema.go
 - **sqlx mode** is detected when methods contain `EXEC`/`QUERY` operations, or when `WithTx` method is present
 - **api mode** is detected when methods contain HTTP method names (GET, POST, etc.), or when `Options()`/
   `ResponseHandler()` methods are present
+- **rpc mode** is detected when interface methods each have exactly 1 input parameter and 2 outputs, with the second being `error`
 
 ### Available Modes
 
 - `sqlx`: Generate database CRUD operations using sqlx
 - `api`: Generate HTTP client code
+- `rpc`: Generate net/rpc client and server wrappers
 
 ### Command Line Options
 
@@ -166,7 +200,7 @@ defc generate --features=sqlx/log,sqlx/rebind schema.go
 
 | Flag                    | Short | Type     | Description                                                                  |
 |-------------------------|-------|----------|------------------------------------------------------------------------------|
-| `--mode`                | `-m`  | string   | Generation mode: `sqlx` or `api` (auto-detected in `generate` command)       |
+| `--mode`                | `-m`  | string   | Generation mode: `sqlx`, `api`, or `rpc` (auto-detected in `generate` command) |
 | `--output`              | `-o`  | string   | Output file name (auto-generated as `<source>.gen.go` in `generate` command) |
 | `--features`            | `-f`  | []string | Enable specific features (see Features section above)                        |
 | `--import`              |       | []string | Additional import packages                                                   |
@@ -231,6 +265,13 @@ legacy behavior, build with the `legacy` tag: `go build -tags=legacy`.
 - `api/future`: Use enhanced response handling with `FromResponse()` method *(enabled by default since v1.37.0)*
 - `api/get-body`: Enable access to request body copy via `http.Request.GetBody()` for debugging and logging
 - `api/nort`: Generate code without runtime dependencies
+
+#### rpc Mode Features
+
+- `rpc/nort`: Generate code without runtime dependency on defc runtime helpers (uses reflection-based zero value helpers in generated code)
+- Generated client constructor: `New{Interface}(client *rpc.Client) {Interface}`
+- Generated server wrapper: `New{Interface}Server(impl {Interface}) *{Interface}Server`
+- Method signature rules: exactly 1 input parameter and 2 outputs, with the second being `error`
 
 ### Schema Definition
 

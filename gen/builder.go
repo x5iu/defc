@@ -11,6 +11,7 @@ const (
 	ModeStart Mode = iota
 	ModeApi
 	ModeSqlx
+	ModeRpc
 	ModeEnd
 )
 
@@ -20,6 +21,8 @@ func (mode Mode) String() string {
 		return "api"
 	case ModeSqlx:
 		return "sqlx"
+	case ModeRpc:
+		return "rpc"
 	default:
 		return sprintf("Mode(%d)", mode)
 	}
@@ -133,6 +136,8 @@ func (builder *CliBuilder) Build(w io.Writer) error {
 		return builder.buildApi(w)
 	case ModeSqlx:
 		return builder.buildSqlx(w)
+	case ModeRpc:
+		return builder.buildRpc(w)
 	default:
 	}
 	return nil

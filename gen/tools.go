@@ -100,6 +100,11 @@ func isSlice(node ast.Node) bool {
 	return typ.Len == nil && !eltIsByte
 }
 
+func isChan(node ast.Node) bool {
+	_, ok := node.(*ast.ChanType)
+	return ok
+}
+
 func checkInput(method *ast.FuncType) bool {
 	for _, param := range method.Params.List {
 		if len(param.Names) == 0 {
@@ -397,10 +402,30 @@ func DetectTargetDecl(file string, src []byte, target string) (string, Mode, int
 								}
 							}
 						}
+						if maybeRpcDecl(ifaceType) {
+							return f.Name.String(), ModeRpc, fset.Position(typeSpec.Pos()).Line - 1, nil
+						}
 					}
 				}
 			}
 		}
 	}
 	return "", 0, 0, ErrNoTargetDeclFound
+}
+
+func maybeRpcDecl(iface *ast.InterfaceType) bool {
+	for _, field := range iface.Methods.List {
+		if funcType, ok := field.Type.(*ast.FuncType); ok {
+			if len(funcType.Params.List) != 1 {
+				return false
+			}
+			if len(funcType.Results.List) != 2 {
+				return false
+			}
+			if !checkErrorType(funcType.Results.List[1]) {
+				return false
+			}
+		}
+	}
+	return true
 }

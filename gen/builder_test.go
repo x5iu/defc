@@ -2,10 +2,9 @@ package gen
 
 import (
 	"bytes"
+	goformat "go/format"
 	"os"
 	"testing"
-
-	goformat "go/format"
 
 	goimport "golang.org/x/tools/imports"
 )
@@ -47,7 +46,8 @@ func TestMode(t *testing.T) {
 			{Mode: 0, String: "Mode(0)", IsValid: false},
 			{Mode: 1, String: "api", IsValid: true},
 			{Mode: 2, String: "sqlx", IsValid: true},
-			{Mode: 3, String: "Mode(3)", IsValid: false},
+			{Mode: 3, String: "rpc", IsValid: true},
+			{Mode: 4, String: "Mode(4)", IsValid: false},
 			{Mode: 999, String: "Mode(999)", IsValid: false},
 		}
 		for _, testcase := range testcases {

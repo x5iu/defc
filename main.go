@@ -47,6 +47,7 @@ var (
 		gen.FeatureSqlxFuture,
 		gen.FeatureSqlxCallback,
 		gen.FeatureSqlxAnyCallback,
+		gen.FeatureRpcNoRt,
 	}
 )
 
@@ -111,10 +112,11 @@ Based on the above background, I wanted to implement a code generation tool. By 
 request, it is possible to automatically generate code for the related CRUD operations or HTTP requests, which includes 
 parameter construction, error handling, result mapping, and log recording logic. defc is my experimental attempt at 
 such a schema-to-code generation; "def" stands for "define", indicating the behavior of setting up a Schema. Currently, 
-defc provides the following two scenarios of code generation features:
+defc provides the following three scenarios of code generation features:
 
 * CRUD code generation based on sqlx for databases
-* HTTP interface request code generation based on the net/http package in the Golang standard library`,
+* HTTP interface request code generation based on the net/http package in the Golang standard library
+* RPC client and server wrappers based on the net/rpc package in the Golang standard library`,
 		Version:       runtime.Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -194,9 +196,9 @@ defc provides the following two scenarios of code generation features:
 	generate = &cobra.Command{
 		Use:   "generate FILE",
 		Short: "Generate code from schema file",
-		Long: `The generate command accepts Go source files (.go) containing interface definitions with special method comments.
+		Long: `The generate command accepts Go source files (.go) containing interface definitions with special method comments or RPC-style signatures.
 defc will analyze the file content, automatically determine the interface type representing the schema, and match the 
-corresponding generation mode (sqlx or api). This means you don't have to specify the mode using the '--mode/-m' parameter. 
+corresponding generation mode (sqlx, api or rpc). This means you don't have to specify the mode using the '--mode/-m' parameter. 
 
 You can also omit the '--output' parameter, and defc will use the source file's name with a .gen.go suffix as the 
 generated code file's name. This allows you to generate the corresponding code by only providing a Go filename without 
