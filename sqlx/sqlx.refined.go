@@ -30,13 +30,12 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
-	"unsafe"
 
 	tok "github.com/x5iu/defc/runtime/token"
 	"github.com/x5iu/defc/sqlx/reflectx"
-)
 
-var _ = unsafe.Pointer(uintptr(0))
+	_ "unsafe"
+)
 
 // Bindvar types supported by Rebind, BindMap and BindStruct.
 const (
