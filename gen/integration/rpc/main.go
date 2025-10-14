@@ -22,7 +22,7 @@ func main() {
 		srv.RegisterName("Arith", NewArithServer(&arith{}))
 		srv.ServeCodec(&rpcServerCodec{encoder: json.NewEncoder(s), decoder: json.NewDecoder(s)})
 	}()
-	cli := NewArith(rpc.NewClientWithCodec(&rpcClientCodec{encoder: json.NewEncoder(c), decoder: json.NewDecoder(c)}))
+	cli := NewArithClient(rpc.NewClientWithCodec(&rpcClientCodec{encoder: json.NewEncoder(c), decoder: json.NewDecoder(c)}))
 	args := make(chan int, 2)
 	args <- 21
 	args <- 2

@@ -19,11 +19,11 @@ import (
 {{ $newFunc := (printf "new%sType" $.Ident) }}
 
 {{ $rpcClient := "rpcClient" }}
-func New{{- $.Ident }}(rpcClient *rpc.Client) {{ $.Ident }} {
-    return &{{ $impName }}{  {{ $rpcClient }}: rpcClient  }
+func New{{- $.Ident }}Client(rpcClient *rpc.Client) {{ $.Ident }} {
+    return &{{ $impName }}Client{  {{ $rpcClient }}: rpcClient  }
 }
 
-type {{ $impName }} struct{
+type {{ $impName }}Client struct{
     {{ $rpcClient }} *rpc.Client
 }
 
@@ -31,7 +31,7 @@ type {{ $impName }} struct{
 {{ range $index, $method := $.Methods }}
     {{ $err := printf "%sErr" $method.Ident }}
     {{ $sortIn := $method.SortIn }}
-    func ({{ $receiver }} *{{ $impName }}) {{ $method.Ident }}(
+    func ({{ $receiver }} *{{ $impName }}Client) {{ $method.Ident }}(
     {{- range $index, $ident := $sortIn -}}
         {{- $ident }} {{ getRepr (index $method.In $ident) }},
     {{- end -}}

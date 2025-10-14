@@ -3,7 +3,7 @@
 
 package main
 
-func NewArith(rpcClient *rpc.Client) Arith {
+func NewArithClient(rpcClient *rpc.Client) Arith {
 	panic("Please use `go run -tags test ...` to enable testing; " +
 		"this is just a placeholder function for static analysis to proceed.")
 }
