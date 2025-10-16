@@ -227,7 +227,9 @@ var (
     {{ $sqlxTx := printf "sqlxTx%s" $method.Ident -}}
     var {{ $sqlxTx }} *sqlx.Tx
     {{ $sqlxTx }}, {{ $err }} = __imp.__core.BeginTxx({{ if $method.HasContext }}ctx{{ else }}context.Background(){{ end }}, {{ if $isolationLv }}&sql.TxOptions{Isolation: {{ $isolationLv }}}{{ else }}nil{{ end }})
-    {{ $tx }} = {{ $sqlxTx }}
+    if {{ $sqlxTx }} != nil {
+        {{ $tx }} = {{ $sqlxTx }}
+    }
     }
     if {{ $err }} != nil {
     return {{ range $index, $type := $method.Out -}}
@@ -235,6 +237,9 @@ var (
             v{{- $index -}}{{- $method.Ident }},
         {{- end -}}
     {{- end -}} fmt.Errorf("error creating %s transaction: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+    }
+    if {{ $tx }} == nil {
+        panic("tx is nil")
     }
     if !__imp.__withTx{
     defer {{ $tx }}.Rollback()
@@ -475,6 +480,9 @@ var (
     }
     if err != nil {
     return fmt.Errorf("error creating transaction in %s: %w", strconv.Quote("WithTx"), err)
+    }
+    if inner == nil {
+        panic("tx is nil")
     }
 
     defer inner.Rollback()
