@@ -437,6 +437,10 @@ var (
         fmt.Errorf("error sending '{{ $method.Ident }}' request: %w", {{ $err }})
         }
 
+        if {{ $httpResponse }} == nil {
+            panic("response is nil")
+        }
+
         {{ if $.HasFeature "api/gzip" }}
         func() {
             for _, contentEncoding := range {{ $httpResponse }}.Header.Values("Content-Encoding") {
