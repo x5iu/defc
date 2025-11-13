@@ -34,11 +34,19 @@ func main() {
 	if result != 42 {
 		log.Fatalf("unexpected result: %d != 42", result)
 	}
+	defer func() {
+		if recover() == nil {
+			log.Fatalln("expects recover, got nil")
+		}
+	}()
+	cli.panic()
+	log.Fatalln("expects panic, got nil")
 }
 
 //go:generate defc generate -T Arith -o arith.gen.go
 type Arith interface {
 	Multiply(args chan int) (int, error)
+	panic()
 }
 
 type arith struct{}
@@ -50,6 +58,8 @@ func (impl *arith) Multiply(args chan int) (int, error) {
 	}
 	return reply, nil
 }
+
+func (impl *arith) panic() {}
 
 type rpcServerCodec struct {
 	encoder *json.Encoder

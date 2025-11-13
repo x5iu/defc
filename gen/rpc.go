@@ -34,17 +34,19 @@ type rpcContext struct {
 
 func (ctx *rpcContext) Build(w io.Writer) error {
 	for _, method := range ctx.Methods {
-		if len(method.In) != 1 {
-			return fmt.Errorf("rpc method %s should have exactly 1 input parameter", method.Ident)
-		}
-		if len(method.Out) != 2 {
-			return fmt.Errorf("rpc method %s should have exactly 2 output parameters", method.Ident)
-		}
-		// if !isPointer(method.Out[0]) {
-		// 	return fmt.Errorf("rpc method %s should have a pointer as the output parameter", method.Ident)
-		// }
-		if !checkErrorType(method.Out[1]) {
-			return fmt.Errorf("rpc method %s should have an error as the second output parameter", method.Ident)
+		if token.IsExported(method.Ident) {
+			if len(method.In) != 1 {
+				return fmt.Errorf("rpc method %s should have exactly 1 input parameter", method.Ident)
+			}
+			if len(method.Out) != 2 {
+				return fmt.Errorf("rpc method %s should have exactly 2 output parameters", method.Ident)
+			}
+			// if !isPointer(method.Out[0]) {
+			// 	return fmt.Errorf("rpc method %s should have a pointer as the output parameter", method.Ident)
+			// }
+			if !checkErrorType(method.Out[1]) {
+				return fmt.Errorf("rpc method %s should have an error as the second output parameter", method.Ident)
+			}
 		}
 	}
 	if err := ctx.genRpcCode(w); err != nil {
@@ -149,10 +151,12 @@ func (ctx *rpcContext) genRpcCode(w io.Writer) error {
 	tmpl, err := template.
 		New("defc(rpc)").
 		Funcs(template.FuncMap{
-			"isPointer": isPointer,
-			"indirect":  indirect,
-			"isChan":    isChan,
-			"getRepr":   func(node ast.Node) string { return ctx.Doc.Repr(node) },
+			"quote":      quote,
+			"isPointer":  isPointer,
+			"indirect":   indirect,
+			"isChan":     isChan,
+			"getRepr":    func(node ast.Node) string { return ctx.Doc.Repr(node) },
+			"isExported": token.IsExported,
 		}).
 		Parse(rpcTemplate)
 

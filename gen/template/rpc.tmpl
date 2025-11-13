@@ -43,27 +43,33 @@ type {{ $impName }}Client struct{
         {{- end -}}
         )
     {{- end -}}
-    {
-        {{ $isReplyPointerType := false -}}
-        {{ $rpcReply := printf "%sRPCReply" $method.Ident -}}
-        {{ $rpcReply }} := {{ range $index, $type := $method.Out -}}
-            {{- if eq $index 0 -}}
-                {{- if isPointer $type -}}
-                    {{ $isReplyPointerType = true }}
-                    new({{ getRepr (indirect $type) }})
-                {{- else -}}
-                    {{ if $.HasFeature "rpc/nort" }}{{ $newFunc }}{{ else }}{{ $runtime }}.New{{ end }}[{{ getRepr $type }}]()
+    {{- if isExported $method.Ident -}}
+        {
+            {{ $isReplyPointerType := false -}}
+            {{ $rpcReply := printf "%sRPCReply" $method.Ident -}}
+            {{ $rpcReply }} := {{ range $index, $type := $method.Out -}}
+                {{- if eq $index 0 -}}
+                    {{- if isPointer $type -}}
+                        {{ $isReplyPointerType = true }}
+                        new({{ getRepr (indirect $type) }})
+                    {{- else -}}
+                        {{ if $.HasFeature "rpc/nort" }}{{ $newFunc }}{{ else }}{{ $runtime }}.New{{ end }}[{{ getRepr $type }}]()
+                    {{- end -}}
                 {{- end -}}
-            {{- end -}}
-        {{- end }}
-        {{ $err }} := {{ $receiver }}.{{ $rpcClient }}.Call("{{ $.Ident }}.{{ $method.Ident }}", {{- range $index, $ident := $sortIn -}}
-            {{- $ident }},
-        {{- end -}} {{ if not $isReplyPointerType }}&{{ end }}{{ $rpcReply }})
-        if {{ $err }} != nil {
-            return {{ if not $isReplyPointerType }}{{ $rpcReply }}{{ else }}nil{{ end }}, {{ $err }}
+            {{- end }}
+            {{ $err }} := {{ $receiver }}.{{ $rpcClient }}.Call("{{ $.Ident }}.{{ $method.Ident }}", {{- range $index, $ident := $sortIn -}}
+                {{- $ident }},
+            {{- end -}} {{ if not $isReplyPointerType }}&{{ end }}{{ $rpcReply }})
+            if {{ $err }} != nil {
+                return {{ if not $isReplyPointerType }}{{ $rpcReply }}{{ else }}nil{{ end }}, {{ $err }}
+            }
+            return {{ $rpcReply }}, nil
         }
-        return {{ $rpcReply }}, nil
-    }
+    {{- else -}}
+        {
+            panic(fmt.Errorf("unexported method %q should not be called", {{ quote $method.Ident }}))
+        }
+    {{- end -}}
 {{ end }}
 
 func New{{ $.Ident }}Server(impl {{ $.Ident }}) *{{ $.Ident }}Server {
@@ -78,26 +84,28 @@ type {{ $.Ident }}Server struct {
 }
 
 {{ range $index, $method := $.Methods }}
-    {{ $err := printf "%sErr" $method.Ident }}
-    {{ $arg := index $method.In ( index $method.SortIn 0 ) }}
-    {{ $reply := index $method.Out 0 }}
-    func ({{ $receiver }} *{{ $.Ident }}Server) {{ $method.Ident }}(
-    arg {{ getRepr $arg }},
-    reply {{ if not ( isPointer $reply ) }}*{{ end }}{{ getRepr $reply }},
-    ) error {
-        {{ $rpcReply := printf "%sRPCReply" $method.Ident -}}
-        {{ $rpcReply }}, {{ $err }} := {{ $receiver }}.{{ $impName }}.{{ $method.Ident }}(arg)
-        if {{ $err }} != nil {
-            return {{ $err }}
+    {{ if isExported $method.Ident }}
+        {{ $err := printf "%sErr" $method.Ident }}
+        {{ $arg := index $method.In ( index $method.SortIn 0 ) }}
+        {{ $reply := index $method.Out 0 }}
+        func ({{ $receiver }} *{{ $.Ident }}Server) {{ $method.Ident }}(
+            arg {{ getRepr $arg }},
+            reply {{ if not ( isPointer $reply ) }}*{{ end }}{{ getRepr $reply }},
+        ) error {
+            {{ $rpcReply := printf "%sRPCReply" $method.Ident -}}
+            {{ $rpcReply }}, {{ $err }} := {{ $receiver }}.{{ $impName }}.{{ $method.Ident }}(arg)
+            if {{ $err }} != nil {
+                return {{ $err }}
+            }
+            {{- if isChan ( indirect $reply ) }}
+            if reply != nil && *reply != nil {
+                close(*reply)
+            }
+            {{- end }}
+            *reply = {{ if isPointer $reply }}*{{ end }}{{ $rpcReply }}
+            return nil
         }
-        {{ if isChan ( indirect $reply ) -}}
-        if reply != nil && *reply != nil {
-            close(*reply)
-        }
-        {{- end }}
-        *reply = {{ if isPointer $reply }}*{{ end }}{{ $rpcReply }}
-        return nil
-    }
+    {{ end }}
 {{ end }}
 
 {{ if $.HasFeature "rpc/nort" }}
