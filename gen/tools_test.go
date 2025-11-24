@@ -3,6 +3,9 @@ package gen
 import (
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"reflect"
 	"strings"
 	"testing"
@@ -224,4 +227,88 @@ type TestSqlx2 interface {
 		t.Errorf("detect: expects ErrNoTargetDeclFound, got => %s", err)
 		return
 	}
+}
+
+func TestMaybeRpcDecl(t *testing.T) {
+	t.Run("rpc_interface", func(t *testing.T) {
+		const src = `
+package test
+
+type RPCService interface {
+	Do(*Args) (*Reply, error)
+}
+`
+
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "test.go", src, 0)
+		if err != nil {
+			t.Fatalf("ParseFile: %v", err)
+		}
+
+		var iface *ast.InterfaceType
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range genDecl.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+				if it, ok := typeSpec.Type.(*ast.InterfaceType); ok {
+					iface = it
+					break
+				}
+			}
+		}
+		if iface == nil {
+			t.Fatalf("no interface type found")
+		}
+
+		if !maybeRpcDecl(iface) {
+			t.Fatalf("maybeRpcDecl() = false, want true for rpc-like interface")
+		}
+	})
+
+	t.Run("non_rpc_interface", func(t *testing.T) {
+		const src = `
+package test
+
+type NotRPC interface {
+	Do(a, b int) error
+}
+`
+
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "test.go", src, 0)
+		if err != nil {
+			t.Fatalf("ParseFile: %v", err)
+		}
+
+		var iface *ast.InterfaceType
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range genDecl.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+				if it, ok := typeSpec.Type.(*ast.InterfaceType); ok {
+					iface = it
+					break
+				}
+			}
+		}
+		if iface == nil {
+			t.Fatalf("no interface type found")
+		}
+
+		if maybeRpcDecl(iface) {
+			t.Fatalf("maybeRpcDecl() = true, want false for non-rpc interface")
+		}
+	})
 }

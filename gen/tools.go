@@ -422,7 +422,7 @@ func maybeRpcDecl(iface *ast.InterfaceType) bool {
 			if len(funcType.Results.List) != 2 {
 				return false
 			}
-			if !checkErrorType(funcType.Results.List[1]) {
+			if !checkErrorType(funcType.Results.List[1].Type) {
 				return false
 			}
 		}
