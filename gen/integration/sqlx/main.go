@@ -114,6 +114,50 @@ func main() {
 	if !reflect.DeepEqual(userIDs, UserIDs{{1}, {4}}) {
 		log.Fatalf("unexpected userIDs: %v\n", userIDs)
 	}
+
+	// Test constbind: GetUserByName
+	userByName, err := executor.GetUserByName(ctx, "defc_test_0001")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if userByName.id != 1 || userByName.name != "defc_test_0001" {
+		log.Fatalf("unexpected user from GetUserByName: User(id=%d, name=%q)\n",
+			userByName.id,
+			userByName.name)
+	}
+
+	// Test constbind: QueryUsersByNameAndID
+	usersByPattern, err := executor.QueryUsersByNameAndID(ctx, "defc_test_000%", 2)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if len(usersByPattern) != 3 {
+		log.Fatalf("expected 3 users from QueryUsersByNameAndID, got %d\n", len(usersByPattern))
+	}
+	// Should get users with id > 2: defc_test_0003, defc_test_0004, defc_test_0005
+	expectedIDs := []int64{3, 4, 5}
+	for i, u := range usersByPattern {
+		if u.id != expectedIDs[i] {
+			log.Fatalf("unexpected user id at index %d: expected %d, got %d\n", i, expectedIDs[i], u.id)
+		}
+	}
+
+	// Test constbind: UpdateUserName
+	_, err = executor.UpdateUserName(ctx, 1, "defc_test_updated")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	updatedUser, err := executor.GetUserByName(ctx, "defc_test_updated")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if updatedUser.id != 1 || updatedUser.name != "defc_test_updated" {
+		log.Fatalf("unexpected updated user: User(id=%d, name=%q)\n",
+			updatedUser.id,
+			updatedUser.name)
+	}
+
+	log.Println("All constbind tests passed!")
 }
 
 type sqlc struct {
@@ -213,6 +257,21 @@ type Executor interface {
 	// /* {"name": "defc", "action": "test"} */
 	// select id, name, user_id from project where user_id = ? and id != 0 order by id asc;
 	GetProjectsByUserID(userID int64) ([]*Project, error)
+
+	// GetUserByName query constbind
+	// /* {"name": "defc", "action": "test"} */
+	// select id, name from user where name = ${name};
+	GetUserByName(ctx context.Context, name string) (*User, error)
+
+	// QueryUsersByNameAndID query constbind
+	// /* {"name": "defc", "action": "test"} */
+	// select id, name from user where name like ${pattern} and id > ${minID} order by id asc;
+	QueryUsersByNameAndID(ctx context.Context, pattern string, minID int64) ([]*User, error)
+
+	// UpdateUserName exec constbind
+	// /* {"name": "defc", "action": "test"} */
+	// update user set name = ${newName} where id = ${id};
+	UpdateUserName(ctx context.Context, id int64, newName string) (sql.Result, error)
 }
 
 type UserID struct {

@@ -404,6 +404,22 @@ func (ctx *sqlxContext) genSqlxCode(w io.Writer) error {
 			"getRepr":       func(node ast.Node) string { return ctx.Doc.Repr(node) },
 			"isQuery":       func(op string) bool { return op == sqlxOpQuery },
 			"isExec":        func(op string) bool { return op == sqlxOpExec },
+			"constBindSQL": func(header string) (string, error) {
+				processed, err := readHeader(header, ctx.Pwd)
+				if err != nil {
+					return "", err
+				}
+				result := parseConstBindExpressions(processed)
+				return result.SQL, nil
+			},
+			"constBindArgs": func(header string) ([]string, error) {
+				processed, err := readHeader(header, ctx.Pwd)
+				if err != nil {
+					return nil, err
+				}
+				result := parseConstBindExpressions(processed)
+				return result.Args, nil
+			},
 		}).
 		Parse(sqlxTemplate)
 

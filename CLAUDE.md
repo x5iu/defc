@@ -130,6 +130,8 @@ defc --mode=rpc  --output=client.go
   - `Options()`: Configuration provider in api mode
   - `ResponseHandler()`: Response processing in api mode
 - Template functions like `bind`, `bindvars`, `getRepr` are available in SQL templates
+- **Sqlx method options**: `CONST`, `CONSTBIND`, `BIND`, `NAMED`, `ONE`, `MANY`, `SCAN(expr)`, `WRAP=func`, `ISOLATION=level`, `ARGUMENTS=varname`
+  - `CONSTBIND`: Uses `${expr}` syntax for compile-time parameter binding without template rendering (gen/method.go:261-334)
 - Test files use `runTest()` helper function for consistent integration testing
 - RPC specifics:
   - Methods must have exactly 1 input parameter and 2 outputs, with the second being `error` (gen/rpc.go:35-49)
