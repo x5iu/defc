@@ -1,0 +1,49 @@
+name: Auto Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+          PREV_TAG=$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" 2>/dev/null || echo "")
+          echo "current=$CURRENT_TAG" >> $GITHUB_OUTPUT
+          echo "previous=$PREV_TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes with Claude
+        env:
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          CURRENT_TAG="${{ steps.prev_tag.outputs.current }}"
+          PREV_TAG="${{ steps.prev_tag.outputs.previous }}"
+          claude -p "Write release notes for this project (defc, a Go code generation tool). Current tag: ${CURRENT_TAG}, previous tag: ${PREV_TAG}. Read git commits between these two tags and write professional release notes in Markdown. Include: summary, new features, bug fixes, breaking changes (if any). Be concise." --output-format text > release_notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
