@@ -72,6 +72,7 @@ func TestParseConstBindExpressions(t *testing.T) {
 		input    string
 		wantSQL  string
 		wantArgs []string
+		wantErr  bool
 	}{
 		{
 			name:     "simple expression",
@@ -86,7 +87,7 @@ func TestParseConstBindExpressions(t *testing.T) {
 			wantArgs: []string{"user.Name", "user.Age"},
 		},
 		{
-			name:     "expression in single quotes should be replaced",
+			name:     "simple variable expression",
 			input:    "SELECT * FROM user WHERE name = ${name}",
 			wantSQL:  "SELECT * FROM user WHERE name = ?",
 			wantArgs: []string{"name"},
@@ -116,10 +117,18 @@ func TestParseConstBindExpressions(t *testing.T) {
 			wantArgs: []string{},
 		},
 		{
+			name:     "unclosed expression",
+			input:    "SELECT * FROM user WHERE id = ${name",
+			wantSQL:  "",
+			wantArgs: nil,
+			wantErr:  true,
+		},
+		{
 			name:     "empty expression",
 			input:    "SELECT * FROM user WHERE id = ${}",
-			wantSQL:  "SELECT * FROM user WHERE id = ?",
-			wantArgs: []string{""},
+			wantSQL:  "",
+			wantArgs: nil,
+			wantErr:  true,
 		},
 		{
 			name:     "expression with spaces",
@@ -149,7 +158,14 @@ func TestParseConstBindExpressions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseConstBindExpressions(tt.input)
+			result, err := parseConstBindExpressions(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
 			if result.SQL != tt.wantSQL {
 				t.Errorf("SQL = %q, want %q", result.SQL, tt.wantSQL)
 			}

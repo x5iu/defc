@@ -409,7 +409,10 @@ func (ctx *sqlxContext) genSqlxCode(w io.Writer) error {
 				if err != nil {
 					return "", err
 				}
-				result := parseConstBindExpressions(processed)
+				result, err := parseConstBindExpressions(processed)
+				if err != nil {
+					return "", err
+				}
 				return result.SQL, nil
 			},
 			"constBindArgs": func(header string) ([]string, error) {
@@ -417,7 +420,10 @@ func (ctx *sqlxContext) genSqlxCode(w io.Writer) error {
 				if err != nil {
 					return nil, err
 				}
-				result := parseConstBindExpressions(processed)
+				result, err := parseConstBindExpressions(processed)
+				if err != nil {
+					return nil, err
+				}
 				return result.Args, nil
 			},
 		}).

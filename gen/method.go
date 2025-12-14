@@ -266,13 +266,13 @@ type ConstBindResult struct {
 
 // ParseConstBind parses the Header and extracts ${...} expressions,
 // replacing them with ? placeholders. This is used with CONSTBIND option.
-func (method *Method) ParseConstBind() ConstBindResult {
+func (method *Method) ParseConstBind() (ConstBindResult, error) {
 	return parseConstBindExpressions(method.Header)
 }
 
 // parseConstBindExpressions extracts ${...} expressions from the input string
 // and replaces them with ? placeholders.
-func parseConstBindExpressions(input string) ConstBindResult {
+func parseConstBindExpressions(input string) (ConstBindResult, error) {
 	var (
 		result       []byte
 		args         []string
@@ -300,6 +300,7 @@ func parseConstBindExpressions(input string) ConstBindResult {
 
 		// Look for ${ pattern outside of quotes
 		if !singleQuoted && !doubleQuoted && ch == '$' && i+1 < len(input) && input[i+1] == '{' {
+			startPos := i
 			// Find the matching }
 			depth := 1
 			j := i + 2
@@ -313,14 +314,19 @@ func parseConstBindExpressions(input string) ConstBindResult {
 				j++
 			}
 
-			if depth == 0 {
-				// Extract the expression (without ${ and })
-				expr := trimSpace(input[i+2 : j-1])
-				args = append(args, expr)
-				result = append(result, '?')
-				i = j
-				continue
+			if depth != 0 {
+				return ConstBindResult{}, fmt.Errorf("unclosed expression starting at position %d: %s", startPos, input[startPos:])
 			}
+
+			// Extract the expression (without ${ and })
+			expr := trimSpace(input[i+2 : j-1])
+			if expr == "" {
+				return ConstBindResult{}, fmt.Errorf("empty expression at position %d", startPos)
+			}
+			args = append(args, expr)
+			result = append(result, '?')
+			i = j
+			continue
 		}
 
 		result = append(result, ch)
@@ -330,7 +336,7 @@ func parseConstBindExpressions(input string) ConstBindResult {
 	return ConstBindResult{
 		SQL:  string(result),
 		Args: args,
-	}
+	}, nil
 }
 
 // ReturnSlice should only be used with '--mode=api' arg
