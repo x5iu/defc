@@ -2,8 +2,10 @@ name: Auto Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+    paths:
+      - "runtime/version.go"
 
 jobs:
   release:
@@ -15,34 +17,60 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check version and create tag if needed
+        id: check_version
+        run: |
+          # Extract version from runtime/version.go
+          VERSION=$(grep -oP 'const Version = "\K[^"]+' runtime/version.go)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Get latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+          # Check if version differs from latest tag
+          if [ "$VERSION" != "$LATEST_TAG" ]; then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "Version $VERSION differs from latest tag $LATEST_TAG, will create new release"
+          else
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "Version $VERSION matches latest tag, skipping release"
+          fi
+
+      - name: Create new tag
+        if: steps.check_version.outputs.should_release == 'true'
+        run: |
+          VERSION="${{ steps.check_version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+
       - name: Setup Node.js
+        if: steps.check_version.outputs.should_release == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Install Claude Code
+        if: steps.check_version.outputs.should_release == 'true'
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Get previous tag
-        id: prev_tag
-        run: |
-          CURRENT_TAG=${GITHUB_REF#refs/tags/}
-          PREV_TAG=$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" 2>/dev/null || echo "")
-          echo "current=$CURRENT_TAG" >> $GITHUB_OUTPUT
-          echo "previous=$PREV_TAG" >> $GITHUB_OUTPUT
-
       - name: Generate release notes with Claude
+        if: steps.check_version.outputs.should_release == 'true'
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          CURRENT_TAG="${{ steps.prev_tag.outputs.current }}"
-          PREV_TAG="${{ steps.prev_tag.outputs.previous }}"
+          CURRENT_TAG="${{ steps.check_version.outputs.version }}"
+          PREV_TAG="${{ steps.check_version.outputs.latest_tag }}"
           claude -p "Write release notes for this project (defc, a Go code generation tool). Current tag: ${CURRENT_TAG}, previous tag: ${PREV_TAG}. Read git commits between these two tags and write professional release notes in Markdown. Include: summary, new features, bug fixes, breaking changes (if any). Be concise." --output-format text > release_notes.md
 
       - name: Create Release
+        if: steps.check_version.outputs.should_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.check_version.outputs.version }}
           body_path: release_notes.md
           generate_release_notes: false
         env:
