@@ -84,3 +84,19 @@ var FailNoTypeDecl struct{}
 
 //go:generate defc [mode] [output] [features...] TestBuildSqlx/fail_no_iface_type
 type FailNoIfaceType struct{}
+
+//go:generate defc [mode] [output] [features...] TestBuildSqlx/success_constbind
+type SuccessConstBind interface {
+	// GetUser query constbind
+	// SELECT * FROM user WHERE username = ${user.Name} AND age > ${user.Age};
+	GetUser(ctx context.Context, user *User) (*User, error)
+
+	// InsertUser exec constbind
+	// INSERT INTO user (name, age) VALUES (${user.Name}, ${user.Age});
+	InsertUser(ctx context.Context, user *User) (sql.Result, error)
+}
+
+type User struct {
+	Name string
+	Age  int
+}

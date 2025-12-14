@@ -258,6 +258,87 @@ func (method *Method) ArgumentsVar() string {
 	return ""
 }
 
+// ConstBindResult represents the result of parsing constbind expressions
+type ConstBindResult struct {
+	SQL  string   // SQL with ${...} replaced by ?
+	Args []string // extracted expressions
+}
+
+// ParseConstBind parses the Header and extracts ${...} expressions,
+// replacing them with ? placeholders. This is used with CONSTBIND option.
+func (method *Method) ParseConstBind() (ConstBindResult, error) {
+	return parseConstBindExpressions(method.Header)
+}
+
+// parseConstBindExpressions extracts ${...} expressions from the input string
+// and replaces them with ? placeholders.
+func parseConstBindExpressions(input string) (ConstBindResult, error) {
+	var (
+		result       []byte
+		args         []string
+		i            int
+		singleQuoted bool
+		doubleQuoted bool
+	)
+
+	for i < len(input) {
+		ch := input[i]
+
+		// Handle quote tracking (to avoid replacing ${...} inside string literals)
+		if ch == '\'' && !doubleQuoted && (i == 0 || input[i-1] != '\\') {
+			singleQuoted = !singleQuoted
+			result = append(result, ch)
+			i++
+			continue
+		}
+		if ch == '"' && !singleQuoted && (i == 0 || input[i-1] != '\\') {
+			doubleQuoted = !doubleQuoted
+			result = append(result, ch)
+			i++
+			continue
+		}
+
+		// Look for ${ pattern outside of quotes
+		if !singleQuoted && !doubleQuoted && ch == '$' && i+1 < len(input) && input[i+1] == '{' {
+			startPos := i
+			// Find the matching }
+			depth := 1
+			j := i + 2
+			for j < len(input) && depth > 0 {
+				switch input[j] {
+				case '{':
+					depth++
+				case '}':
+					depth--
+				}
+				j++
+			}
+
+			if depth != 0 {
+				return ConstBindResult{}, fmt.Errorf("unclosed expression starting at position %d: %s", startPos, input[startPos:])
+			}
+
+			// Extract the expression (without ${ and })
+			expr := trimSpace(input[i+2 : j-1])
+			if expr == "" {
+				return ConstBindResult{}, fmt.Errorf("empty expression at position %d", startPos)
+			}
+			args = append(args, expr)
+			result = append(result, '?')
+			i = j
+			continue
+		}
+
+		result = append(result, ch)
+		i++
+	}
+
+	return ConstBindResult{
+		SQL:  string(result),
+		Args: args,
+	}, nil
+}
+
 // ReturnSlice should only be used with '--mode=api' arg
 func (method *Method) ReturnSlice() bool {
 	if args := method.MetaArgs(); len(args) >= 3 {

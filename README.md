@@ -296,6 +296,7 @@ MethodName(ctx context.Context, params...) (result, error)
 - `MANY`: Use `sqlx.Select` for multiple results
 - `ONE`: Use `sqlx.Get` for single result
 - `CONST`: Disable template processing for better performance
+- `CONSTBIND`: Use `${expr}` syntax for compile-time parameter binding without template rendering
 - `BIND`: Use binding mode for parameters
 - `SCAN(expr)`: Custom scan target
 - `WRAP=func`: Wrap the query with a custom function
@@ -572,6 +573,34 @@ type UserQuery interface {
 FindUsers(ctx context.Context, name string, minAge int) ([]*User, error)
 }
 ```
+
+#### Const Bind Mode
+
+The `CONSTBIND` option provides a simple way to bind Go expressions directly in SQL without template rendering overhead.
+Use `${expr}` syntax to reference variables or expressions:
+
+```go
+//go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=user_query.go
+type UserQuery interface {
+// GetUserByName QUERY CONSTBIND
+// SELECT * FROM users WHERE name = ${name} AND age > ${minAge};
+GetUserByName(ctx context.Context, name string, minAge int) (*User, error)
+
+// UpdateUser EXEC CONSTBIND
+// UPDATE users SET name = ${user.Name}, age = ${user.Age} WHERE id = ${user.ID};
+UpdateUser(ctx context.Context, user *User) error
+
+// GetUsersByStatus QUERY CONSTBIND
+// SELECT * FROM users WHERE status = ${status} AND created_at > ${time.Now().Add(-24 * time.Hour)};
+GetUsersByStatus(ctx context.Context, status string) ([]*User, error)
+}
+```
+
+**Key differences from other modes:**
+
+- `CONST`: SQL is used as-is, parameters must use `?` placeholders manually
+- `CONSTBIND`: SQL uses `${expr}` syntax, automatically converted to `?` placeholders with expressions as arguments
+- `BIND`: Uses Go template with `{{ bind $.var }}` syntax, rendered at runtime
 
 #### Transaction Support
 
