@@ -139,6 +139,12 @@ func TestParseConstBindExpressions(t *testing.T) {
 			wantSQL:  "SELECT * FROM user WHERE name = ? AND status = 'active' AND age = ?",
 			wantArgs: []string{"name", "age"},
 		},
+		{
+			name:     "literal expression",
+			input:    "SELECT * FROM user WHERE name = ${\"X\"} AND status = 'active' AND age = ${18}",
+			wantSQL:  "SELECT * FROM user WHERE name = ? AND status = 'active' AND age = ?",
+			wantArgs: []string{"\"X\"", "18"},
+		},
 	}
 
 	for _, tt := range tests {
