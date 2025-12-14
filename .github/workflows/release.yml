@@ -64,7 +64,7 @@ jobs:
         run: |
           CURRENT_TAG="${{ steps.check_version.outputs.version }}"
           PREV_TAG="${{ steps.check_version.outputs.latest_tag }}"
-          claude -p "Write release notes for this project (defc, a Go code generation tool). Current tag: ${CURRENT_TAG}, previous tag: ${PREV_TAG}. Read git commits between these two tags and write professional release notes in Markdown. Include: summary, new features, bug fixes, breaking changes (if any). Be concise." --output-format text > release_notes.md
+          claude -p "Generate release notes for defc ${CURRENT_TAG} (a Go code generation tool). Previous version: ${PREV_TAG}. Instructions: 1) Read the git commits between ${PREV_TAG} and ${CURRENT_TAG} using: git log ${PREV_TAG}..HEAD --oneline; 2) Output ONLY the release notes content in Markdown format, nothing else; 3) Do NOT include any preamble, explanation, or commentary about what you are doing; 4) Format: ## Summary, ## New Features, ## Bug Fixes, ## Breaking Changes (omit empty sections); 5) Be concise and professional." --output-format text > release_notes.md
 
       - name: Create Release
         if: steps.check_version.outputs.should_release == 'true'
