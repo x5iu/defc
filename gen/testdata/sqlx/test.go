@@ -100,3 +100,10 @@ type User struct {
 	Name string
 	Age  int
 }
+
+//go:generate defc [mode] [output] [features...] TestBuildSqlx/fail_constbind_bind_conflict
+type FailConstBindBindConflict interface {
+	// GetUser query constbind bind
+	// SELECT * FROM user WHERE username = ${user.Name} AND age > ${user.Age};
+	GetUser(ctx context.Context, user *User) (*User, error)
+}

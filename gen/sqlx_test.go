@@ -205,4 +205,18 @@ func TestBuildSqlx(t *testing.T) {
 			return
 		}
 	})
+	t.Run("fail_constbind_bind_conflict", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		if err := runTest(genFile, builder); err == nil {
+			t.Errorf("build: expects errors, got nil")
+			return
+		} else if !strings.Contains(err.Error(),
+			"CONSTBIND and BIND options are mutually exclusive") {
+			t.Errorf("build: expects ConstBindBindConflict error, got => %s", err)
+			return
+		}
+	})
 }
