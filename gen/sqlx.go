@@ -59,10 +59,22 @@ type sqlxContext struct {
 }
 
 func (ctx *sqlxContext) Build(w io.Writer) error {
+	const (
+		constbindOption = "CONSTBIND"
+		bindOption      = "BIND"
+	)
+
 	var fixedMethods []*Method = nil
 	for i, method := range ctx.Methods {
 		if l := len(method.Out); l == 0 || !checkErrorType(method.Out[l-1]) {
 			return fmt.Errorf("checkErrorType: no 'error' found in method %s returned values",
+				quote(method.Ident))
+		}
+
+		// Check for conflicting CONSTBIND and BIND options
+		opts := method.SqlxOptions()
+		if hasOption(opts, constbindOption) && hasOption(opts, bindOption) {
+			return fmt.Errorf("method %s: CONSTBIND and BIND options are mutually exclusive, please use only one of them",
 				quote(method.Ident))
 		}
 
