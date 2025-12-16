@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "runtime/version.go"
+  workflow_dispatch:
 
 jobs:
   release:
@@ -24,21 +25,39 @@ jobs:
           VERSION=$(grep -oP 'const Version = "\K[^"]+' runtime/version.go)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-          # Get latest tag
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-
-          # Check if version differs from latest tag
-          if [ "$VERSION" != "$LATEST_TAG" ]; then
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "Version $VERSION differs from latest tag $LATEST_TAG, will create new release"
+          # Check if version tag already exists
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+            echo "Tag $VERSION already exists"
+            # Get the tag before this version for release notes
+            PREV_TAG=$(git describe --tags --abbrev=0 "$VERSION^" 2>/dev/null || echo "")
           else
-            echo "should_release=false" >> $GITHUB_OUTPUT
-            echo "Version $VERSION matches latest tag, skipping release"
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+            echo "Tag $VERSION does not exist"
+            # Get latest tag as previous tag
+            PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          fi
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+          # Determine if we should release
+          # For workflow_dispatch: always release (create tag if needed, or re-release existing tag)
+          # For push: only release if version differs from latest tag
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "Manual trigger: will create release for $VERSION"
+          else
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ "$VERSION" != "$LATEST_TAG" ]; then
+              echo "should_release=true" >> $GITHUB_OUTPUT
+              echo "Version $VERSION differs from latest tag $LATEST_TAG, will create new release"
+            else
+              echo "should_release=false" >> $GITHUB_OUTPUT
+              echo "Version $VERSION matches latest tag, skipping release"
+            fi
           fi
 
       - name: Create new tag
-        if: steps.check_version.outputs.should_release == 'true'
+        if: steps.check_version.outputs.should_release == 'true' && steps.check_version.outputs.tag_exists == 'false'
         run: |
           VERSION="${{ steps.check_version.outputs.version }}"
           git config user.name "github-actions[bot]"
@@ -63,7 +82,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           CURRENT_TAG="${{ steps.check_version.outputs.version }}"
-          PREV_TAG="${{ steps.check_version.outputs.latest_tag }}"
+          PREV_TAG="${{ steps.check_version.outputs.prev_tag }}"
           claude -p "Generate release notes for defc ${CURRENT_TAG} (a Go code generation tool). Previous version: ${PREV_TAG}. Instructions: 1) Read the git commits between ${PREV_TAG} and ${CURRENT_TAG} using: git log ${PREV_TAG}..HEAD --oneline; 2) Output ONLY the release notes content in Markdown format, nothing else; 3) Do NOT include any preamble, explanation, or commentary about what you are doing; 4) Format: ## Summary, ## New Features, ## Bug Fixes, ## Breaking Changes (omit empty sections); 5) Be concise and professional." --output-format text > release_notes.md
 
       - name: Create Release
