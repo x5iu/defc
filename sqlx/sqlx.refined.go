@@ -572,27 +572,36 @@ func (r *Row) Scan(dest ...any) error {
 	if r.err != nil {
 		return r.err
 	}
-	defer r.rows.Close()
+	// Note: We intentionally do NOT use defer r.rows.Close() here.
+	// If rows.Scan panics (e.g., due to a custom Scanner implementation),
+	// calling rows.Close() in a defer will cause a deadlock with certain
+	// database drivers (e.g., go-sqlite3). By not using defer, panic will
+	// propagate naturally without attempting to close the rows.
 	for _, dp := range dest {
 		if _, ok := dp.(*sql.RawBytes); ok {
+			_ = r.rows.Close()
 			return errors.New("sql: RawBytes isn't allowed on Row.Scan")
 		}
 	}
 	if !r.rows.Next() {
 		if err := r.rows.Err(); err != nil {
+			_ = r.rows.Close()
 			return err
 		}
+		_ = r.rows.Close()
 		return sql.ErrNoRows
 	}
 	err := r.rows.Scan(dest...)
 	if err != nil {
+		_ = r.rows.Close()
 		return err
 	}
 	// Make sure the query can be processed to completion with no errors.
-	if err := r.rows.Close(); err != nil {
+	if err = r.rows.Err(); err != nil {
+		_ = r.rows.Close()
 		return err
 	}
-	return nil
+	return r.rows.Close()
 }
 
 // Columns returns the underlying sql.Rows.Columns(), or the deferred error usually
@@ -957,13 +966,16 @@ func (r *Row) scanAny(dest any, structOnly bool) error {
 		r.err = sql.ErrNoRows
 		return r.err
 	}
-	defer r.rows.Close()
+	// Note: r.Scan() will close r.rows, so we don't defer close here.
+	// For early returns before Scan, we must close rows explicitly.
 
 	v := reflect.ValueOf(dest)
 	if v.Kind() != reflect.Ptr {
+		_ = r.rows.Close()
 		return errors.New("must pass a pointer, not a value, to StructScan destination")
 	}
 	if v.IsNil() {
+		_ = r.rows.Close()
 		return errors.New("nil pointer passed to StructScan destination")
 	}
 
@@ -971,15 +983,18 @@ func (r *Row) scanAny(dest any, structOnly bool) error {
 	scannable := isScannable(base)
 
 	if structOnly && scannable {
+		_ = r.rows.Close()
 		return structOnlyError(base)
 	}
 
 	columns, err := r.Columns()
 	if err != nil {
+		_ = r.rows.Close()
 		return err
 	}
 
 	if scannable && len(columns) > 1 {
+		_ = r.rows.Close()
 		return fmt.Errorf("scannable dest type %s with >1 columns (%d) in result", base.Kind(), len(columns))
 	}
 
@@ -988,7 +1003,9 @@ func (r *Row) scanAny(dest any, structOnly bool) error {
 	}
 
 	if fr, ok := dest.(FromRow); ok {
-		return fr.FromRow(r)
+		err := fr.FromRow(r)
+		_ = r.rows.Close()
+		return err
 	}
 
 	m := r.Mapper
@@ -996,12 +1013,14 @@ func (r *Row) scanAny(dest any, structOnly bool) error {
 	fields := m.TraversalsByName(v.Type(), columns)
 	// if we are not unsafe and are missing fields, return an error
 	if f, err := missingFields(fields); err != nil && !r.unsafe {
+		_ = r.rows.Close()
 		return fmt.Errorf("missing destination name %s in %T", columns[f], dest)
 	}
 	values := make([]any, len(columns))
 
 	err = fieldsByTraversal(v, fields, values, true)
 	if err != nil {
+		_ = r.rows.Close()
 		return err
 	}
 	// scan into the struct field pointers and append to our results
