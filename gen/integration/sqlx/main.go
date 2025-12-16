@@ -15,8 +15,9 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	defc "github.com/x5iu/defc/runtime"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var executor Executor
@@ -158,6 +159,40 @@ func main() {
 	}
 
 	log.Println("All constbind tests passed!")
+
+	// Test that panic in Scan propagates correctly
+	// When a struct field's Scan method panics, the panic should propagate
+	// to the caller without causing deadlock.
+	func() {
+		// Create a separate database connection for this test
+		panicDB := defc.MustOpen("sqlite3", ":memory:")
+		panicDB.Exec("CREATE TABLE user (id INTEGER PRIMARY KEY, name TEXT)")
+		panicDB.Exec("INSERT INTO user (id, name) VALUES (1, 'test')")
+		panicCore := &sqlc{panicDB}
+		panicExecutor := NewExecutorFromCore(panicCore)
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			defer func() {
+				if r := recover(); r == nil {
+					log.Fatalln("Expected panic but got none")
+				} else {
+					log.Printf("Expected panic occurred: %v\n", r)
+				}
+			}()
+			// This should panic, not return an error
+			_, _ = panicExecutor.GetPanicUser(ctx, 1)
+		}()
+		select {
+		case <-done:
+			// Test completed successfully (panic was caught in goroutine)
+		case <-time.After(30 * time.Second):
+			log.Fatalln("Test timeout: panic test exceeded 30 seconds")
+		}
+	}()
+
+	log.Println("All tests passed!")
 }
 
 type sqlc struct {
@@ -272,6 +307,11 @@ type Executor interface {
 	// /* {"name": "defc", "action": "test"} */
 	// update user set name = ${newName} where id = ${id};
 	UpdateUserName(ctx context.Context, id int64, newName string) (sql.Result, error)
+
+	// GetPanicUser query constbind
+	// /* {"name": "defc", "action": "test"} */
+	// SELECT id, name from user where id = ${id};
+	GetPanicUser(ctx context.Context, id int64) (*PanicUser, error)
 }
 
 type UserID struct {
@@ -348,6 +388,17 @@ func (project *Project) FromRow(row defc.Row) error {
 		"name", &project.name,
 		"user_id", &project.userID,
 	)
+}
+
+type PanicUser struct {
+	ID   PanicID `db:"id"`
+	Name string  `db:"name"`
+}
+
+type PanicID int64
+
+func (pid *PanicID) Scan(src any) error {
+	panic("PanicID.Scan: should panic")
 }
 
 func sqlComment(context.Context) string {

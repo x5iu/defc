@@ -249,9 +249,6 @@ var (
     if {{ $tx }} == nil {
         panic("tx is nil")
     }
-    if !__imp.__withTx{
-    defer {{ $tx }}.Rollback()
-    }
 
     {{ $offset := printf "offset%s" $method.Ident -}}
     {{ $args := printf "args%s" $method.Ident -}}
@@ -268,6 +265,7 @@ var (
         {{- if $.HasFeature "sqlx/in" }}
             {{ $query }}, {{ $args }}, {{ $err }} := {{ if $.HasFeature "sqlx/nort" }}{{ $inFunc }}{{ else }}__rt.In{{ end }}({{ $query }}, {{ $argList }})
             if {{ $err }} != nil {
+            if !__imp.__withTx { {{ $tx }}.Rollback() }
             return {{ range $index, $type := $method.Out -}}
                 {{- if lt $index (sub (len $method.Out) 1) -}}
                     v{{- $index -}}{{- $method.Ident }},
@@ -296,6 +294,7 @@ var (
 
         {{ $splitSql }}, {{ $argList }}, {{ $err }} = sqlx.Named({{ $splitSql }}, {{ $args }})
         if {{ $err }} != nil {
+        if !__imp.__withTx { {{ $tx }}.Rollback() }
         return {{ range $index, $type := $method.Out -}}
             {{- if lt $index (sub (len $method.Out) 1) -}}
                 v{{- $index -}}{{- $method.Ident }},
@@ -309,6 +308,7 @@ var (
             {{ $splitSql }}, {{ $argList }}, {{ $err }} = sqlx.In({{ $splitSql }}, {{ $argList }}...)
         {{ end -}}
         if {{ $err }} != nil {
+        if !__imp.__withTx { {{ $tx }}.Rollback() }
         return {{ range $index, $type := $method.Out -}}
             {{- if lt $index (sub (len $method.Out) 1) -}}
                 v{{- $index -}}{{- $method.Ident }},
@@ -368,6 +368,7 @@ var (
     {{ end }}
 
     if {{ $err }} != nil {
+    if !__imp.__withTx { {{ $tx }}.Rollback() }
     return {{ range $index, $type := $method.Out -}}
         {{- if lt $index (sub (len $method.Out) 1) -}}
             v{{- $index -}}{{- $method.Ident }},
