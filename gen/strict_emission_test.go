@@ -112,4 +112,63 @@ type Iface interface {
 			t.Error("missing SQLArityCheck under sqlx/strict")
 		}
 	})
+
+	t.Run("sqlx_strict_merge_nonnort", func(t *testing.T) {
+		out := build(t, ModeSqlx, namedSchema, []string{FeatureSqlxStrictMerge})
+		if !strings.Contains(out, "__rt.MergeNamedArgsStrict") {
+			t.Error("missing MergeNamedArgsStrict emission under sqlx/strict-merge")
+		}
+		if !strings.Contains(out, "error merging") {
+			t.Error("missing merge error-propagation block")
+		}
+	})
+
+	t.Run("sqlx_strict_merge_nort", func(t *testing.T) {
+		out := build(t, ModeSqlx, namedSchema,
+			[]string{FeatureSqlxNoRt, FeatureSqlxStrictMerge})
+		if !strings.Contains(out, "(map[string]any, error)") {
+			t.Error("nort+strict-merge must emit two-return inline body")
+		}
+		if !strings.Contains(out, "ToNamedArgs(") {
+			t.Error("nort+strict-merge inline body missing source labels")
+		}
+	})
+
+	t.Run("sqlx_strict_merge_mutual_exclusion", func(t *testing.T) {
+		var buf bytes.Buffer
+		b := NewCliBuilder(ModeSqlx).
+			WithFeats([]string{FeatureSqlxStrictMerge, FeatureSqlxLenientMerge}).
+			WithPkg("test").
+			WithFile("test.go", []byte(namedSchema)).
+			WithPos(findTypeLine(namedSchema))
+		if err := b.Build(&buf); err == nil ||
+			!strings.Contains(err.Error(), "mutually exclusive") {
+			t.Fatalf("expected mutual-exclusion error, got %v", err)
+		}
+	})
+}
+
+const namedSchema = `package test
+
+import (
+	"context"
+	"fmt"
+)
+
+type Iface interface {
+	WithTx(ctx context.Context, fn func(Iface) error) error
+
+	// Run exec named
+	// DELETE FROM t WHERE id = :id
+	Run(ctx context.Context, id fmt.Stringer) error
+}
+`
+
+func findTypeLine(src string) int {
+	for i, ln := range strings.Split(src, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(ln), "type Iface interface") {
+			return i
+		}
+	}
+	return 0
 }
