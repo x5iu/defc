@@ -3,6 +3,7 @@ package gen
 import (
 	"go/ast"
 	"io"
+	"time"
 )
 
 type Mode int
@@ -87,6 +88,19 @@ type CliBuilder struct {
 
 	// template
 	template string
+
+	// allowScript gates the sqlx-mode `#SCRIPT` directive.
+	allowScript bool
+
+	// scriptTimeout caps each `#SCRIPT` invocation.
+	scriptTimeout time.Duration
+
+	// scriptEnv is an extra names-only env allow-list for `#SCRIPT`.
+	scriptEnv []string
+
+	// includeRoots is an optional list of extra filesystem roots under
+	// which sqlx-mode `#INCLUDE` paths may resolve.
+	includeRoots []string
 }
 
 func (builder *CliBuilder) WithFeats(feats []string) *CliBuilder {
@@ -127,6 +141,26 @@ func (builder *CliBuilder) WithPos(pos int) *CliBuilder {
 
 func (builder *CliBuilder) WithTemplate(template string) *CliBuilder {
 	builder.template = template
+	return builder
+}
+
+func (builder *CliBuilder) WithAllowScript(allow bool) *CliBuilder {
+	builder.allowScript = allow
+	return builder
+}
+
+func (builder *CliBuilder) WithScriptTimeout(timeout time.Duration) *CliBuilder {
+	builder.scriptTimeout = timeout
+	return builder
+}
+
+func (builder *CliBuilder) WithScriptEnv(env []string) *CliBuilder {
+	builder.scriptEnv = env
+	return builder
+}
+
+func (builder *CliBuilder) WithIncludeRoots(roots []string) *CliBuilder {
+	builder.includeRoots = roots
 	return builder
 }
 
