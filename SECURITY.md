@@ -109,6 +109,49 @@ variables, does not perform command substitution, and does not invoke a
 shell. Anything that looks like `${PATH}` inside a method option is a
 literal token boundary, not a variable reference.
 
+## Named-args scoping
+
+`runtime.MergeNamedArgs` flattens every outer argument into a single
+flat `map[string]any` keyed by bind name. Inputs may be authoritative
+scoping values (e.g. a `context`-extracted `tenantCtx.ToNamedArgs()`
+returning `{"tenant_id": real}`) and/or attacker-influenced payloads
+(e.g. a request body struct tagged `db:"tenant_id"`). When two sources
+contribute the same key, Go's randomised map iteration means the
+winner is non-deterministic — and on a bad roll the attacker value
+can silently overwrite the authoritative one, bypassing tenant /
+row-level scoping in the rendered SQL.
+
+As of v1.45.0, collisions are always detected:
+
+- Default (v1.45.0): the legacy last-writer-wins semantics are
+  preserved for backwards compatibility, but a one-line warning
+  `defc[merge]: duplicate bind key "…" contributed by sources=[…]`
+  is emitted through `log.Printf` or a user-installed hook
+  (`runtime.SetOnMergeCollision`). Rate-limited at 100 emissions
+  per unique `(key, sources)` tuple. Opt out with
+  `DEFC_MERGE_WARN=0`.
+- Opt-in (`--features sqlx/strict-merge`): the generated code
+  returns an error wrapping `runtime.ErrNamedArgsCollision`
+  whenever two distinct sources write the same bind key, *before*
+  the SQL is executed. Use `errors.As` to extract
+  `*runtime.NamedArgsCollisionError{Key, Sources}` for telemetry.
+- v1.46.0 will make strict mode the default.
+
+Provenance labels follow a stable scheme:
+
+| Source branch                       | Label                                   |
+|-------------------------------------|-----------------------------------------|
+| `ToNamedArgs()` implementor         | `ToNamedArgs(<outer>)`                  |
+| `driver.Valuer`                     | `driver.Valuer(<outer>)`                |
+| `ToArgs` (no `ToNamedArgs`)         | `ToArgs(<outer>)`                       |
+| `map[string]any` flatten            | `map(<outer>)`                          |
+| `db`-tagged struct field            | `struct(<outer>.<field-path>)`          |
+| Fallback scalar                     | `scalar(<outer>)`                       |
+
+Run `defc doctor --project . --fail-on-stale` in CI to detect
+generated files from pre-v1.45 defc whose inlined
+`__<Ident>MergeNamedArgs` still lacks collision detection.
+
 ## Supported versions
 
 Only the latest minor release line receives security fixes. Users on

@@ -281,6 +281,18 @@ defc generate --template="SELECT * FROM {{ .table }}" --type=MyQuery schema.go
 - `sqlx/callback`: Support for callback methods automatically executed after query completion
 - `sqlx/any-callback`: Support for callback methods with flexible executor interface
 - `sqlx/nort`: Generate code without runtime dependencies
+- `sqlx/strict-merge`: **(v1.45.0)** Error on duplicate bind keys
+  contributed by different arguments during `MergeNamedArgs`. The
+  generated call site returns the error alongside the existing
+  `sqlx.Named` error path. Mutually exclusive with
+  `sqlx/lenient-merge`; see the `🔒 Security — MergeNamedArgs
+  collision` entry in `CHANGELOG.md` for rollout details. Override
+  the default `log.Printf` warn sink by installing a hook via
+  `runtime.SetOnMergeCollision(func(runtime.MergeCollisionEvent))`;
+  silence entirely with `DEFC_MERGE_WARN=0`.
+- `sqlx/lenient-merge`: **(v1.45.0)** Explicit opt-in to the
+  legacy silent-overwrite behaviour. Mutually exclusive with
+  `sqlx/strict-merge`; slated for removal in v1.47.0.
 
 #### api Mode Features
 
