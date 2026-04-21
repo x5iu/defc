@@ -59,6 +59,52 @@ All notable changes to `defc` will be documented in this file.
   `SECURITY.md` documents the trust boundary, `#SCRIPT`
   deprecation timeline, and vulnerability-reporting process.
 
+### 🔒 Security — template injection
+
+- **Generated `sqlx`- and `api`-mode code interpolated schema
+  template values directly into SQL statements, URLs, and HTTP
+  headers.** A method whose doc comment contained
+  `SELECT * FROM users WHERE name = '{{.name}}'`,
+  `GET https://host/users/{{.id}}`, or
+  `X-Thing: {{.v}}` produced Go code that concatenated the raw
+  rendered string into the outgoing request, enabling SQL
+  injection, SSRF / URL-smuggling, and CR/LF header injection
+  respectively. The rendering was entirely attacker-controllable
+  whenever any part of the interpolated value crossed a trust
+  boundary.
+
+  Five new runtime validators ship in `runtime/`:
+  `HeaderValue` / `PreExecHeaderMap`, `StrictURL` / `PathSegment`
+  / `QueryValue`, `QuoteIdentifier`, and `SQLArityCheck`
+  (backed by `runtime/token.CountPlaceholders`, a quote- and
+  comment-aware `?` counter). All validators fail closed with
+  typed sentinel errors (`ErrUnsafeInterpolation`) and allocate
+  only on the rejection path.
+
+  Three opt-in feature flags gate the emission of these checks
+  in generated code: `api/strict-headers` pre-validates the
+  rendered header map and re-sweeps every `req.Header.Add` value;
+  `api/strict-url` wraps the rendered URL in a
+  `StrictURL(<constant-prefix>, rendered)` call that rejects
+  scheme/host drift; `sqlx/strict` inserts a `SQLArityCheck`
+  between template execution and transaction open so a mismatch
+  between `?` count and argument count aborts before any DB work.
+  All three default **OFF**; existing generated code is
+  byte-identical when the flags are absent. An
+  `api/unsafe-crlf` opt-out is reserved but currently unused.
+
+  A new `defc lint [PATH...]` subcommand statically analyses
+  schema files and reports bare `{{.x}}` interpolations in
+  unsafe contexts, classifying each finding by kind
+  (`sql.value`, `sql.identifier`, `sql.literal`, `sql.comment`,
+  `url.scheme`, `url.authority`, `url.path`, `url.query-key`,
+  `url.query-value`, `url.fragment`, `header.name`,
+  `header.value`) and suggesting a safe helper wrap
+  (`bind`, `identifier`, `pathseg`, `query`, `header`). Flags:
+  `--strict`, `--only`, `--ignore`, `--format=text|json`,
+  `--fail-on=blocker|note|none`. Exit codes are 0 (clean),
+  2 (findings at threshold), 64 (usage/IO error).
+
 ### 🔒 Security — unsafe.Pointer UB
 
 - **`MultipartBody[T]` / `JSONBody[T]` first-embedded-field invariant

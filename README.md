@@ -177,7 +177,38 @@ defc generate --output=query.go schema.go
 
 # With specific features
 defc generate --features=sqlx/log,sqlx/rebind schema.go
+
+# Statically lint a schema for unsafe template interpolations
+defc lint schema.go
+defc lint --strict --format=json ./...
 ```
+
+### Safe Template Interpolation
+
+`defc` ships strict, opt-in runtime validators for the three template
+injection classes that a naive `{{.x}}` interpolation enables:
+
+- **`sqlx/strict`** — inserts `runtime.SQLArityCheck(query, len(args))`
+  after template execution, aborting before any DB work if the
+  rendered `?` count does not match the argument count.
+- **`api/strict-headers`** — pre-validates the rendered header map
+  and re-sweeps each `req.Header.Add` value, rejecting CR / LF /
+  NUL and other control bytes with `ErrUnsafeInterpolation`.
+- **`api/strict-url`** — wraps the rendered URL with
+  `runtime.StrictURL(constPrefix, rendered)`, which rejects
+  control bytes, unparseable URLs, non-http(s) schemes, and
+  scheme/host drift away from the template's constant prefix.
+
+All flags default **OFF**; enabling them leaves generated code
+byte-identical to prior versions except for the added check calls.
+
+The `defc lint` subcommand statically flags bare `{{.x}}` actions in
+SQL / URL / HTTP-header contexts at generate time. It classifies each
+finding (e.g. `sql.literal`, `url.query-value`, `header.value`) and
+suggests a safe helper wrap (`bind`, `identifier`, `pathseg`,
+`query`, `header`). Exit codes: `0` clean, `2` findings at threshold,
+`64` usage/IO error. Flags: `--strict`, `--only`, `--ignore`,
+`--format=text|json`, `--fail-on=blocker|note|none`.
 
 **Smart Defaults:** The `defc generate` command provides intelligent defaults:
 

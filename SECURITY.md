@@ -70,9 +70,39 @@ repository and reference it from `#INCLUDE` instead:
 // #INCLUDE "queries/list_users.sql"
 ```
 
-## `splitArgs` is not a shell
+## Template interpolation — strict runtime validators
 
-The `splitArgs` helper used by `sqlx` method options (`ARGUMENTS=…`,
+Schema templates in `sqlx`- and `api`-mode methods render arbitrary
+user data into SQL statements, URLs, and HTTP headers. A bare
+`{{.x}}` action in any of those contexts is unsafe whenever the
+value crosses a trust boundary: it enables SQL injection, SSRF /
+URL smuggling, and CR/LF header injection respectively.
+
+As of v1.45 the runtime ships strict validators that generated code
+can call to fail closed on such inputs:
+
+- `runtime.SQLArityCheck(query, argc)` — backed by
+  `runtime/token.CountPlaceholders`; rejects queries whose rendered
+  `?` count does not match the argument count, before any DB round
+  trip.
+- `runtime.HeaderValue`, `runtime.PreExecHeaderMap` — reject HTTP
+  header values containing CR, LF, NUL, or other control bytes.
+- `runtime.StrictURL(constPrefix, rendered)` — rejects control
+  bytes, unparseable URLs, non-http(s) schemes, and any drift of
+  scheme or host away from the template's constant prefix.
+- `runtime.PathSegment`, `runtime.QueryValue`, `runtime.QuoteIdentifier`
+  — safe building blocks for helper-wrapped interpolations.
+
+All strict emission is gated by opt-in feature flags (`sqlx/strict`,
+`api/strict-headers`, `api/strict-url`) that default **OFF**, so
+generated output is byte-identical to prior versions unless a
+feature is explicitly enabled.
+
+The `defc lint` subcommand statically flags bare interpolations in
+these contexts and suggests the appropriate safe-helper wrap; see
+the README for usage.
+
+## `splitArgs` is not a shell
 etc.) supports `${…}` as a **grouping** construct for readability; it is
 **not** shell parameter expansion. It does not expand environment
 variables, does not perform command substitution, and does not invoke a
