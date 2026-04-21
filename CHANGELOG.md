@@ -4,6 +4,38 @@ All notable changes to `defc` will be documented in this file.
 
 ## v1.45.0 — 2026-04-21
 
+### 🔒 Security — unsafe.Pointer UB
+
+- **`MultipartBody[T]` / `JSONBody[T]` first-embedded-field invariant
+  was enforced *after* an `unsafe.Pointer` cast.** Both `Read`
+  implementations performed `x = *(*T)(unsafe.Pointer(b))` and *then*
+  checked that `MultipartBody` / `JSONBody` was the first embedded
+  field of `T`. When a user violated the layout invariant (e.g. a
+  non-empty field preceded the embedded body), the cast read past the
+  allocation boundary of `b`: under `-race` or
+  `-gcflags=all=-d=checkptr=1` this triggered an unrecoverable
+  `fatal error: checkptr: converted pointer straddles multiple
+  allocations`; without `checkptr` it silently read adjacent memory —
+  classical undefined behaviour. `JSONBody.Read` happened to not fault
+  today because its estimation loop implicitly ran the first-field
+  check before the cast, but the ordering was fragile.
+
+  Both sites now hoist the guards above the cast. `Read` computes
+  `reflect.TypeOf(x)`, verifies `Kind() == reflect.Struct`, then
+  verifies `NumField() > 0 && Field(0).Anonymous && Field(0).Type ==
+  reflect.TypeOf(b).Elem()` — and only then performs the
+  `*(*T)(unsafe.Pointer(b))` cast. The friendly panic messages
+  (`"use the value type of a struct rather than a pointer type as the
+  value for generics"`, `"JSONBody is not the first embedded field of
+  struct type T"`, `"MultipartBody is not the first embedded field of
+  struct type T"`) are preserved verbatim; regression tests now cover
+  both the dislocated and zero-field-generic variants and the suite is
+  green under `-race -count=2` and `-gcflags=all=-d=checkptr=1`.
+
+  `test.sh` grew a `go test -gcflags=all=-d=checkptr=1 ./runtime/...`
+  gate (between the plain runtime test and `sqlx`) so contributors
+  without `-race` still catch any regression of this UB class.
+
 ### 🔒 Security / 🐛 Bug fixes
 
 - **Pool-backed response-body aliasing (api mode).** Fixed a concurrency
