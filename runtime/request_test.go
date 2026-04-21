@@ -39,6 +39,12 @@ type testDislocationRequestJSONBody struct {
 	JSONBody[testDislocationRequestJSONBody]
 }
 
+type testZeroFieldJSONGeneric struct{}
+
+type testZeroFieldRequestJSONBody struct {
+	JSONBody[testZeroFieldJSONGeneric]
+}
+
 func TestJSONBody(t *testing.T) {
 	want := map[string]any{
 		"code":    "test",
@@ -98,6 +104,20 @@ func TestJSONBody(t *testing.T) {
 		}()
 		_, _ = io.ReadAll(r)
 	})
+	t.Run("loc_panic_zero_field", func(t *testing.T) {
+		var r io.Reader
+		r = &testZeroFieldRequestJSONBody{}
+		defer func() {
+			if rec := recover(); rec == nil {
+				t.Errorf("json_body: expects Panic, got nil")
+				return
+			} else if lit, ok := rec.(string); !ok || lit != "JSONBody is not the first embedded field of struct type T" {
+				t.Errorf("json_body: unexpected Panic literal => %s", rec)
+				return
+			}
+		}()
+		_, _ = io.ReadAll(r)
+	})
 }
 
 type testRequestMultipartBody struct {
@@ -117,6 +137,12 @@ type testPanicRequestMultipartBody struct {
 type testDislocationRequestMultipartBody struct {
 	Name string `form:"name"`
 	MultipartBody[testDislocationRequestMultipartBody]
+}
+
+type testZeroFieldMultipartGeneric struct{}
+
+type testZeroFieldRequestMultipartBody struct {
+	MultipartBody[testZeroFieldMultipartGeneric]
 }
 
 func TestMultipartBody(t *testing.T) {
@@ -184,6 +210,19 @@ func TestMultipartBody(t *testing.T) {
 	})
 	t.Run("loc_panic", func(t *testing.T) {
 		r := &testDislocationRequestMultipartBody{Name: "test"}
+		defer func() {
+			if rec := recover(); rec == nil {
+				t.Errorf("multipart_body: expects Panic, got nil")
+				return
+			} else if lit, ok := rec.(string); !ok || lit != "MultipartBody is not the first embedded field of struct type T" {
+				t.Errorf("multipart_body: unexpected Panic literal => %s", rec)
+				return
+			}
+		}()
+		_, _ = io.ReadAll(r)
+	})
+	t.Run("loc_panic_zero_field", func(t *testing.T) {
+		r := &testZeroFieldRequestMultipartBody{}
 		defer func() {
 			if rec := recover(); rec == nil {
 				t.Errorf("multipart_body: expects Panic, got nil")
