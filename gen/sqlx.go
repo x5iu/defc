@@ -3,13 +3,18 @@ package gen
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"io"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
+	"time"
 
 	_ "embed"
 )
@@ -20,6 +25,13 @@ const (
 
 	sqlxMethodWithTx = "WithTx"
 
+	// sqlxCmdInclude expands to the contents of one or more files under the
+	// schema directory (or a configured --include-root). Symlinks are
+	// rejected and per-file / aggregate size caps apply. See SECURITY.md.
+	//
+	// sqlxCmdScript executes an external command at generate time. It is
+	// gated behind --allow-script and is DEPRECATED for removal in the next
+	// minor release; see SECURITY.md for the migration path.
 	sqlxCmdInclude = "#INCLUDE"
 	sqlxCmdScript  = "#SCRIPT"
 
@@ -54,6 +66,7 @@ type sqlxContext struct {
 	Imports         []string
 	Funcs           []string
 	Pwd             string
+	HeaderCfg       *readHeaderConfig
 	Doc             Doc
 	Template        string
 }
@@ -305,6 +318,24 @@ inspectType:
 		}
 	}
 
+	schemaDir := builder.pwd
+	if builder.file != "" {
+		if abs := builder.file; filepath.IsAbs(abs) {
+			schemaDir = filepath.Dir(abs)
+		} else {
+			schemaDir = filepath.Dir(filepath.Join(builder.pwd, abs))
+		}
+	}
+	headerCfg := &readHeaderConfig{
+		schemaDir:     schemaDir,
+		includeRoots:  append([]string(nil), builder.includeRoots...),
+		allowScript:   builder.allowScript,
+		scriptTimeout: builder.scriptTimeout,
+		scriptEnv:     append([]string(nil), builder.scriptEnv...),
+		directiveFile: builder.file,
+		lineOffset:    builder.pos,
+	}
+
 	return &sqlxContext{
 		Package:   builder.pkg,
 		BuildTags: parseBuildTags(builder.doc),
@@ -314,76 +345,248 @@ inspectType:
 		Features:  sqlxFeatures,
 		Imports:   builder.imports,
 		Funcs:     builder.funcs,
+		Pwd:       builder.pwd,
+		HeaderCfg: headerCfg,
 		Doc:       builder.doc,
 		Template:  builder.template,
 	}, nil
 }
 
-func readHeader(header string, pwd string) (string, error) {
-	var buf bytes.Buffer
-	scanner := bufio.NewScanner(strings.NewReader(header))
-	var text string
+// readHeaderConfig carries the policy knobs readHeader needs to evaluate
+// `#INCLUDE` / `#SCRIPT` directives safely. Anchors `#INCLUDE` to the schema
+// file's own directory plus any caller-supplied includeRoots; gates `#SCRIPT`
+// behind allowScript; bounds `#SCRIPT` execution via scriptTimeout; scrubs
+// the child env down to scriptEnv plus the runCommand baseline allow-list;
+// and carries directiveFile / lineOffset so diagnostics can report `file:line`
+// pointing at the offending directive.
+type readHeaderConfig struct {
+	schemaDir     string
+	includeRoots  []string
+	allowScript   bool
+	scriptTimeout time.Duration
+	scriptEnv     []string
+	directiveFile string
+	lineOffset    int
+}
+
+const (
+	includePerFileCap   = 1 * 1024 * 1024 // 1 MiB
+	includeAggregateCap = 4 * 1024 * 1024 // 4 MiB
+)
+
+// isPathUnder reports whether child, after cleaning, is lexically equal to or
+// a descendant of parent (also cleaned). Both arguments must be absolute.
+func isPathUnder(child, parent string) bool {
+	c := filepath.Clean(child)
+	p := filepath.Clean(parent)
+	if c == p {
+		return true
+	}
+	rel, err := filepath.Rel(p, c)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	if strings.HasPrefix(rel, "..") {
+		return false
+	}
+	return !filepath.IsAbs(rel)
+}
+
+// rejectSymlinkInPath walks every component from `anchor` (inclusive) down to
+// `target` (inclusive) and reports an error if any is a symlink. Both inputs
+// must be clean absolute paths; `target` must lie under `anchor`.
+func rejectSymlinkInPath(anchor, target string) error {
+	anchor = filepath.Clean(anchor)
+	target = filepath.Clean(target)
+	rel, err := filepath.Rel(anchor, target)
+	if err != nil {
+		return err
+	}
+	current := anchor
+	// Check the anchor itself.
+	if fi, err := lstat(current); err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("symlink not allowed at %q", current)
+		}
+	}
+	if rel == "." {
+		return nil
+	}
+	for _, part := range strings.Split(rel, string(os.PathSeparator)) {
+		if part == "" {
+			continue
+		}
+		current = filepath.Join(current, part)
+		fi, err := lstat(current)
+		if err != nil {
+			return err
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("symlink not allowed at %q", current)
+		}
+	}
+	return nil
+}
+
+// resolveIncludePath anchors a user-supplied #INCLUDE path (which may be a
+// glob pattern) to the schema directory or one of the explicit include roots,
+// rejecting anything that escapes. The returned path is a clean absolute
+// pattern suitable for filepath.Glob; the returned anchor is the root the
+// pattern resolved under (used for per-component symlink rejection).
+func resolveIncludePath(rawPath string, cfg *readHeaderConfig) (pattern, anchor string, err error) {
+	var resolved string
+	if filepath.IsAbs(rawPath) {
+		resolved = filepath.Clean(rawPath)
+		for _, root := range cfg.includeRoots {
+			if isPathUnder(resolved, root) {
+				return resolved, filepath.Clean(root), nil
+			}
+		}
+		return "", "", fmt.Errorf("uses an absolute path that does not lie under any --include-root")
+	}
+	resolved = filepath.Clean(filepath.Join(cfg.schemaDir, rawPath))
+	if isPathUnder(resolved, cfg.schemaDir) {
+		return resolved, filepath.Clean(cfg.schemaDir), nil
+	}
+	for _, root := range cfg.includeRoots {
+		if isPathUnder(resolved, root) {
+			return resolved, filepath.Clean(root), nil
+		}
+	}
+	return "", "", fmt.Errorf("resolves to %q which is outside the schema directory and all --include-root entries", resolved)
+}
+
+func readHeader(header string, cfg *readHeaderConfig) (string, error) {
+	if cfg == nil {
+		cfg = &readHeaderConfig{}
+	}
+	var (
+		buf           bytes.Buffer
+		scanner       = bufio.NewScanner(strings.NewReader(header))
+		text          string
+		lineNo        int // 1-based line within `header`
+		currentLineNo int // line on which the current directive began
+		includedTotal int64
+	)
+
 	for {
 		if text == "" {
 			if !scanner.Scan() {
 				break
 			}
+			lineNo++
 			text = scanner.Text()
+			currentLineNo = lineNo
 		}
 
-		var next string
+		var (
+			next       string
+			nextLineNo int
+			haveNext   bool
+		)
 		for {
 			if !scanner.Scan() {
 				break
 			}
-			next = scanner.Text()
-			if len(next) > 0 && (next[0] == ' ' || next[0] == '\t') {
-				text += " " + trimSpace(next)
-				next = "" // next is consumed here
+			lineNo++
+			candidate := scanner.Text()
+			if len(candidate) > 0 && (candidate[0] == ' ' || candidate[0] == '\t') {
+				text += " " + trimSpace(candidate)
 			} else {
+				next = candidate
+				nextLineNo = lineNo
+				haveNext = true
 				break
 			}
 		}
 
 		text = trimSpace(text)
 		args := splitArgs(text)
+		directiveLine := cfg.lineOffset + currentLineNo
 
-		// parse #include/#script command which should be placed in a new line
 		if len(args) == 2 && toUpper(args[0]) == sqlxCmdInclude {
-			// unquote path pattern if it is quoted
-			path := unquote(args[1])
-			if !isAbs(path) {
-				path = join(pwd, path)
+			rawPath := unquote(args[1])
+			pattern, anchor, resolveErr := resolveIncludePath(rawPath, cfg)
+			if resolveErr != nil {
+				return "", fmt.Errorf("#INCLUDE %q at %s:%d %s",
+					rawPath, cfg.directiveFile, directiveLine, resolveErr.Error())
 			}
-			// get filenames that match the pattern
-			matches, err := glob(path)
+			matches, err := glob(pattern)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("#INCLUDE %q at %s:%d: filepath.Glob(%q): %w",
+					rawPath, cfg.directiveFile, directiveLine, pattern, err)
 			}
-			// read each file into buffer
-			for _, path = range matches {
-				if !isAbs(path) {
-					path = join(pwd, path)
+			if len(matches) == 0 {
+				return "", fmt.Errorf("#INCLUDE %q at %s:%d matched no files",
+					rawPath, cfg.directiveFile, directiveLine)
+			}
+			sort.Strings(matches)
+			for _, match := range matches {
+				if !filepath.IsAbs(match) {
+					match = filepath.Clean(filepath.Join(cfg.schemaDir, match))
+				} else {
+					match = filepath.Clean(match)
 				}
-				content, err := read(path)
+				if err := rejectSymlinkInPath(anchor, match); err != nil {
+					return "", fmt.Errorf("#INCLUDE %q at %s:%d: %s",
+						rawPath, cfg.directiveFile, directiveLine, err.Error())
+				}
+				fi, err := stat(match)
 				if err != nil {
-					return "", fmt.Errorf("os.ReadFile(%s): %w", quote(path), err)
+					return "", fmt.Errorf("#INCLUDE %q at %s:%d: os.Stat(%q): %w",
+						rawPath, cfg.directiveFile, directiveLine, match, err)
 				}
-				buf.WriteString(string(content))
+				if fi.IsDir() {
+					continue
+				}
+				if fi.Size() > includePerFileCap {
+					return "", fmt.Errorf("#INCLUDE %q at %s:%d: file %q exceeds 1 MiB per-file limit (%d bytes)",
+						rawPath, cfg.directiveFile, directiveLine, match, fi.Size())
+				}
+				if includedTotal+fi.Size() > includeAggregateCap {
+					return "", fmt.Errorf("#INCLUDE %q at %s:%d: total included bytes exceed 4 MiB aggregate limit",
+						rawPath, cfg.directiveFile, directiveLine)
+				}
+				content, err := read(match)
+				if err != nil {
+					return "", fmt.Errorf("#INCLUDE %q at %s:%d: os.ReadFile(%q): %w",
+						rawPath, cfg.directiveFile, directiveLine, match, err)
+				}
+				includedTotal += int64(len(content))
+				buf.Write(content)
 			}
 		} else if len(args) > 1 && toUpper(args[0]) == sqlxCmdScript {
-			output, err := runCommand(args[1:])
-			if err != nil {
-				return "", err
+			if !cfg.allowScript {
+				return "", fmt.Errorf("#SCRIPT directive at %s:%d is disabled by default; re-run with --allow-script if you understand the security implications (see SECURITY.md)",
+					cfg.directiveFile, directiveLine)
 			}
+			timeout := cfg.scriptTimeout
+			if timeout <= 0 {
+				timeout = 10 * time.Second
+			}
+			output, err := runCommand(context.Background(), args[1:], timeout, cfg.scriptEnv)
+			if err != nil {
+				return "", fmt.Errorf("#SCRIPT at %s:%d: %w",
+					cfg.directiveFile, directiveLine, err)
+			}
+			fmt.Fprintf(os.Stderr, "defc: warning: #SCRIPT at %s:%d is deprecated and will be removed in a future release; see SECURITY.md\n",
+				cfg.directiveFile, directiveLine)
 			buf.WriteString(output)
 		} else {
 			buf.WriteString(text)
 		}
 		buf.WriteString("\r\n")
 
-		// now next becomes the current line
-		text = next
+		if haveNext {
+			text = next
+			currentLineNo = nextLineNo
+		} else {
+			text = ""
+			break
+		}
 	}
 	return buf.String(), nil
 }
@@ -410,14 +613,14 @@ func (ctx *sqlxContext) genSqlxCode(w io.Writer) error {
 			"isPointer":     isPointer,
 			"indirect":      indirect,
 			"deselect":      deselect,
-			"readHeader":    func(header string) (string, error) { return readHeader(header, ctx.Pwd) },
+			"readHeader":    func(header string) (string, error) { return readHeader(header, ctx.HeaderCfg) },
 			"isContextType": func(ident string, expr ast.Expr) bool { return ctx.Doc.IsContextType(ident, expr) },
 			"sub":           func(x, y int) int { return x - y },
 			"getRepr":       func(node ast.Node) string { return ctx.Doc.Repr(node) },
 			"isQuery":       func(op string) bool { return op == sqlxOpQuery },
 			"isExec":        func(op string) bool { return op == sqlxOpExec },
 			"constBindSQL": func(header string) (string, error) {
-				processed, err := readHeader(header, ctx.Pwd)
+				processed, err := readHeader(header, ctx.HeaderCfg)
 				if err != nil {
 					return "", err
 				}
@@ -428,7 +631,7 @@ func (ctx *sqlxContext) genSqlxCode(w io.Writer) error {
 				return result.SQL, nil
 			},
 			"constBindArgs": func(header string) ([]string, error) {
-				processed, err := readHeader(header, ctx.Pwd)
+				processed, err := readHeader(header, ctx.HeaderCfg)
 				if err != nil {
 					return nil, err
 				}

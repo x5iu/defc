@@ -62,6 +62,9 @@ func (method *Method) SortIn() []string {
 var backslashRe = regexp.MustCompile(`\\[ \t\r]*?\n[ \t\r]*`)
 
 func (method *Method) MetaArgs() []string {
+	// NOTE: splitArgs is a custom, NON-shell tokeniser. `${...}` here is a
+	// grouping delimiter identical to `$(...)`, not a POSIX variable
+	// expansion. See SECURITY.md (`splitArgs` non-shell note).
 	rawArgs := splitArgs(backslashRe.ReplaceAllString(method.Meta, ""))
 	args := make([]string, 0, len(rawArgs))
 	for i := 0; i < len(rawArgs); i++ {
