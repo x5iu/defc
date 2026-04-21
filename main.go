@@ -53,6 +53,8 @@ var (
 		gen.FeatureSqlxCallback,
 		gen.FeatureSqlxAnyCallback,
 		gen.FeatureSqlxStrict,
+		gen.FeatureSqlxStrictMerge,
+		gen.FeatureSqlxLenientMerge,
 		gen.FeatureRpcNoRt,
 	}
 )
