@@ -23,8 +23,10 @@ func (e *UnsafeURLError) Unwrap() error { return ErrUnsafeInterpolation }
 // are additive and fail-closed:
 //
 //  1. Byte sweep: rejects CR, LF, NUL, other C0 controls, DEL, space
-//     and structural delimiters (" ', <, >, {, }, backtick) that would
-//     indicate smuggled bytes even before URL parsing.
+//     and structural delimiters (", <, >, {, }, backtick) that would
+//     indicate smuggled bytes even before URL parsing. Note: apostrophe
+//     is permitted (common in legitimate URLs); dedicated quoting via
+//     [QueryValue]/[PathSegment] applies when callers need it.
 //  2. url.Parse must succeed.
 //  3. u.Scheme ∈ {http, https}.
 //  4. When constantPrefix is non-empty, u.Scheme/u.Host must match
@@ -74,8 +76,9 @@ func sweepURLBytes(s string) error {
 }
 
 // PathSegment returns a percent-encoded URL path segment suitable for
-// inlining in a path between two literal slashes. Additionally rejects
-// NUL and any byte that would decode to a C0 control.
+// inlining in a path between two literal slashes. NUL bytes are
+// stripped prior to encoding; other C0 controls are percent-encoded
+// by [url.PathEscape] per RFC 3986 and rendered inert on the wire.
 func PathSegment(v string) string {
 	for i := 0; i < len(v); i++ {
 		if v[i] == 0x00 {

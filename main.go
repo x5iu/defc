@@ -423,7 +423,7 @@ func checkIncludeRoots() error {
 			return fmt.Errorf("--include-root %q must be an absolute path", root)
 		}
 		cleaned := filepath.Clean(root)
-		if cleaned != root || strings.Contains(root, "..") {
+		if cleaned != root {
 			return fmt.Errorf("--include-root %q must be a cleaned absolute path (no \"..\" or trailing separators)", root)
 		}
 		fi, err := os.Stat(root)

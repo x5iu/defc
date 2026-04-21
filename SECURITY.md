@@ -103,6 +103,8 @@ these contexts and suggests the appropriate safe-helper wrap; see
 the README for usage.
 
 ## `splitArgs` is not a shell
+
+The directive argument parser (`splitArgs` consumed by `#INCLUDE`, `#SCRIPT`,
 etc.) supports `${…}` as a **grouping** construct for readability; it is
 **not** shell parameter expansion. It does not expand environment
 variables, does not perform command substitution, and does not invoke a

@@ -288,6 +288,8 @@ All notable changes to `defc` will be documented in this file.
 ### ⏫ Dependencies
 
 - Bumped `golang.org/x/tools` to `v0.28.0` (required by the analyzer and
-  compatible with Go 1.22+ toolchains). Implicit `go` directive bumped
-  from `1.19` to `1.22.0`; integration sub-modules (`gen/integration/api`,
-  `gen/integration/sqlx`) retain their existing `go` directives.
+  compatible with Go 1.22+ toolchains). Root `go` directive bumped from
+  `1.19` to `1.22.0`; integration sub-modules (`gen/integration/api`,
+  `gen/integration/sqlx`) bumped to `go 1.22.0` for matrix alignment.
+  CI matrix consequently dropped Go 1.19/1.20/1.21 and now tests on
+  1.22 through 1.25.

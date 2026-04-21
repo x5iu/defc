@@ -125,7 +125,7 @@ func (es NamedArgsCollisionErrors) Error() string {
 }
 
 func (es NamedArgsCollisionErrors) Is(target error) bool {
-	return errors.Is(target, ErrNamedArgsCollision) || target == ErrNamedArgsCollision
+	return target == ErrNamedArgsCollision
 }
 
 func (es NamedArgsCollisionErrors) Unwrap() []error {
@@ -147,7 +147,7 @@ type MergeCollisionEvent struct {
 	Version string
 }
 
-var onMergeCollision atomic.Value // func(MergeCollisionEvent)
+var onMergeCollision atomic.Value // *func(MergeCollisionEvent); see init()
 
 // SetOnMergeCollision installs a hook invoked once per duplicate bind
 // key discovered during warn-mode [MergeNamedArgs] calls. Passing nil
@@ -178,6 +178,12 @@ var (
 
 func init() {
 	mergeWarnLimit.Store(100)
+	// Pre-populate onMergeCollision with a typed nil so that the very
+	// first .Load() (before any SetOnMergeCollision call) returns a
+	// *func(MergeCollisionEvent) instead of an untyped nil interface.
+	// Subsequent SetOnMergeCollision(fn) Store calls preserve the same
+	// dynamic type, avoiding atomic.Value's "inconsistent type" panic.
+	onMergeCollision.Store((*func(MergeCollisionEvent))(nil))
 }
 
 // SetMergeCollisionRateLimit overrides the per-(key, sorted-sources)
