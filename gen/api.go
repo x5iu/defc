@@ -47,10 +47,6 @@ const (
 	// and host/scheme match a compile-time constant prefix extracted
 	// from method.TmplURL.
 	FeatureApiStrictURL = "api/strict-url"
-	// FeatureApiUnsafeCRLF is reserved as an escape hatch for when
-	// api/strict-headers becomes the default (v1.46+). It is
-	// parseable but a no-op in v1.45.
-	FeatureApiUnsafeCRLF = "api/unsafe-crlf"
 )
 
 func (builder *CliBuilder) buildApi(w io.Writer) error {

@@ -133,19 +133,6 @@ type Iface interface {
 			t.Error("nort+strict-merge inline body missing source labels")
 		}
 	})
-
-	t.Run("sqlx_strict_merge_mutual_exclusion", func(t *testing.T) {
-		var buf bytes.Buffer
-		b := NewCliBuilder(ModeSqlx).
-			WithFeats([]string{FeatureSqlxStrictMerge, FeatureSqlxLenientMerge}).
-			WithPkg("test").
-			WithFile("test.go", []byte(namedSchema)).
-			WithPos(findTypeLine(namedSchema))
-		if err := b.Build(&buf); err == nil ||
-			!strings.Contains(err.Error(), "mutually exclusive") {
-			t.Fatalf("expected mutual-exclusion error, got %v", err)
-		}
-	})
 }
 
 const namedSchema = `package test
@@ -163,12 +150,3 @@ type Iface interface {
 	Run(ctx context.Context, id fmt.Stringer) error
 }
 `
-
-func findTypeLine(src string) int {
-	for i, ln := range strings.Split(src, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(ln), "type Iface interface") {
-			return i
-		}
-	}
-	return 0
-}

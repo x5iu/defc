@@ -44,7 +44,6 @@ var (
 		gen.FeatureApiGetBody,
 		gen.FeatureApiStrictHeaders,
 		gen.FeatureApiStrictURL,
-		gen.FeatureApiUnsafeCRLF,
 		gen.FeatureSqlxIn,
 		gen.FeatureSqlxLog,
 		gen.FeatureSqlxRebind,
@@ -54,7 +53,6 @@ var (
 		gen.FeatureSqlxAnyCallback,
 		gen.FeatureSqlxStrict,
 		gen.FeatureSqlxStrictMerge,
-		gen.FeatureSqlxLenientMerge,
 		gen.FeatureRpcNoRt,
 	}
 )
@@ -525,10 +523,6 @@ func init() {
 
 func main() {
 	if err := defc.Execute(); err != nil {
-		if _, ok := err.(*usageError); ok {
-			fmt.Fprintln(os.Stderr, "Error:", err)
-			os.Exit(64)
-		}
 		cobra.CheckErr(err)
 	}
 }

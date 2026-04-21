@@ -4,13 +4,8 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"log"
-	"os"
 	"reflect"
-	"sort"
 	"strings"
-	"sync"
-	"sync/atomic"
 
 	tok "github.com/x5iu/defc/runtime/token"
 )
@@ -51,29 +46,64 @@ func MergeArgs(args ...any) []any {
 	return dst
 }
 
-// MergeNamedArgs flattens nested named-argument contributions into a
-// single flat bind map. Signature is preserved for backwards
-// compatibility; when a duplicate bind key is produced by two
-// different sources, the last writer wins (non-deterministic under
-// Go's randomised map iteration) and a one-line warning is emitted
-// through [OnMergeCollision] (or [log.Printf] when no hook is set).
-//
-// See [MergeNamedArgsStrict] for the opt-in variant that returns a
-// typed error on collisions instead of warning. The generator emits
-// either form depending on the sqlx/strict-merge feature flag.
 func MergeNamedArgs(argsMap map[string]any) map[string]any {
-	namedMap, _ := mergeNamedArgs(argsMap, true)
+	namedMap := make(map[string]any, len(argsMap))
+	for name, arg := range argsMap {
+		rv := reflect.ValueOf(arg)
+		if _, notAnArg := arg.(NotAnArg); notAnArg {
+			continue
+		} else if toNamedArgs, ok := arg.(ToNamedArgs); ok {
+			for k, v := range toNamedArgs.ToNamedArgs() {
+				namedMap[k] = v
+			}
+		} else if _, ok = arg.(driver.Valuer); ok {
+			namedMap[name] = arg
+		} else if _, ok = arg.(ToArgs); ok {
+			namedMap[name] = arg
+		} else if rv.Kind() == reflect.Map {
+			iter := rv.MapRange()
+			for iter.Next() {
+				k, v := iter.Key(), iter.Value()
+				if k.Kind() == reflect.String {
+					namedMap[k.String()] = v.Interface()
+				}
+			}
+		} else if rv.Kind() == reflect.Struct ||
+			(rv.Kind() == reflect.Pointer && rv.Elem().Kind() == reflect.Struct) {
+			rv = reflect.Indirect(rv)
+			rt := rv.Type()
+			for i := 0; i < rt.NumField(); i++ {
+				if sf := rt.Field(i); sf.Anonymous {
+					sft := sf.Type
+					if sft.Kind() == reflect.Pointer {
+						sft = sft.Elem()
+					}
+					for j := 0; j < sft.NumField(); j++ {
+						if tag, exists := sft.Field(j).Tag.Lookup("db"); exists {
+							for pos, char := range tag {
+								if !(('0' <= char && char <= '9') || ('a' <= char && char <= 'z') || ('A' <= char && char <= 'Z') || char == '_') {
+									tag = tag[:pos]
+									break
+								}
+							}
+							namedMap[tag] = rv.FieldByIndex([]int{i, j}).Interface()
+						}
+					}
+				} else if tag, exists := sf.Tag.Lookup("db"); exists {
+					for pos, char := range tag {
+						if !(('0' <= char && char <= '9') || ('a' <= char && char <= 'z') || ('A' <= char && char <= 'Z') || char == '_') {
+							tag = tag[:pos]
+							break
+						}
+					}
+					namedMap[tag] = rv.Field(i).Interface()
+				}
+			}
+		} else {
+			namedMap[name] = arg
+		}
+	}
 	return namedMap
-}
-
-// MergeNamedArgsStrict behaves like [MergeNamedArgs] except that any
-// duplicate bind key contributed by two distinct sources returns an
-// error that wraps [ErrNamedArgsCollision]. The concrete error type
-// is either *[NamedArgsCollisionError] (single collision) or
-// [NamedArgsCollisionErrors] (multiple collisions). On error the
-// returned map is nil.
-func MergeNamedArgsStrict(argsMap map[string]any) (map[string]any, error) {
-	return mergeNamedArgs(argsMap, false)
 }
 
 // ErrNamedArgsCollision is the sentinel wrapped by every error
@@ -137,128 +167,19 @@ func (es NamedArgsCollisionErrors) Unwrap() []error {
 	return out
 }
 
-// MergeCollisionEvent is delivered to the user-installed
-// [OnMergeCollision] hook (if any) whenever warn mode sees a
-// duplicate bind key. Version carries the runtime version for log
-// aggregation.
-type MergeCollisionEvent struct {
-	Key     string
-	Sources []string
-	Version string
-}
-
-var onMergeCollision atomic.Value // *func(MergeCollisionEvent); see init()
-
-// SetOnMergeCollision installs a hook invoked once per duplicate bind
-// key discovered during warn-mode [MergeNamedArgs] calls. Passing nil
-// restores the default [log.Printf] sink. Installing a no-op hook is
-// a supported opt-out.
-func SetOnMergeCollision(fn func(MergeCollisionEvent)) {
-	if fn == nil {
-		onMergeCollision.Store((*func(MergeCollisionEvent))(nil))
-		return
-	}
-	onMergeCollision.Store(&fn)
-}
-
-// OnMergeCollision is retained as an exported variable for codepaths
-// that want to read the currently installed hook (mainly tests).
-// Prefer [SetOnMergeCollision] for installation to keep the
-// goroutine-safe atomic handoff.
-//
-// Deprecated: use [SetOnMergeCollision].
-func OnMergeCollision(event MergeCollisionEvent) {
-	dispatchCollisionWarning(event.Key, event.Sources)
-}
-
-var (
-	mergeWarnCounters sync.Map // key: "KEY|src1,src2" -> *atomic.Int64
-	mergeWarnLimit    atomic.Int64
-)
-
-func init() {
-	mergeWarnLimit.Store(100)
-	// Pre-populate onMergeCollision with a typed nil so that the very
-	// first .Load() (before any SetOnMergeCollision call) returns a
-	// *func(MergeCollisionEvent) instead of an untyped nil interface.
-	// Subsequent SetOnMergeCollision(fn) Store calls preserve the same
-	// dynamic type, avoiding atomic.Value's "inconsistent type" panic.
-	onMergeCollision.Store((*func(MergeCollisionEvent))(nil))
-}
-
-// SetMergeCollisionRateLimit overrides the per-(key, sorted-sources)
-// cap on emitted warnings. A non-positive value disables rate
-// limiting entirely. The default cap is 100 emissions per tuple per
-// process lifetime.
-func SetMergeCollisionRateLimit(n int) {
-	mergeWarnLimit.Store(int64(n))
-}
-
-func mergeWarnEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("DEFC_MERGE_WARN"))) {
-	case "0", "off", "false", "no":
-		return false
-	}
-	return true
-}
-
-func dispatchCollisionWarning(key string, sources []string) {
-	if !mergeWarnEnabled() {
-		return
-	}
-	sorted := append([]string(nil), sources...)
-	sort.Strings(sorted)
-	tag := key + "|" + strings.Join(sorted, ",")
-	limit := mergeWarnLimit.Load()
-	if limit > 0 {
-		counterAny, _ := mergeWarnCounters.LoadOrStore(tag, new(atomic.Int64))
-		counter := counterAny.(*atomic.Int64)
-		if counter.Add(1) > limit {
-			return
-		}
-	}
-	if hookPtr, _ := onMergeCollision.Load().(*func(MergeCollisionEvent)); hookPtr != nil && *hookPtr != nil {
-		(*hookPtr)(MergeCollisionEvent{Key: key, Sources: sources, Version: Version})
-		return
-	}
-	log.Printf("defc[merge]: duplicate bind key %q contributed by sources=%v (version=%s)",
-		key, sources, Version)
-}
-
-// MergeCollisionsTotal returns the process-wide count of collision
-// warnings observed so far. Exposed for tests and optional metrics
-// integrations; real callers should install a hook instead.
-func MergeCollisionsTotal() int64 {
-	var total int64
-	mergeWarnCounters.Range(func(_, v any) bool {
-		total += v.(*atomic.Int64).Load()
-		return true
-	})
-	return total
-}
-
-// resetMergeCollisionCountersForTest clears the per-tuple warn counters.
-// Unexported; tests reach it via an internal export in a _test.go.
-func resetMergeCollisionCountersForTest() {
-	mergeWarnCounters.Range(func(k, _ any) bool {
-		mergeWarnCounters.Delete(k)
-		return true
-	})
-}
-
-func mergeNamedArgs(argsMap map[string]any, legacy bool) (map[string]any, error) {
+// MergeNamedArgsStrict behaves like [MergeNamedArgs] except that any
+// duplicate bind key contributed by two distinct sources returns an
+// error that wraps [ErrNamedArgsCollision]. The concrete error type
+// is either *[NamedArgsCollisionError] (single collision) or
+// [NamedArgsCollisionErrors] (multiple collisions). On error the
+// returned map is nil.
+func MergeNamedArgsStrict(argsMap map[string]any) (map[string]any, error) {
 	namedMap := make(map[string]any, len(argsMap))
 	provenance := make(map[string]string, len(argsMap))
 	var collisions []NamedArgsCollisionError
 
 	put := func(k string, v any, src string) {
 		if prev, ok := provenance[k]; ok && prev != src {
-			if legacy {
-				dispatchCollisionWarning(k, []string{prev, src})
-				namedMap[k] = v
-				provenance[k] = src
-				return
-			}
 			collisions = append(collisions, NamedArgsCollisionError{
 				Key:     k,
 				Sources: []string{prev, src},
@@ -326,9 +247,6 @@ func mergeNamedArgs(argsMap map[string]any, legacy bool) (map[string]any, error)
 		}
 	}
 
-	if legacy {
-		return namedMap, nil
-	}
 	if len(collisions) == 0 {
 		return namedMap, nil
 	}

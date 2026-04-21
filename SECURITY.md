@@ -98,10 +98,6 @@ All strict emission is gated by opt-in feature flags (`sqlx/strict`,
 generated output is byte-identical to prior versions unless a
 feature is explicitly enabled.
 
-The `defc lint` subcommand statically flags bare interpolations in
-these contexts and suggests the appropriate safe-helper wrap; see
-the README for usage.
-
 ## `splitArgs` is not a shell
 
 The directive argument parser (`splitArgs` consumed by `#INCLUDE`, `#SCRIPT`,
@@ -123,21 +119,15 @@ winner is non-deterministic — and on a bad roll the attacker value
 can silently overwrite the authoritative one, bypassing tenant /
 row-level scoping in the rendered SQL.
 
-As of v1.45.0, collisions are always detected:
-
-- Default (v1.45.0): the legacy last-writer-wins semantics are
-  preserved for backwards compatibility, but a one-line warning
-  `defc[merge]: duplicate bind key "…" contributed by sources=[…]`
-  is emitted through `log.Printf` or a user-installed hook
-  (`runtime.SetOnMergeCollision`). Rate-limited at 100 emissions
-  per unique `(key, sources)` tuple. Opt out with
-  `DEFC_MERGE_WARN=0`.
-- Opt-in (`--features sqlx/strict-merge`): the generated code
-  returns an error wrapping `runtime.ErrNamedArgsCollision`
-  whenever two distinct sources write the same bind key, *before*
-  the SQL is executed. Use `errors.As` to extract
-  `*runtime.NamedArgsCollisionError{Key, Sources}` for telemetry.
-- v1.46.0 will make strict mode the default.
+As of v1.45.0, the opt-in `sqlx/strict-merge` feature flag causes
+the generator to emit a call to `runtime.MergeNamedArgsStrict`,
+which returns an error wrapping `runtime.ErrNamedArgsCollision`
+whenever two distinct sources contribute the same bind key, *before*
+the SQL is executed. Use `errors.As` to extract
+`*runtime.NamedArgsCollisionError{Key, Sources}` for telemetry.
+When the flag is absent, `runtime.MergeNamedArgs` retains its
+legacy last-writer-wins behaviour. v1.46.0 will make strict mode
+the default.
 
 Provenance labels follow a stable scheme:
 
@@ -149,10 +139,6 @@ Provenance labels follow a stable scheme:
 | `map[string]any` flatten            | `map(<outer>)`                          |
 | `db`-tagged struct field            | `struct(<outer>.<field-path>)`          |
 | Fallback scalar                     | `scalar(<outer>)`                       |
-
-Run `defc doctor --project . --fail-on-stale` in CI to detect
-generated files from pre-v1.45 defc whose inlined
-`__<Ident>MergeNamedArgs` still lacks collision detection.
 
 ## Supported versions
 

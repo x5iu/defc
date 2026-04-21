@@ -51,14 +51,8 @@ const (
 	// FeatureSqlxStrictMerge opts into the v1.46 error-on-collision
 	// behaviour of MergeNamedArgs a release early. When set, the
 	// generator emits two-return calls and error handling mirroring
-	// the existing sqlx.Named error path. Mutually exclusive with
-	// FeatureSqlxLenientMerge.
+	// the existing sqlx.Named error path.
 	FeatureSqlxStrictMerge = "sqlx/strict-merge"
-
-	// FeatureSqlxLenientMerge explicitly opts into today's silent-
-	// overwrite behaviour (plus warn logging). Reserved for the
-	// v1.46 grace release and removed in v1.47.
-	FeatureSqlxLenientMerge = "sqlx/lenient-merge"
 )
 
 func (builder *CliBuilder) buildSqlx(w io.Writer) error {
@@ -95,9 +89,6 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 	)
 
 	var fixedMethods []*Method = nil
-	if ctx.HasFeature(FeatureSqlxStrictMerge) && ctx.HasFeature(FeatureSqlxLenientMerge) {
-		return fmt.Errorf("sqlx/strict-merge and sqlx/lenient-merge are mutually exclusive")
-	}
 	for i, method := range ctx.Methods {
 		if l := len(method.Out); l == 0 || !checkErrorType(method.Out[l-1]) {
 			return fmt.Errorf("checkErrorType: no 'error' found in method %s returned values",
