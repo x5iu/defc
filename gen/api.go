@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strings"
 	"text/template"
 
 	_ "embed"
@@ -35,6 +36,21 @@ const (
 	FeatureApiGzip         = "api/gzip"
 	FeatureApiRetry        = "api/retry"
 	FeatureApiGetBody      = "api/get-body"
+
+	// FeatureApiStrictHeaders gates the HeaderValue / PreExecHeaderMap
+	// emission that rejects CRLF / NUL / C0 / DEL bytes in templated
+	// HTTP header values. v1.45 default: OFF. See CHANGELOG.md and
+	// README.md for the rollout table.
+	FeatureApiStrictHeaders = "api/strict-headers"
+	// FeatureApiStrictURL gates the runtime StrictURL check that runs
+	// after address-template execution, asserting scheme ∈ {http,https}
+	// and host/scheme match a compile-time constant prefix extracted
+	// from method.TmplURL.
+	FeatureApiStrictURL = "api/strict-url"
+	// FeatureApiUnsafeCRLF is reserved as an escape hatch for when
+	// api/strict-headers becomes the default (v1.46+). It is
+	// parseable but a no-op in v1.45.
+	FeatureApiUnsafeCRLF = "api/unsafe-crlf"
 )
 
 func (builder *CliBuilder) buildApi(w io.Writer) error {
@@ -447,6 +463,19 @@ func headerHasBody(header string) bool {
 //go:embed template/api.tmpl
 var apiTemplate string
 
+// staticURLPrefix returns the leading constant substring of a
+// method.TmplURL up to the first `{{` action, with trailing whitespace
+// trimmed. It is injected into generated code so the runtime
+// StrictURL call can assert the rendered URL's host/scheme still
+// match the author's intent.
+func staticURLPrefix(tmpl string) string {
+	idx := strings.Index(tmpl, "{{")
+	if idx < 0 {
+		return strings.TrimRight(tmpl, " \t\r\n")
+	}
+	return strings.TrimRight(tmpl[:idx], " \t\r\n")
+}
+
 func (ctx *apiContext) genApiCode(w io.Writer) error {
 	tmpl, err := template.
 		New("defc(api)").
@@ -464,6 +493,7 @@ func (ctx *apiContext) genApiCode(w io.Writer) error {
 			"isInner":           isInner,
 			"httpMethodHasBody": httpMethodHasBody,
 			"headerHasBody":     headerHasBody,
+			"staticURLPrefix":   staticURLPrefix,
 		}).
 		Parse(apiTemplate)
 

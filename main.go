@@ -42,6 +42,9 @@ var (
 		gen.FeatureApiGzip,
 		gen.FeatureApiRetry,
 		gen.FeatureApiGetBody,
+		gen.FeatureApiStrictHeaders,
+		gen.FeatureApiStrictURL,
+		gen.FeatureApiUnsafeCRLF,
 		gen.FeatureSqlxIn,
 		gen.FeatureSqlxLog,
 		gen.FeatureSqlxRebind,
@@ -49,6 +52,7 @@ var (
 		gen.FeatureSqlxFuture,
 		gen.FeatureSqlxCallback,
 		gen.FeatureSqlxAnyCallback,
+		gen.FeatureSqlxStrict,
 		gen.FeatureRpcNoRt,
 	}
 )

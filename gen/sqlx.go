@@ -42,6 +42,11 @@ const (
 	FeatureSqlxFuture      = "sqlx/future"
 	FeatureSqlxCallback    = "sqlx/callback"
 	FeatureSqlxAnyCallback = "sqlx/any-callback"
+
+	// FeatureSqlxStrict gates runtime SQLArityCheck emission that
+	// asserts the number of ? placeholders in the rendered SQL
+	// matches the argList length. v1.45 default: OFF.
+	FeatureSqlxStrict = "sqlx/strict"
 )
 
 func (builder *CliBuilder) buildSqlx(w io.Writer) error {

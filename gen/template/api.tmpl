@@ -306,14 +306,26 @@ var (
         {{ $bufReader := printf "bufReader%s" $method.Ident }}
         {{ $mimeHeader := printf "mimeHeader%s" $method.Ident -}}
         {{ if ne $method.Header "" -}}
-            if {{ $err }} = {{ $headerTmpl }}.Execute({{ $header }}, map[string]any{
+            {{ $headerMap := printf "headerMap%s" $method.Ident -}}
+            {{ $headerMap }} := map[string]any{
             {{ if $.HasInner -}}
                 "{{ $.Ident }}": __imp.{{ methodInner }}(),
             {{ end -}}
             {{ range $index, $ident := $sortIn -}}
                 "{{- $ident }}": {{ $ident -}},
             {{ end }}
-            }); {{ $err }} != nil {
+            }
+            {{ if and ($.HasFeature "api/strict-headers") (not ($.HasFeature "api/nort")) -}}
+                if {{ $err }} = __rt.PreExecHeaderMap({{ $headerMap }}); {{ $err }} != nil {
+                return {{ range $index, $type := $method.Out -}}
+                    {{- if lt $index (sub (len $method.Out) 1) -}}
+                        v{{- $index -}}{{- $method.Ident }},
+                    {{- end -}}
+                {{- end -}}
+                fmt.Errorf("error building '{{ $method.Ident }}' header: %w", {{ $err }})
+                }
+            {{ end -}}
+            if {{ $err }} = {{ $headerTmpl }}.Execute({{ $header }}, {{ $headerMap }}); {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}
                 {{- if lt $index (sub (len $method.Out) 1) -}}
                     v{{- $index -}}{{- $method.Ident }},
@@ -334,7 +346,22 @@ var (
         {{- end }}
 
         {{ $url := printf "url%s" $method.Ident -}}
-        {{ $url }} := {{ $addr }}.String()
+        {{ if and ($.HasFeature "api/strict-url") (not ($.HasFeature "api/nort")) -}}
+            {{ $urlRaw := printf "urlRaw%s" $method.Ident -}}
+            {{ $urlErr := printf "urlErr%s" $method.Ident -}}
+            {{ $urlRaw }} := {{ $addr }}.String()
+            {{ $url }}, {{ $urlErr }} := __rt.StrictURL({{ quote (staticURLPrefix $method.TmplURL) }}, {{ $urlRaw }})
+            if {{ $urlErr }} != nil {
+            return {{ range $index, $type := $method.Out -}}
+                {{- if lt $index (sub (len $method.Out) 1) -}}
+                    v{{- $index -}}{{- $method.Ident }},
+                {{- end -}}
+            {{- end -}}
+            fmt.Errorf("error building '{{ $method.Ident }}' url: %w", {{ $urlErr }})
+            }
+        {{ else -}}
+            {{ $url }} := {{ $addr }}.String()
+        {{ end -}}
         {{- $request := printf "request%s" $method.Ident -}}
         {{- if httpMethodHasBody $httpMethod }}
             {{- if headerHasBody $method.TmplHeader }}
@@ -381,6 +408,16 @@ var (
             {{ $v := printf "v%s" $method.Ident -}}
             for {{ $k }}, {{ $vv }} := range {{ $mimeHeader }} {
             for _, {{ $v }} := range {{ $vv }} {
+            {{ if and ($.HasFeature "api/strict-headers") (not ($.HasFeature "api/nort")) -}}
+                if _, errHV := __rt.HeaderValue({{ $v }}); errHV != nil {
+                return {{ range $index, $type := $method.Out -}}
+                    {{- if lt $index (sub (len $method.Out) 1) -}}
+                        v{{- $index -}}{{- $method.Ident }},
+                    {{- end -}}
+                {{- end -}}
+                fmt.Errorf("error building '{{ $method.Ident }}' header: %w", errHV)
+                }
+            {{ end -}}
             {{ $request }}.Header.Add({{ $k }}, {{ $v }})
             }
             }
