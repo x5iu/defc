@@ -4,6 +4,61 @@ All notable changes to `defc` will be documented in this file.
 
 ## v1.45.0 — 2026-04-21
 
+### 🔒 Security — generate-time RCE
+
+- **`#INCLUDE` and `#SCRIPT` directives in `sqlx`-mode headers were
+  unbounded file-read and arbitrary-command-execution sinks at
+  code-generation time.** `#INCLUDE` expanded any glob the process
+  could read (including `/etc/passwd`, `../../outside`, and paths
+  traversed via symlinks out of the schema directory) and had no
+  size cap. `#SCRIPT` forked an arbitrary command inheriting the
+  full parent environment with no timeout. A malicious schema `.go`
+  file merged into a repository therefore achieved RCE the next time
+  a developer ran `go generate`.
+
+  `#INCLUDE` is now constrained to the schema directory (the
+  directory holding the `.go` file that declared the directive) or
+  to paths under a `--include-root=DIR` anchor; `..` escapes and
+  symlink components are rejected via an `lstat`-walk from the
+  anchor to the target; glob results are sorted for deterministic
+  output; a 1 MiB per-file cap and 4 MiB aggregate cap apply.
+  Diagnostics include the originating `file:line`.
+
+  `#SCRIPT` is **disabled by default** — re-running without flags
+  returns `#SCRIPT is disabled by default; re-run with
+  --allow-script …`. When `--allow-script` is supplied, child
+  processes run with a scrubbed environment whose baseline is
+  `PATH, HOME, USER, LANG, LC_ALL, LC_CTYPE, TMPDIR, GOCACHE,
+  GOMODCACHE, GOPATH`; additional variables can be allow-listed one
+  at a time via repeatable `--script-env=NAME` (names validated
+  against `^[A-Z_][A-Z0-9_]*$`). `--script-timeout` (default `30s`,
+  capped at 10 minutes) bounds wall-clock; the child's stderr is
+  captured up to 64 KiB with a truncation marker. PATH lookup is
+  done against the scrubbed env (no `os.LookPath` race on the
+  parent's PATH); bare relative `argv[0]` containing a slash is
+  rejected. Each successful `#SCRIPT` invocation emits a
+  deprecation warning to stderr. `#SCRIPT` is slated for removal in
+  v1.47.0; see `SECURITY.md` for the migration path (commit the
+  rendered SQL and switch to `#INCLUDE`).
+
+  New CLI flags: `--allow-script`, `--script-timeout=DUR`,
+  `--script-env=NAME` (repeatable), `--include-root=DIR`
+  (repeatable). Corresponding `CliBuilder` setters
+  (`WithAllowScript`, `WithScriptTimeout`, `WithScriptEnv`,
+  `WithIncludeRoots`) are available for programmatic embedding.
+
+  New unit coverage: `TestReadHeader_IncludeBoundary` exercises
+  absolute-path rejection, `..` escape rejection, symlink rejection,
+  per-file and aggregate caps, happy path, and `--include-root`
+  anchoring; `TestReadHeader_ScriptGating` covers the default-off
+  gate, timeout kill-switch, and env scrubbing.
+  `TestRunCommand` grew subtests for timeout-kills-slow-process,
+  env-scrubbed, env-allow-list, relative-`argv[0]`-rejected, and
+  context-cancel-propagation.
+
+  `SECURITY.md` documents the trust boundary, `#SCRIPT`
+  deprecation timeline, and vulnerability-reporting process.
+
 ### 🔒 Security — unsafe.Pointer UB
 
 - **`MultipartBody[T]` / `JSONBody[T]` first-embedded-field invariant
