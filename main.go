@@ -522,5 +522,11 @@ func init() {
 }
 
 func main() {
-	cobra.CheckErr(defc.Execute())
+	if err := defc.Execute(); err != nil {
+		if _, ok := err.(*usageError); ok {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(64)
+		}
+		cobra.CheckErr(err)
+	}
 }
