@@ -20,7 +20,7 @@ fi
 
 # Build and run the poolalias analyzer against runtime + user-code fixtures.
 go install ./gen/analyzer/poolalias/cmd/poolalias
-go vet -vettool="$(go env GOPATH)/bin/poolalias" ./runtime ./gen/analyzer/...
+go vet -vettool="$(go env GOPATH)/bin/poolalias" ./runtime ./gen/integration
 
 go test -cover ./gen
 go test -cover ./runtime

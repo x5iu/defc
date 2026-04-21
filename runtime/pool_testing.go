@@ -97,16 +97,16 @@ func (p *ControlledPool) Put(buf *bytes.Buffer) {
 	p.queue = append(p.queue, buf)
 }
 
-// swapBufferPool installs p as the package-global bufferPool and registers a
-// t.Cleanup that restores the original. The testing.TB argument makes it
-// impossible to call from non-test code.
-func swapBufferPool(t testing.TB, p pool) (restore func()) {
+// swapBufferPool installs p as the package-global bufferPool for the lifetime
+// of t and registers a t.Cleanup that restores the original pool afterward.
+// The testing.TB argument makes it impossible to call from non-test code.
+// No return value: callers must not attempt to restore manually; the
+// t.Cleanup registration is the only supported restoration path.
+func swapBufferPool(t testing.TB, p pool) {
 	t.Helper()
 	prev := bufferPool
 	bufferPool = p
-	restore = func() {
+	t.Cleanup(func() {
 		bufferPool = prev
-	}
-	t.Cleanup(restore)
-	return restore
+	})
 }
