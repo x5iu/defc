@@ -31,11 +31,17 @@ type ResponseError interface {
 	Body() []byte
 }
 
+// NewResponseError constructs a ResponseError with a defensive copy of body.
+//
+// The returned error owns an independent []byte; callers may safely mutate or
+// pool-return the body argument immediately after the call. This defensive
+// copy closes a silent data-corruption hazard where body aliased a sync.Pool-
+// owned *bytes.Buffer that was reset and recycled after the method returned.
 func NewResponseError(caller string, status int, body []byte) ResponseError {
 	return &implResponseError{
 		caller: caller,
 		status: status,
-		body:   body,
+		body:   append([]byte(nil), body...),
 	}
 }
 
