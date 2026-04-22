@@ -7,8 +7,10 @@ import (
 	"go/format"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	goimport "golang.org/x/tools/imports"
@@ -70,7 +72,18 @@ var (
 	funcs             []string
 	targetType        string
 	template          string
+
+	// generate-time security knobs
+	allowScript      bool
+	scriptTimeoutStr string
+	scriptTimeout    time.Duration
+	scriptEnvAllow   []string
+	includeRoots     []string
 )
+
+const scriptTimeoutUpperBound = 10 * time.Minute
+
+var scriptEnvNameRe = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 
 var (
 	defc = &cobra.Command{
@@ -179,7 +192,11 @@ defc provides the following three scenarios of code generation features:
 				WithPkg(os.Getenv(EnvGoPackage)).
 				WithPwd(pwd).
 				WithFile(file, doc).
-				WithPos(pos)
+				WithPos(pos).
+				WithAllowScript(allowScript).
+				WithScriptTimeout(scriptTimeout).
+				WithScriptEnv(scriptEnvAllow).
+				WithIncludeRoots(includeRoots)
 
 			var buffer bytes.Buffer
 			if err = builder.Build(&buffer); err != nil {
@@ -299,7 +316,11 @@ type defc should handle using the '--type/-T' parameter to avoid generating inco
 					WithPwd(pwd).
 					WithFile(file, doc).
 					WithPos(pos).
-					WithTemplate(template)
+					WithTemplate(template).
+					WithAllowScript(allowScript).
+					WithScriptTimeout(scriptTimeout).
+					WithScriptEnv(scriptEnvAllow).
+					WithIncludeRoots(includeRoots)
 				var buffer bytes.Buffer
 				if err = builder.Build(&buffer); err != nil {
 					return err
@@ -350,6 +371,77 @@ func checkFlags() (err error) {
 	if err = checkFeatures(features); err != nil {
 		return err
 	}
+	if err = checkScriptFlags(); err != nil {
+		return err
+	}
+	if err = checkIncludeRoots(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkScriptFlags parses and validates the three #SCRIPT-related knobs.
+// Populates the package-level `scriptTimeout` from `scriptTimeoutStr`.
+func checkScriptFlags() error {
+	scriptTimeout = 0
+	if scriptTimeoutStr != "" {
+		d, perr := time.ParseDuration(scriptTimeoutStr)
+		if perr != nil {
+			return fmt.Errorf("--script-timeout must be a valid duration, got %q: %w", scriptTimeoutStr, perr)
+		}
+		if d < 0 {
+			return fmt.Errorf("--script-timeout must be non-negative, got %q", scriptTimeoutStr)
+		}
+		if d > scriptTimeoutUpperBound {
+			return fmt.Errorf("--script-timeout exceeds 10m upper bound, got %q", scriptTimeoutStr)
+		}
+		scriptTimeout = d
+	}
+	if !allowScript {
+		if scriptTimeoutStr != "" || len(scriptEnvAllow) > 0 {
+			return errors.New("--script-timeout and --script-env require --allow-script")
+		}
+	}
+	for _, name := range scriptEnvAllow {
+		if name == "" || strings.Contains(name, "=") || !scriptEnvNameRe.MatchString(name) {
+			return fmt.Errorf("--script-env %q is not a valid environment variable name", name)
+		}
+	}
+	return nil
+}
+
+// checkIncludeRoots validates each --include-root entry.
+func checkIncludeRoots() error {
+	for _, root := range includeRoots {
+		if !filepath.IsAbs(root) {
+			return fmt.Errorf("--include-root %q must be an absolute path", root)
+		}
+		cleaned := filepath.Clean(root)
+		if cleaned != root {
+			return fmt.Errorf("--include-root %q must be a cleaned absolute path (no \"..\" or trailing separators)", root)
+		}
+		fi, err := os.Stat(root)
+		if err != nil || !fi.IsDir() {
+			return fmt.Errorf("--include-root %q does not exist or is not a directory", root)
+		}
+		// Reject any symlink in the resolved path.
+		current := ""
+		parts := strings.Split(root, string(os.PathSeparator))
+		if filepath.IsAbs(root) {
+			current = string(os.PathSeparator)
+		}
+		for _, part := range parts {
+			if part == "" {
+				continue
+			}
+			current = filepath.Join(current, part)
+			if lfi, lerr := os.Lstat(current); lerr == nil {
+				if lfi.Mode()&os.ModeSymlink != 0 {
+					return fmt.Errorf("--include-root %q contains a symlink at %q", root, current)
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -398,6 +490,15 @@ func init() {
 	flags.StringArrayVar(&funcs, "func", nil, "additional funcs")
 	flags.StringArrayVar(&funcs, "function", nil, "additional funcs")
 
+	flags.BoolVar(&allowScript, "allow-script", false,
+		"allow #SCRIPT directives to execute commands at generate time (deprecated; see SECURITY.md)")
+	flags.StringVar(&scriptTimeoutStr, "script-timeout", "",
+		"hard timeout for each #SCRIPT invocation (requires --allow-script)")
+	flags.StringArrayVar(&scriptEnvAllow, "script-env", nil,
+		"extra environment variable NAMES to pass through to #SCRIPT (repeatable; values are copied from the current process env; requires --allow-script)")
+	flags.StringArrayVar(&includeRoots, "include-root", nil,
+		"additional filesystem roots that #INCLUDE absolute paths may resolve under (repeatable; must be existing absolute directories)")
+
 	// [2024-04-07]
 	// Since we use the `checkFlags` function to validate required parameters,
 	// we can disable Cobra's check for required flags.
@@ -417,5 +518,7 @@ func init() {
 }
 
 func main() {
-	cobra.CheckErr(defc.Execute())
+	if err := defc.Execute(); err != nil {
+		cobra.CheckErr(err)
+	}
 }

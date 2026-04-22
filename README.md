@@ -343,39 +343,78 @@ The `ResponseHandler()` method must return a type that implements the Response i
 
 ### SQL File Inclusion
 
-The `sqlx` mode supports including external SQL files and script output using special directives:
+The `sqlx` mode supports including external SQL files and (optionally) script
+output using special directives.
+
+> ⚠️ **Security**: `#INCLUDE` and `#SCRIPT` execute at **code-generation time**,
+> with the developer's full filesystem and PATH. Treat schema `.go` files as
+> trusted build inputs — never run `defc generate` on an untrusted schema
+> file. See [SECURITY.md](./SECURITY.md) for the full trust model.
 
 #### #INCLUDE Directive
 
-Include external SQL files or use glob patterns:
+Include external SQL files or use glob patterns. For safety, `#INCLUDE`
+paths are constrained to:
+
+- **Schema directory**: relative paths resolve against the directory that
+  contains the schema `.go` file. Paths that escape via `..` are rejected.
+- **`--include-root=DIR`** (repeatable): absolute paths must live under one
+  of the configured roots. Without any `--include-root` flag, absolute
+  paths are rejected.
+- **No symlinks**: any symlink component along the resolved path is
+  rejected.
+- **Size caps**: each matched file ≤ 1 MiB; total material included per
+  directive ≤ 4 MiB.
 
 ```go
 //go:generate go run -mod=mod "github.com/x5iu/defc" --mode=sqlx --output=user_query.go
 type UserQuery interface {
 // GetUser QUERY ONE
-// #INCLUDE "queries/get_user.sql"
+// #INCLUDE "queries/get_user.sql"        // ✅ relative, under schema dir
 GetUser(ctx context.Context, id int64) (*User, error)
 
 // GetActiveUsers QUERY MANY
-// #INCLUDE "queries/*.sql"  // Include all SQL files
+// #INCLUDE "queries/*.sql"                // ✅ glob, sorted deterministically
 GetActiveUsers(ctx context.Context) ([]*User, error)
 }
+
+// Rejected examples:
+//   #INCLUDE "/etc/passwd"                 // absolute, no --include-root
+//   #INCLUDE "../../outside.sql"           // escapes schema directory
+//   #INCLUDE "link.sql"                    // resolves through a symlink
 ```
 
-#### #SCRIPT Directive
+#### #SCRIPT Directive  *(deprecated, off by default)*
 
-Execute shell commands and include their output:
+> ⚠️ **Deprecated.** `#SCRIPT` executes arbitrary commands at generate
+> time. It is **disabled by default** and will be removed in a future
+> release. Prefer checking the rendered SQL into source and including it
+> with `#INCLUDE`.
+
+To keep using `#SCRIPT` during migration, pass `--allow-script` together
+with `--script-timeout` and, when required, `--script-env=NAME`
+(repeatable) to whitelist specific environment variables. The child
+process runs with a scrubbed environment that only inherits
+`PATH`, `HOME`, `USER`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`,
+`GOCACHE`, `GOMODCACHE`, `GOPATH` plus the names listed via
+`--script-env`. `--script-timeout` is capped at 10 minutes.
 
 ```go
 type UserQuery interface {
 // ListUsers QUERY MANY
 // #SCRIPT cat "queries/list_users.sql"
 ListUsers(ctx context.Context) ([]*User, error)
-
-// GetUserCount QUERY ONE
-// #SCRIPT echo "SELECT COUNT(*) as count FROM users"
-GetUserCount(ctx context.Context) (int64, error)
 }
+```
+
+**Migration:** replace the `#SCRIPT` body with the committed SQL file it
+produces, and use `#INCLUDE` instead:
+
+```go
+// Before:
+// #SCRIPT cat "queries/list_users.sql"
+// After:
+// #INCLUDE "queries/list_users.sql"
 ```
 
 ### Template Debugging
