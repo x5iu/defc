@@ -34,7 +34,7 @@ func (b *JSONBody[T]) Read(p []byte) (n int, err error) {
 	b.once.Do(func() {
 		var x T
 		vt := reflect.TypeOf(x)
-		if vt.Kind() != reflect.Struct {
+		if vt == nil || vt.Kind() != reflect.Struct {
 			panic("use the value type of a struct rather than a pointer type as the value for generics")
 		}
 		target := reflect.TypeOf(b).Elem()
@@ -124,7 +124,7 @@ func (b *MultipartBody[T]) Read(p []byte) (n int, err error) {
 	b.once.Do(func() {
 		var x T
 		vt := reflect.TypeOf(x)
-		if vt.Kind() != reflect.Struct {
+		if vt == nil || vt.Kind() != reflect.Struct {
 			panic("use the value type of a struct rather than a pointer type as the value for generics")
 		}
 		target := reflect.TypeOf(b).Elem()

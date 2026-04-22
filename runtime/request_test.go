@@ -84,7 +84,7 @@ func TestJSONBody(t *testing.T) {
 				t.Errorf("json_body: expects Panic, got nil")
 				return
 			} else if lit, ok := rec.(string); !ok || lit != "use the value type of a struct rather than a pointer type as the value for generics" {
-				t.Errorf("json_body: unexpected Panic literal => %s", rec)
+				t.Errorf("json_body: unexpected Panic literal => %v", rec)
 				return
 			}
 		}()
@@ -98,7 +98,7 @@ func TestJSONBody(t *testing.T) {
 				t.Errorf("json_body: expects Panic, got nil")
 				return
 			} else if lit, ok := rec.(string); !ok || lit != "JSONBody is not the first embedded field of struct type T" {
-				t.Errorf("json_body: unexpected Panic literal => %s", rec)
+				t.Errorf("json_body: unexpected Panic literal => %v", rec)
 				return
 			}
 		}()
@@ -112,11 +112,24 @@ func TestJSONBody(t *testing.T) {
 				t.Errorf("json_body: expects Panic, got nil")
 				return
 			} else if lit, ok := rec.(string); !ok || lit != "JSONBody is not the first embedded field of struct type T" {
-				t.Errorf("json_body: unexpected Panic literal => %s", rec)
+				t.Errorf("json_body: unexpected Panic literal => %v", rec)
 				return
 			}
 		}()
 		_, _ = io.ReadAll(r)
+	})
+	t.Run("interface_type_panic", func(t *testing.T) {
+		var b JSONBody[io.Reader]
+		defer func() {
+			if rec := recover(); rec == nil {
+				t.Errorf("json_body: expects Panic, got nil")
+				return
+			} else if lit, ok := rec.(string); !ok || lit != "use the value type of a struct rather than a pointer type as the value for generics" {
+				t.Errorf("json_body: unexpected Panic literal => %v", rec)
+				return
+			}
+		}()
+		_, _ = b.Read(nil)
 	})
 }
 
@@ -202,7 +215,7 @@ func TestMultipartBody(t *testing.T) {
 				t.Errorf("multipart_body: expects Panic, got nil")
 				return
 			} else if lit, ok := rec.(string); !ok || lit != "use the value type of a struct rather than a pointer type as the value for generics" {
-				t.Errorf("multipart_body: unexpected Panic literal => %s", rec)
+				t.Errorf("multipart_body: unexpected Panic literal => %v", rec)
 				return
 			}
 		}()
@@ -215,7 +228,7 @@ func TestMultipartBody(t *testing.T) {
 				t.Errorf("multipart_body: expects Panic, got nil")
 				return
 			} else if lit, ok := rec.(string); !ok || lit != "MultipartBody is not the first embedded field of struct type T" {
-				t.Errorf("multipart_body: unexpected Panic literal => %s", rec)
+				t.Errorf("multipart_body: unexpected Panic literal => %v", rec)
 				return
 			}
 		}()
@@ -228,11 +241,24 @@ func TestMultipartBody(t *testing.T) {
 				t.Errorf("multipart_body: expects Panic, got nil")
 				return
 			} else if lit, ok := rec.(string); !ok || lit != "MultipartBody is not the first embedded field of struct type T" {
-				t.Errorf("multipart_body: unexpected Panic literal => %s", rec)
+				t.Errorf("multipart_body: unexpected Panic literal => %v", rec)
 				return
 			}
 		}()
 		_, _ = io.ReadAll(r)
+	})
+	t.Run("interface_type_panic", func(t *testing.T) {
+		var b MultipartBody[io.Reader]
+		defer func() {
+			if rec := recover(); rec == nil {
+				t.Errorf("multipart_body: expects Panic, got nil")
+				return
+			} else if lit, ok := rec.(string); !ok || lit != "use the value type of a struct rather than a pointer type as the value for generics" {
+				t.Errorf("multipart_body: unexpected Panic literal => %v", rec)
+				return
+			}
+		}()
+		_, _ = b.Read(nil)
 	})
 }
 
