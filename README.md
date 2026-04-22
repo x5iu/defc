@@ -179,6 +179,25 @@ defc generate --output=query.go schema.go
 defc generate --features=sqlx/log,sqlx/rebind schema.go
 ```
 
+### Safe Template Interpolation
+
+`defc` ships strict, opt-in runtime validators for the three template
+injection classes that a naive `{{.x}}` interpolation enables:
+
+- **`sqlx/strict`** — inserts `runtime.SQLArityCheck(query, len(args))`
+  after template execution, aborting before any DB work if the
+  rendered `?` count does not match the argument count.
+- **`api/strict-headers`** — pre-validates the rendered header map
+  and re-sweeps each `req.Header.Add` value, rejecting CR / LF /
+  NUL and other control bytes with `ErrUnsafeInterpolation`.
+- **`api/strict-url`** — wraps the rendered URL with
+  `runtime.StrictURL(constPrefix, rendered)`, which rejects
+  control bytes, unparseable URLs, non-http(s) schemes, and
+  scheme/host drift away from the template's constant prefix.
+
+All flags default **OFF**; enabling them leaves generated code
+byte-identical to prior versions except for the added check calls.
+
 **Smart Defaults:** The `defc generate` command provides intelligent defaults:
 
 - **Auto-detect mode** by analyzing your interface methods

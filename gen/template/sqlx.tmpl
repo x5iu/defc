@@ -221,6 +221,16 @@ var (
         {{ $query }} := {{ quote (readHeader $method.Header) }}
     {{ end }}
 
+    {{ if and ($.HasFeature "sqlx/strict") (not ($.HasFeature "sqlx/nort")) (not (hasOption ($method.SqlxOptions) "NAMED")) }}
+        if errA := __rt.SQLArityCheck({{ $query }}, len({{ $argList }})); errA != nil {
+        return {{ range $index, $type := $method.Out -}}
+            {{- if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }},
+            {{- end -}}
+        {{- end -}} fmt.Errorf("error checking %s query: %w", strconv.Quote({{ quote $method.Ident }}), errA)
+        }
+    {{ end }}
+
     {{ $log := printf "log%s" $method.Ident }}
     {{- $ok := printf "ok%s" $method.Ident }}
     {{- $start := printf "start%s" $method.Ident }}

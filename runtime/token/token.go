@@ -182,3 +182,87 @@ func SplitTokens(line string) (tokens []string) {
 	splitTokensCache.Add(line, tokens)
 	return tokens
 }
+
+// CountPlaceholders counts `?` positional placeholders in a SQL
+// string, skipping those inside single-quoted literals, double-quoted
+// identifiers, backtick-quoted identifiers, `--` line comments, and
+// `/* ... */` block comments. Intended for [SQLArityCheck] equivalents
+// outside this package; standard SQL escape (doubled quote inside a
+// literal) is honored.
+//
+// Placeholder counting is intentionally unaware of `:name` / `$N`
+// styles — the defc sqlx pipeline emits `?` everywhere before rebind.
+func CountPlaceholders(s string) int {
+	var (
+		count  int
+		single bool
+		double bool
+		back   bool
+		line   bool // -- ... \n
+		block  bool // /* ... */
+	)
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case line:
+			if c == '\n' {
+				line = false
+			}
+		case block:
+			if c == '*' && i+1 < len(s) && s[i+1] == '/' {
+				block = false
+				i++
+			}
+		case single:
+			if c == '\\' && i+1 < len(s) {
+				i++
+				continue
+			}
+			if c == '\'' {
+				if i+1 < len(s) && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				single = false
+			}
+		case double:
+			if c == '\\' && i+1 < len(s) {
+				i++
+				continue
+			}
+			if c == '"' {
+				if i+1 < len(s) && s[i+1] == '"' {
+					i++
+					continue
+				}
+				double = false
+			}
+		case back:
+			if c == '`' {
+				back = false
+			}
+		default:
+			switch c {
+			case '\'':
+				single = true
+			case '"':
+				double = true
+			case '`':
+				back = true
+			case '-':
+				if i+1 < len(s) && s[i+1] == '-' {
+					line = true
+					i++
+				}
+			case '/':
+				if i+1 < len(s) && s[i+1] == '*' {
+					block = true
+					i++
+				}
+			case '?':
+				count++
+			}
+		}
+	}
+	return count
+}
