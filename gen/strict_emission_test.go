@@ -67,5 +67,8 @@ type Iface interface {
 		if !strings.Contains(out, "ToNamedArgs(") {
 			t.Error("nort+strict-merge inline body missing source labels")
 		}
+		if !strings.Contains(out, "rv.IsNil()") {
+			t.Error("nort+strict-merge inline body missing typed-nil guard")
+		}
 	})
 }

@@ -627,12 +627,25 @@ CoreBeginTx(ctx context.Context, opts *sql.TxOptions) ({{ $coreTxInterface }}, e
     func {{ $mergeNamedArgsFunc }}(argsMap map[string]any) (map[string]any, error) {
     namedMap := make(map[string]any, len(argsMap))
     provenance := make(map[string]string, len(argsMap))
+    collisionIndex := make(map[string]int)
     var collisions []struct{ Key string; Sources []string }
     put := func(k string, v any, src string) {
     if prev, ok := provenance[k]; ok && prev != src {
+    if idx, have := collisionIndex[k]; have {
+    c := &collisions[idx]
+    dup := false
+    for _, s := range c.Sources {
+    if s == src { dup = true; break }
+    }
+    if !dup {
+    c.Sources = append(c.Sources, src)
+    }
+    } else {
     collisions = append(collisions, struct{ Key string; Sources []string }{
     Key: k, Sources: []string{prev, src},
     })
+    collisionIndex[k] = len(collisions) - 1
+    }
     return
     }
     namedMap[k] = v
@@ -669,8 +682,13 @@ CoreBeginTx(ctx context.Context, opts *sql.TxOptions) ({{ $coreTxInterface }}, e
     }
     }
     } else if rv.Kind() == reflect.Struct ||
-    (rv.Kind() == reflect.Pointer && rv.Elem().Kind() == reflect.Struct) {
-    rv = reflect.Indirect(rv)
+    (rv.Kind() == reflect.Pointer && rv.Type().Elem().Kind() == reflect.Struct) {
+    if rv.Kind() == reflect.Pointer {
+    if rv.IsNil() {
+    continue
+    }
+    rv = rv.Elem()
+    }
     rt := rv.Type()
     for i := 0; i < rt.NumField(); i++ {
     if sf := rt.Field(i); sf.Anonymous {
@@ -679,16 +697,28 @@ CoreBeginTx(ctx context.Context, opts *sql.TxOptions) ({{ $coreTxInterface }}, e
     sft = sft.Elem()
     }
     for j := 0; j < sft.NumField(); j++ {
-    if tag, exists := sft.Field(j).Tag.Lookup("db"); exists {
+    if rawTag, exists := sft.Field(j).Tag.Lookup("db"); exists {
+    if rawTag == "-" {
+    continue
+    }
+    tag := rawTag
+    if idx := strings.Index(tag, ","); idx >= 0 {
+    tag = tag[:idx]
+    }
     tag = truncateTag(tag)
-    if tag == "" { continue }
     put(tag, rv.FieldByIndex([]int{i, j}).Interface(),
     "struct("+name+"."+sf.Name+"."+sft.Field(j).Name+")")
     }
     }
-    } else if tag, exists := sf.Tag.Lookup("db"); exists {
+    } else if rawTag, exists := sf.Tag.Lookup("db"); exists {
+    if rawTag == "-" {
+    continue
+    }
+    tag := rawTag
+    if idx := strings.Index(tag, ","); idx >= 0 {
+    tag = tag[:idx]
+    }
     tag = truncateTag(tag)
-    if tag == "" { continue }
     put(tag, rv.Field(i).Interface(),
     "struct("+name+"."+sf.Name+")")
     }
@@ -702,7 +732,18 @@ CoreBeginTx(ctx context.Context, opts *sql.TxOptions) ({{ $coreTxInterface }}, e
     }
     parts := make([]string, 0, len(collisions))
     for _, c := range collisions {
-    parts = append(parts, fmt.Sprintf("defc: duplicate bind key %q contributed by %s and %s", c.Key, c.Sources[0], c.Sources[1]))
+    var joined string
+    switch len(c.Sources) {
+    case 0:
+    joined = "<unknown>"
+    case 1:
+    joined = c.Sources[0]
+    case 2:
+    joined = c.Sources[0] + " and " + c.Sources[1]
+    default:
+    joined = strings.Join(c.Sources[:len(c.Sources)-1], ", ") + " and " + c.Sources[len(c.Sources)-1]
+    }
+    parts = append(parts, fmt.Sprintf("defc: duplicate bind key %q contributed by %s", c.Key, joined))
     }
     return nil, fmt.Errorf("%s", strings.Join(parts, "; "))
     }

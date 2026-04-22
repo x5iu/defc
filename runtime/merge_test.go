@@ -3,6 +3,7 @@ package defc
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -376,5 +377,87 @@ func TestArguments(t *testing.T) {
 	if !reflect.DeepEqual(arguments, Arguments{1, 2, 3}) {
 		t.Errorf("arguments: %v != [1, 2, 3]", arguments)
 		return
+	}
+}
+
+type mergeStrictNilFoo struct {
+	X int `db:"x"`
+}
+
+func TestMergeNamedArgsStrictNilStructPointer(t *testing.T) {
+	m := map[string]any{
+		"p": (*mergeStrictNilFoo)(nil),
+		"q": map[string]any{"b": 1},
+	}
+	strict, err := MergeNamedArgsStrict(m)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	wantKeys := map[string]struct{}{"b": {}}
+	if len(strict) != len(wantKeys) {
+		t.Fatalf("len: got %d want %d", len(strict), len(wantKeys))
+	}
+	for k := range wantKeys {
+		if _, ok := strict[k]; !ok {
+			t.Fatalf("missing %q", k)
+		}
+	}
+}
+
+func TestMergeNamedArgsStrictThreeSourceCollision(t *testing.T) {
+	m := map[string]any{
+		"m1": map[string]any{"k": 1},
+		"m2": map[string]any{"k": 2},
+		"m3": map[string]any{"k": 3},
+	}
+	_, err := MergeNamedArgsStrict(m)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, ErrNamedArgsCollision) {
+		t.Fatalf("err: %v", err)
+	}
+	var one *NamedArgsCollisionError
+	if !errors.As(err, &one) {
+		t.Fatalf("unexpected type: %T", err)
+	}
+	if len(one.Sources) != 3 {
+		t.Fatalf("len(Sources)=%d", len(one.Sources))
+	}
+}
+
+type mergeStrictTagBody struct {
+	A int    `db:""`
+	B int    `db:"only"`
+	C int    `db:"name; charset=utf-8"`
+}
+
+func TestMergeNamedArgsStrictDBTagKeyParityWithLegacy(t *testing.T) {
+	m := map[string]any{
+		"s": mergeStrictTagBody{A: 1, B: 2, C: 3},
+	}
+	legacy := MergeNamedArgs(m)
+	strict, err := MergeNamedArgsStrict(m)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if !reflect.DeepEqual(legacy, strict) {
+		t.Fatalf("diverge legacy=%#v strict=%#v", legacy, strict)
+	}
+}
+
+type mergeStrictWhitespaceDash struct {
+	W int `db:" - "`
+}
+
+func TestMergeStrictPreservesWhitespaceDashTag(t *testing.T) {
+	m := map[string]any{"s": mergeStrictWhitespaceDash{W: 42}}
+	legacy := MergeNamedArgs(m)
+	strict, err := MergeNamedArgsStrict(m)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if !reflect.DeepEqual(legacy, strict) {
+		t.Fatalf("diverge legacy=%#v strict=%#v", legacy, strict)
 	}
 }

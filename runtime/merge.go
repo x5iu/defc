@@ -173,17 +173,35 @@ func (es NamedArgsCollisionErrors) Unwrap() []error {
 // is either *[NamedArgsCollisionError] (single collision) or
 // [NamedArgsCollisionErrors] (multiple collisions). On error the
 // returned map is nil.
+func containsString(s []string, e string) bool {
+	for i := range s {
+		if s[i] == e {
+			return true
+		}
+	}
+	return false
+}
+
 func MergeNamedArgsStrict(argsMap map[string]any) (map[string]any, error) {
 	namedMap := make(map[string]any, len(argsMap))
 	provenance := make(map[string]string, len(argsMap))
+	collisionIndex := map[string]int{}
 	var collisions []NamedArgsCollisionError
 
 	put := func(k string, v any, src string) {
 		if prev, ok := provenance[k]; ok && prev != src {
-			collisions = append(collisions, NamedArgsCollisionError{
-				Key:     k,
-				Sources: []string{prev, src},
-			})
+			if idx, ok2 := collisionIndex[k]; ok2 {
+				existing := &collisions[idx]
+				if !containsString(existing.Sources, src) {
+					existing.Sources = append(existing.Sources, src)
+				}
+			} else {
+				collisions = append(collisions, NamedArgsCollisionError{
+					Key:     k,
+					Sources: []string{prev, src},
+				})
+				collisionIndex[k] = len(collisions) - 1
+			}
 			return
 		}
 		namedMap[k] = v
@@ -213,8 +231,13 @@ func MergeNamedArgsStrict(argsMap map[string]any) (map[string]any, error) {
 				}
 			}
 		} else if rv.Kind() == reflect.Struct ||
-			(rv.Kind() == reflect.Pointer && rv.Elem().Kind() == reflect.Struct) {
-			rv = reflect.Indirect(rv)
+			(rv.Kind() == reflect.Pointer && rv.Type().Elem().Kind() == reflect.Struct) {
+			if rv.Kind() == reflect.Pointer {
+				if rv.IsNil() {
+					continue
+				}
+				rv = rv.Elem()
+			}
 			rt := rv.Type()
 			for i := 0; i < rt.NumField(); i++ {
 				if sf := rt.Field(i); sf.Anonymous {
@@ -223,21 +246,29 @@ func MergeNamedArgsStrict(argsMap map[string]any) (map[string]any, error) {
 						sft = sft.Elem()
 					}
 					for j := 0; j < sft.NumField(); j++ {
-						if tag, exists := sft.Field(j).Tag.Lookup("db"); exists {
-							tag = truncateDBTag(tag)
-							if tag == "" {
+						if rawTag, exists := sft.Field(j).Tag.Lookup("db"); exists {
+							if rawTag == "-" {
 								continue
 							}
+							tag := rawTag
+							if idx := strings.Index(tag, ","); idx >= 0 {
+								tag = tag[:idx]
+							}
+							tag = truncateDBTag(tag)
 							put(tag,
 								rv.FieldByIndex([]int{i, j}).Interface(),
 								"struct("+name+"."+sf.Name+"."+sft.Field(j).Name+")")
 						}
 					}
-				} else if tag, exists := sf.Tag.Lookup("db"); exists {
-					tag = truncateDBTag(tag)
-					if tag == "" {
+				} else if rawTag, exists := sf.Tag.Lookup("db"); exists {
+					if rawTag == "-" {
 						continue
 					}
+					tag := rawTag
+					if idx := strings.Index(tag, ","); idx >= 0 {
+						tag = tag[:idx]
+					}
+					tag = truncateDBTag(tag)
 					put(tag, rv.Field(i).Interface(),
 						"struct("+name+"."+sf.Name+")")
 				}

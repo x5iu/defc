@@ -1,10 +1,10 @@
 package defc
 
 import (
+	"database/sql/driver"
 	"encoding/binary"
 	"errors"
 	"reflect"
-	"sort"
 	"testing"
 )
 
@@ -72,15 +72,46 @@ func fuzzMin(a, b int) int {
 	return b
 }
 
+func stringSetEqual(a, b map[string]struct{}) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k := range a {
+		if _, ok := b[k]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func isNilStructPointerArg(arg any) bool {
+	if arg == nil {
+		return false
+	}
+	rv := reflect.ValueOf(arg)
+	return rv.Kind() == reflect.Pointer &&
+		rv.Type().Elem().Kind() == reflect.Struct &&
+		rv.IsNil()
+}
+
+func dropNilStructPointerEntries(argsMap map[string]any) map[string]any {
+	out := make(map[string]any, len(argsMap))
+	for k, v := range argsMap {
+		if isNilStructPointerArg(v) {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
 func FuzzMergeNamedArgsStrict(f *testing.F) {
 	f.Add([]byte{0x00, 0x01, 0x02, 0x03})
 	f.Add([]byte{0x04, 0x05, 0x01, 0x03})
 	f.Add(binary.BigEndian.AppendUint32(nil, 0xdeadbeef))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		corpus := buildCorpus(data)
-		// Property 1: strict never panics on arbitrary synthetic inputs.
 		strictMap, strictErr := MergeNamedArgsStrict(corpus)
-		// Property 2: any error wraps ErrNamedArgsCollision.
 		if strictErr != nil {
 			if !errors.Is(strictErr, ErrNamedArgsCollision) {
 				t.Fatalf("strict error not Is(ErrNamedArgsCollision): %T %v", strictErr, strictErr)
@@ -88,23 +119,114 @@ func FuzzMergeNamedArgsStrict(f *testing.F) {
 			if strictMap != nil {
 				t.Fatalf("strict returned partial map alongside error")
 			}
-		}
-		// Property 3: on success, key set matches legacy MergeNamedArgs.
-		if strictErr == nil {
-			legacy := MergeNamedArgs(corpus)
-			if !reflect.DeepEqual(sortedKeys(legacy), sortedKeys(strictMap)) {
-				t.Fatalf("key sets diverged legacy=%v strict=%v",
-					sortedKeys(legacy), sortedKeys(strictMap))
+			saw := false
+			eachNamedArgsCollision(strictErr, func(_ NamedArgsCollisionError) { saw = true })
+			if !saw {
+				t.Fatalf("expected at least one NamedArgsCollisionError in chain: %T", strictErr)
 			}
+			want := legacyMergeOverwrittenKeys(corpus)
+			got := keysFromCollisions(strictErr)
+			if !stringSetEqual(got, want) {
+				t.Fatalf("collision key set: got %v want %v", got, want)
+			}
+			return
+		}
+		legacy := MergeNamedArgs(dropNilStructPointerEntries(corpus))
+		if !reflect.DeepEqual(legacy, strictMap) {
+			t.Fatalf("maps diverged legacy=%#v strict=%#v", legacy, strictMap)
 		}
 	})
 }
 
-func sortedKeys(m map[string]any) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
+func assignLegacy(namedMap map[string]any, overwrites map[string]struct{}, k string, v any) {
+	if _, ok := namedMap[k]; ok {
+		overwrites[k] = struct{}{}
 	}
-	sort.Strings(out)
+	namedMap[k] = v
+}
+
+func legacyMergeOverwrittenKeys(argsMap map[string]any) map[string]struct{} {
+	overwrites := make(map[string]struct{})
+	namedMap := make(map[string]any, len(argsMap))
+	for name, arg := range argsMap {
+		if isNilStructPointerArg(arg) {
+			continue
+		}
+		rv := reflect.ValueOf(arg)
+		if _, notAnArg := arg.(NotAnArg); notAnArg {
+			continue
+		} else if toNamedArgs, ok := arg.(ToNamedArgs); ok {
+			for k, v := range toNamedArgs.ToNamedArgs() {
+				assignLegacy(namedMap, overwrites, k, v)
+			}
+		} else if _, ok = arg.(driver.Valuer); ok {
+			assignLegacy(namedMap, overwrites, name, arg)
+		} else if _, ok = arg.(ToArgs); ok {
+			assignLegacy(namedMap, overwrites, name, arg)
+		} else if rv.Kind() == reflect.Map {
+			iter := rv.MapRange()
+			for iter.Next() {
+				k, v := iter.Key(), iter.Value()
+				if k.Kind() == reflect.String {
+					assignLegacy(namedMap, overwrites, k.String(), v.Interface())
+				}
+			}
+		} else if rv.Kind() == reflect.Struct ||
+			(rv.Kind() == reflect.Pointer && rv.Elem().Kind() == reflect.Struct) {
+			rv = reflect.Indirect(rv)
+			rt := rv.Type()
+			for i := 0; i < rt.NumField(); i++ {
+				if sf := rt.Field(i); sf.Anonymous {
+					sft := sf.Type
+					if sft.Kind() == reflect.Pointer {
+						sft = sft.Elem()
+					}
+					for j := 0; j < sft.NumField(); j++ {
+						if tag, exists := sft.Field(j).Tag.Lookup("db"); exists {
+							for pos, char := range tag {
+								if !(('0' <= char && char <= '9') || ('a' <= char && char <= 'z') || ('A' <= char && char <= 'Z') || char == '_') {
+									tag = tag[:pos]
+									break
+								}
+							}
+							assignLegacy(namedMap, overwrites, tag, rv.FieldByIndex([]int{i, j}).Interface())
+						}
+					}
+				} else if tag, exists := sf.Tag.Lookup("db"); exists {
+					for pos, char := range tag {
+						if !(('0' <= char && char <= '9') || ('a' <= char && char <= 'z') || ('A' <= char && char <= 'Z') || char == '_') {
+							tag = tag[:pos]
+							break
+						}
+					}
+					assignLegacy(namedMap, overwrites, tag, rv.Field(i).Interface())
+				}
+			}
+		} else {
+			assignLegacy(namedMap, overwrites, name, arg)
+		}
+	}
+	return overwrites
+}
+
+func eachNamedArgsCollision(err error, fn func(NamedArgsCollisionError)) {
+	var agg NamedArgsCollisionErrors
+	if errors.As(err, &agg) {
+		for i := range agg {
+			fn(agg[i])
+		}
+		return
+	}
+	var p *NamedArgsCollisionError
+	if errors.As(err, &p) {
+		fn(*p)
+	}
+}
+
+func keysFromCollisions(err error) map[string]struct{} {
+	out := make(map[string]struct{})
+	eachNamedArgsCollision(err, func(e NamedArgsCollisionError) {
+		out[e.Key] = struct{}{}
+	})
 	return out
 }
