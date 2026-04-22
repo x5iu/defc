@@ -16,10 +16,10 @@ import (
 	"github.com/x5iu/defc/gen"
 )
 
-func TestSqlxDroppedArgsWarning(t *testing.T) {
+func runSqlxDropwarnModule(t *testing.T, testDir string, wantDiscarded bool) string {
+	t.Helper()
 	const (
 		testPk      = "main"
-		testDir     = "dropwarn"
 		testFile    = "main.go"
 		testGenFile = "repo.gen.go"
 	)
@@ -86,12 +86,37 @@ func TestSqlxDroppedArgsWarning(t *testing.T) {
 		t.Fatalf("stderr:\n%s\nerr: %v", stderr.String(), err)
 	}
 	s := stderr.String()
+	if wantDiscarded {
+		if !strings.Contains(s, "discarded") {
+			t.Fatalf("stderr missing discarded, got:\n%s", s)
+		}
+	} else {
+		if strings.Contains(s, "discarded") {
+			t.Fatalf("stderr unexpectedly contained discarded, got:\n%s", s)
+		}
+	}
+	if !strings.Contains(stdout.String(), "ok") {
+		t.Fatalf("stdout want ok, got %q", stdout.String())
+	}
+	return s
+}
+
+func TestSqlxDroppedArgsWarning(t *testing.T) {
+	s := runSqlxDropwarnModule(t, "dropwarn", true)
 	for _, w := range []string{"DeleteByName", "discarded"} {
 		if !strings.Contains(s, w) {
 			t.Fatalf("stderr missing %q, got:\n%s", w, s)
 		}
 	}
-	if !strings.Contains(stdout.String(), "ok") {
-		t.Fatalf("stdout want ok, got %q", stdout.String())
+}
+
+func TestSqlxMultistmt_noFalsePositiveWhenPlaceholdersMatchArgs(t *testing.T) {
+	runSqlxDropwarnModule(t, "dropwarn_ms_ok", false)
+}
+
+func TestSqlxMultistmt_emitsWhenTotalPlaceholdersLessThanArgCount(t *testing.T) {
+	s := runSqlxDropwarnModule(t, "dropwarn_ms_short", true)
+	if !strings.Contains(s, "Repo.DoShort") {
+		t.Fatalf("expected Repo.DoShort in stderr, got:\n%s", s)
 	}
 }

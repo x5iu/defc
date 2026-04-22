@@ -13,9 +13,9 @@ func TestWarnDroppedArgs_emitsWhenCollectedGreaterThanUsed(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
-	WarnDroppedArgs("FindUser", "SELECT id FROM user WHERE name = 'x'", 2, 0)
+	WarnDroppedArgs("R.FindUser", "SELECT id FROM user WHERE name = 'x'", 2, 0)
 	out := buf.String()
-	if !strings.Contains(out, `method "FindUser"`) {
+	if !strings.Contains(out, `method "R.FindUser"`) {
 		t.Fatalf("missing method name: %q", out)
 	}
 	if !strings.Contains(out, "consumed 0 argument(s) but 2 argument(s)") {
@@ -43,10 +43,22 @@ func TestWarnDroppedArgs_oncePerMethodName(t *testing.T) {
 	log.SetOutput(&buf)
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 	for i := 0; i < 10; i++ {
-		WarnDroppedArgs("Repeat", "SELECT 1", 2, 0)
+		WarnDroppedArgs("A.Repeat", "SELECT 1", 2, 0)
 	}
 	if strings.Count(buf.String(), "defc: method") != 1 {
 		t.Fatalf("expected single defc: method line, got %q", buf.String())
+	}
+}
+
+func TestWarnDroppedArgs_fqKeyDoesNotCoalesce(t *testing.T) {
+	t.Cleanup(func() { resetDroppedArgWarnStateForTest() })
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	WarnDroppedArgs("One.Find", "SELECT 1", 2, 0)
+	WarnDroppedArgs("Two.Find", "SELECT 1", 2, 0)
+	if strings.Count(buf.String(), "defc: method") != 2 {
+		t.Fatalf("expected two defc: method lines, got %q", buf.String())
 	}
 }
 

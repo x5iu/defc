@@ -282,6 +282,21 @@ var (
     {{ $splitSql := printf "splitSql%s" $method.Ident }}
     {{ $sqlSlice := printf "sqlSlice%s" $method.Ident }}
     {{ $sqlSlice }} := {{ if $.HasFeature "sqlx/nort" }}{{ $splitFunc }}{{ else }}__rt.Split{{ end }}({{ $query }}, ";")
+    {{ if and (not (hasOption ($method.SqlxOptions) "NAMED")) (not (hasOption ($method.SqlxOptions) "CONST")) (not (hasOption ($method.SqlxOptions) "CONSTBIND")) (not (hasOption ($method.SqlxOptions) "BIND")) }}
+    {{ $totalQ := printf "totalQ%s" $method.Ident }}
+    {{ $fragQ := printf "fragQ%s" $method.Ident }}
+    var {{ $totalQ }} int
+    for _, {{ $fragQ }} := range {{ $sqlSlice }} {
+    {{ $totalQ }} += {{ if $.HasFeature "sqlx/nort" }}{{ $countFunc }}{{ else }}__rt.Count{{ end }}({{ $fragQ }}, "?")
+    }
+    if len({{ $args }}) > {{ $totalQ }} {
+    {{ if $.HasFeature "sqlx/nort" }}
+    {{ printf "__%sWarnDroppedArgs" $.Ident }}({{ printf "%q" (printf "%s.%s" $.Ident $method.Ident) }}, {{ $query }}, len({{ $args }}), {{ $totalQ }})
+    {{ else }}
+    __rt.WarnDroppedArgs({{ printf "%q" (printf "%s.%s" $.Ident $method.Ident) }}, {{ $query }}, len({{ $args }}), {{ $totalQ }})
+    {{ end }}
+    }
+    {{ end }}
     for {{ $i }}, {{ $splitSql }} := range {{ $sqlSlice }} {
     _ = {{ $i }}
 
@@ -344,16 +359,6 @@ var (
         {{ $count }} := {{ if $.HasFeature "sqlx/nort" }}{{ $countFunc }}{{ else }}__rt.Count{{ end }}({{ $splitSql }}, "?")
         {{ if $.HasFeature "sqlx/rebind" -}}
             {{ $splitSql }} = __imp.__core.Rebind({{ $splitSql }})
-        {{ end }}
-
-        {{ if and (not (hasOption ($method.SqlxOptions) "CONST")) (not (hasOption ($method.SqlxOptions) "CONSTBIND")) (not (hasOption ($method.SqlxOptions) "BIND")) }}
-        if len({{ $args }})-{{ $offset }} > {{ $count }} {
-        {{ if $.HasFeature "sqlx/nort" }}
-        {{ printf "__%sWarnDroppedArgs" $.Ident }}({{ quote $method.Ident }}, {{ $splitSql }}, len({{ $args }})-{{ $offset }}, {{ $count }})
-        {{ else }}
-        __rt.WarnDroppedArgs({{ quote $method.Ident }}, {{ $splitSql }}, len({{ $args }})-{{ $offset }}, {{ $count }})
-        {{ end }}
-        }
         {{ end }}
 
         {{- if $.HasFeature "sqlx/log" }}
