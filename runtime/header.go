@@ -34,8 +34,9 @@ func (e *InvalidHeaderMapError) Unwrap() error { return e.Err }
 // HeaderValue validates v as a safe HTTP header field-value.
 //
 // The returned string is byte-for-byte equal to v when v contains only
-// visible-ASCII (0x21..0x7E), horizontal tab (0x09) and UTF-8 obs-text
-// bytes (>= 0x80). Any CR, LF, NUL, other C0 control, or DEL triggers
+// visible-ASCII (0x21..0x7E), space (0x20), horizontal tab (0x09), and
+// UTF-8 obs-text bytes (>= 0x80), per RFC 9110. Any CR, LF, NUL, other
+// C0 control, or DEL triggers
 // an error. This is a fail-closed validator — values are never
 // silently stripped, because silent stripping creates "valid looking"
 // headers with attacker-chosen prefixes and no audit trail.
@@ -82,6 +83,7 @@ func preExecHeaderOne(v any) error {
 		_, err := HeaderValue(t)
 		return err
 	case []byte:
+		// TODO(perf): byte-sweep variant to avoid []byte → string alloc
 		_, err := HeaderValue(string(t))
 		return err
 	case fmt.Stringer:

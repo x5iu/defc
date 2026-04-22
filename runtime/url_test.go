@@ -27,6 +27,27 @@ func TestStrictURL_Accepts(t *testing.T) {
 	}
 }
 
+func TestStrictURL_HostValidation(t *testing.T) {
+	reject := []string{
+		"http:///path",
+		"http:opaque",
+		"https://",
+	}
+	for _, s := range reject {
+		_, err := StrictURL("", s)
+		if err == nil {
+			t.Fatalf("StrictURL(%q) want error", s)
+		}
+		if !errors.Is(err, ErrUnsafeInterpolation) {
+			t.Fatalf("StrictURL(%q) err=%v want ErrUnsafeInterpolation", s, err)
+		}
+	}
+	_, err := StrictURL("https://API.example.com/", "https://api.example.com/path")
+	if err != nil {
+		t.Fatalf("StrictURL equal-fold host: %v", err)
+	}
+}
+
 func TestStrictURL_Rejects(t *testing.T) {
 	cases := []struct {
 		name     string

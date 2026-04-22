@@ -195,8 +195,9 @@ injection classes that a naive `{{.x}}` interpolation enables:
   control bytes, unparseable URLs, non-http(s) schemes, and
   scheme/host drift away from the template's constant prefix.
 
-All flags default **OFF**; enabling them leaves generated code
-byte-identical to prior versions except for the added check calls.
+All flags default **OFF**; when omitted, generated output matches prior
+versions. Enabling them adds only the validation calls and does not
+change generated API signatures.
 
 **Smart Defaults:** The `defc generate` command provides intelligent defaults:
 

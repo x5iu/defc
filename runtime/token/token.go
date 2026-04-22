@@ -190,6 +190,11 @@ func SplitTokens(line string) (tokens []string) {
 // outside this package; standard SQL escape (doubled quote inside a
 // literal) is honored.
 //
+// String-literal scanning does NOT honor backslash escapes. This matches
+// SQL:standard and Postgres default (standard_conforming_strings=on).
+// Dialects that use backslash escaping (legacy MySQL) should quote-double
+// the single quote instead.
+//
 // Placeholder counting is intentionally unaware of `:name` / `$N`
 // styles — the defc sqlx pipeline emits `?` everywhere before rebind.
 func CountPlaceholders(s string) int {
@@ -214,10 +219,6 @@ func CountPlaceholders(s string) int {
 				i++
 			}
 		case single:
-			if c == '\\' && i+1 < len(s) {
-				i++
-				continue
-			}
 			if c == '\'' {
 				if i+1 < len(s) && s[i+1] == '\'' {
 					i++
@@ -226,10 +227,6 @@ func CountPlaceholders(s string) int {
 				single = false
 			}
 		case double:
-			if c == '\\' && i+1 < len(s) {
-				i++
-				continue
-			}
 			if c == '"' {
 				if i+1 < len(s) && s[i+1] == '"' {
 					i++

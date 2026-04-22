@@ -48,13 +48,17 @@ func StrictURL(constantPrefix, rendered string) (string, error) {
 	default:
 		return "", &UnsafeURLError{Kind: "SchemeDenied", Detail: fmt.Sprintf("scheme %q not in {http,https}", u.Scheme)}
 	}
+	if u.Host == "" || u.Opaque != "" {
+		return "", fmt.Errorf("%w: url must have a non-empty host and no opaque form: %q",
+			ErrUnsafeInterpolation, rendered)
+	}
 	if constantPrefix != "" {
 		p, perr := url.Parse(constantPrefix)
 		if perr == nil && p.Scheme != "" && p.Host != "" {
 			if u.Scheme != p.Scheme {
 				return "", &UnsafeURLError{Kind: "SchemeDrift", Detail: fmt.Sprintf("scheme %q != expected %q", u.Scheme, p.Scheme)}
 			}
-			if u.Host != p.Host {
+			if !strings.EqualFold(u.Host, p.Host) {
 				return "", &UnsafeURLError{Kind: "HostDrift", Detail: fmt.Sprintf("host %q != expected %q", u.Host, p.Host)}
 			}
 		}
