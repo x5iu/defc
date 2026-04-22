@@ -400,6 +400,46 @@ Error: template: defc(sqlx):1:45: executing "GetUser" at <.invalid_function>:
 can't evaluate field invalid_function in type map[string]interface {}
 ```
 
+### SQL values: bind, don't interpolate
+
+In the default sqlx template path, values that must be **data** (user-controlled strings, numbers, and so on) must reach the database as bound arguments (`?`), via `CONSTBIND`, or via `{{ bind $.name }}` with the `BIND` option. Interpolating a method argument into the SQL text with `{{ .name }}` splices the Go value directly into the string that is sent to the driver. That bypasses binding, can drop trailing arguments silently at runtime, and is a classic SQL-injection foot-gun (see [issue #17](https://github.com/x5iu/defc/issues/17)). Starting in recent versions, `defc generate` emits a **non-fatal** warning when it detects this pattern.
+
+**DON'T** — the value is pasted into the SQL text; with `name == "' OR 1=1 --"` the query string becomes a tautology:
+
+```go
+// Find query
+// SELECT * FROM users WHERE name = '{{ .name }}';
+Find(ctx context.Context, name string) error
+```
+
+Rendered SQL (illustrative):
+
+```sql
+SELECT * FROM users WHERE name = '' OR 1=1 --';
+```
+
+**DO** — pick one of these patterns:
+
+```go
+// FindPositional query
+// SELECT * FROM users WHERE name = ?;
+FindPositional(ctx context.Context, name string) error
+```
+
+```go
+// FindConstBind query constbind
+// SELECT * FROM users WHERE name = ${name};
+FindConstBind(ctx context.Context, name string) error
+```
+
+```go
+// FindBind query bind
+// SELECT * FROM users WHERE name = {{ bind $.name }};
+FindBind(ctx context.Context, name string) error
+```
+
+Raw `{{ .x }}` is still appropriate when `x` is an **identifier fragment** you control (for example `ORDER BY {{ .col }}` or dynamic table names) after **your own** validation or allow-listing. In those cases a codegen warning is expected; confirm the validation is correct and ignore the warning if appropriate.
+
 ### Advanced Template Patterns
 
 #### Conditional Rendering

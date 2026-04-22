@@ -10,6 +10,7 @@ import (
 	"io"
 	"strings"
 	"text/template"
+	"text/template/parse"
 
 	_ "embed"
 )
@@ -54,6 +55,7 @@ type sqlxContext struct {
 	Imports         []string
 	Funcs           []string
 	Pwd             string
+	File            string
 	Doc             Doc
 	Template        string
 }
@@ -114,11 +116,15 @@ func (ctx *sqlxContext) Build(w io.Writer) error {
 	}
 
 	var bindInvoked bool
-	// Since the text/template standard library does not provide a specific error type, we can only determine whether
-	// the bind function has been invoked in the template through this rudimentary way.
-	if _, err := template.New("detect_bind_function").Parse(ctx.Template); err != nil {
-		bindInvoked = contains(err.Error(), `function "bind" not defined`)
+	if ctx.Template != "" {
+		if trees, err := parse.Parse("defc-root", ctx.Template, "{{", "}}", sqlxParseStubFuncs(ctx)); err == nil {
+			bindInvoked = templateForestReferencesBind(trees)
+		} else {
+			bindInvoked = contains(err.Error(), `function "bind" not defined`)
+		}
 	}
+
+	ctx.emitSqlxUnsafeInterpolationWarnings()
 
 	// Small hack: When the --template/-t option is enabled, and "bind" function has been invoked, the Bind option
 	// is enabled by default for all methods.
@@ -314,6 +320,8 @@ inspectType:
 		Features:  sqlxFeatures,
 		Imports:   builder.imports,
 		Funcs:     builder.funcs,
+		Pwd:       builder.pwd,
+		File:      builder.file,
 		Doc:       builder.doc,
 		Template:  builder.template,
 	}, nil
