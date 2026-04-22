@@ -13,61 +13,73 @@ type UnsafeInterpFinding struct {
 	NodeSource string
 }
 
-// scanUnsafeRawInterpolation detects method parameters used as raw SQL outside bind/bindvars (issue #17).
-// User funcs from --func are not trusted as safe sinks; taint through dollar-assign locals is not modeled.
 func scanUnsafeRawInterpolation(tree *parse.Tree, sharedTrees map[string]*parse.Tree, methodArgs map[string]struct{}, allowedSinks map[string]struct{}) []UnsafeInterpFinding {
 	if tree == nil || tree.Root == nil {
 		return nil
 	}
-	return walkTemplateList(tree.Root, true, methodArgs, allowedSinks, sharedTrees)
+	return walkTemplateList(tree.Root, true, methodArgs, allowedSinks, sharedTrees, "", nil)
 }
 
-func walkTemplateList(list *parse.ListNode, emitSQL bool, methodArgs map[string]struct{}, allowed map[string]struct{}, shared map[string]*parse.Tree) []UnsafeInterpFinding {
+func walkTemplateList(list *parse.ListNode, emitSQL bool, methodArgs map[string]struct{}, allowed map[string]struct{}, shared map[string]*parse.Tree, taint string, varTaint map[string]string) []UnsafeInterpFinding {
 	if list == nil {
 		return nil
 	}
+	if varTaint == nil {
+		varTaint = map[string]string{}
+	}
 	var out []UnsafeInterpFinding
 	for _, n := range list.Nodes {
-		out = append(out, walkTemplateNode(n, emitSQL, methodArgs, allowed, shared)...)
+		if an, ok := n.(*parse.ActionNode); ok && an.Pipe != nil && len(an.Pipe.Decl) > 0 {
+			addDeclTaints(an.Pipe, methodArgs, varTaint)
+		}
+		out = append(out, walkTemplateNode(n, emitSQL, methodArgs, allowed, shared, taint, varTaint)...)
 	}
 	return out
 }
 
-func walkTemplateNode(n parse.Node, emitSQL bool, methodArgs map[string]struct{}, allowed map[string]struct{}, shared map[string]*parse.Tree) []UnsafeInterpFinding {
+func walkTemplateNode(n parse.Node, emitSQL bool, methodArgs map[string]struct{}, allowed map[string]struct{}, shared map[string]*parse.Tree, taint string, varTaint map[string]string) []UnsafeInterpFinding {
 	switch n := n.(type) {
 	case *parse.TextNode, *parse.CommentNode:
 		return nil
 	case *parse.IfNode:
+		locals := copyVarTaint(varTaint)
 		var out []UnsafeInterpFinding
-		out = append(out, findPipeFindings(n.Pipe, false, methodArgs, allowed, shared, lineOf(n))...)
-		out = append(out, walkTemplateList(n.List, emitSQL, methodArgs, allowed, shared)...)
-		out = append(out, walkTemplateList(n.ElseList, emitSQL, methodArgs, allowed, shared)...)
+		out = append(out, findPipeFindings(n.Pipe, false, methodArgs, allowed, shared, lineOf(n), taint, locals)...)
+		out = append(out, walkTemplateList(n.List, emitSQL, methodArgs, allowed, shared, taint, locals)...)
+		out = append(out, walkTemplateList(n.ElseList, emitSQL, methodArgs, allowed, shared, taint, locals)...)
 		return out
 	case *parse.RangeNode:
 		var out []UnsafeInterpFinding
-		out = append(out, findPipeFindings(n.Pipe, false, methodArgs, allowed, shared, lineOf(n))...)
-		out = append(out, walkTemplateList(n.List, emitSQL, methodArgs, allowed, shared)...)
-		out = append(out, walkTemplateList(n.ElseList, emitSQL, methodArgs, allowed, shared)...)
+		out = append(out, findPipeFindings(n.Pipe, false, methodArgs, allowed, shared, lineOf(n), taint, varTaint)...)
+		locals := copyVarTaint(varTaint)
+		prov := branchTaint(n.Pipe, methodArgs)
+		innerTaint := prov
+		applyRangeDeclTaints(n.Pipe, prov, methodArgs, locals)
+		out = append(out, walkTemplateList(n.List, emitSQL, methodArgs, allowed, shared, innerTaint, locals)...)
+		out = append(out, walkTemplateList(n.ElseList, emitSQL, methodArgs, allowed, shared, taint, varTaint)...)
 		return out
 	case *parse.WithNode:
 		var out []UnsafeInterpFinding
-		out = append(out, findPipeFindings(n.Pipe, false, methodArgs, allowed, shared, lineOf(n))...)
-		out = append(out, walkTemplateList(n.List, emitSQL, methodArgs, allowed, shared)...)
-		out = append(out, walkTemplateList(n.ElseList, emitSQL, methodArgs, allowed, shared)...)
+		out = append(out, findPipeFindings(n.Pipe, false, methodArgs, allowed, shared, lineOf(n), taint, varTaint)...)
+		locals := copyVarTaint(varTaint)
+		innerTaint := branchTaint(n.Pipe, methodArgs)
+		out = append(out, walkTemplateList(n.List, emitSQL, methodArgs, allowed, shared, innerTaint, locals)...)
+		out = append(out, walkTemplateList(n.ElseList, emitSQL, methodArgs, allowed, shared, taint, varTaint)...)
 		return out
 	case *parse.ActionNode:
 		if n.Pipe == nil {
 			return nil
 		}
-		if len(n.Pipe.Decl) > 0 || n.Pipe.IsAssign {
-			return findPipeFindings(n.Pipe, false, methodArgs, allowed, shared, lineOfPipe(n.Pipe))
+		if len(n.Pipe.Decl) > 0 {
+			return findPipeFindings(n.Pipe, false, methodArgs, allowed, shared, lineOfPipe(n.Pipe), taint, varTaint)
 		}
-		return findPipeFindings(n.Pipe, emitSQL, methodArgs, allowed, shared, lineOfPipe(n.Pipe))
+		return findPipeFindings(n.Pipe, emitSQL, methodArgs, allowed, shared, lineOfPipe(n.Pipe), taint, varTaint)
 	case *parse.TemplateNode:
 		var out []UnsafeInterpFinding
-		out = append(out, findPipeFindings(n.Pipe, false, methodArgs, allowed, shared, n.Line)...)
+		locals := copyVarTaint(varTaint)
+		out = append(out, findPipeFindings(n.Pipe, false, methodArgs, allowed, shared, n.Line, taint, locals)...)
 		if st := shared[n.Name]; st != nil {
-			out = append(out, walkTemplateList(st.Root, emitSQL, methodArgs, allowed, shared)...)
+			out = append(out, walkTemplateList(st.Root, emitSQL, methodArgs, allowed, shared, taint, locals)...)
 		}
 		return out
 	case *parse.BreakNode, *parse.ContinueNode:
@@ -75,6 +87,115 @@ func walkTemplateNode(n parse.Node, emitSQL bool, methodArgs map[string]struct{}
 	default:
 		return nil
 	}
+}
+
+func copyVarTaint(m map[string]string) map[string]string {
+	if len(m) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+func addDeclTaints(p *parse.PipeNode, methodArgs map[string]struct{}, varTaint map[string]string) {
+	prov := branchTaint(p, methodArgs)
+	if prov == "" {
+		return
+	}
+	for _, vn := range p.Decl {
+		if name, ok := varNameFromIdent(vn.Ident); ok {
+			varTaint[name] = prov
+		}
+	}
+}
+
+func applyRangeDeclTaints(p *parse.PipeNode, prov string, methodArgs map[string]struct{}, varTaint map[string]string) {
+	if p == nil || prov == "" || len(p.Decl) == 0 {
+		return
+	}
+	decls := p.Decl
+	if len(decls) == 1 {
+		if name, ok := varNameFromIdent(decls[0].Ident); ok {
+			varTaint[name] = prov
+		}
+		return
+	}
+	if len(decls) == 2 {
+		if name, ok := varNameFromIdent(decls[1].Ident); ok {
+			varTaint[name] = prov
+		}
+	}
+}
+
+func vnameFromVariable(n *parse.VariableNode) (string, bool) {
+	if n == nil {
+		return "", false
+	}
+	if len(n.Ident) >= 2 && n.Ident[0] == "$" && n.Ident[1] != "" {
+		return n.Ident[1], true
+	}
+	if len(n.Ident) == 1 {
+		s := n.Ident[0]
+		if len(s) > 1 && s[0] == '$' {
+			return s[1:], true
+		}
+	}
+	return "", false
+}
+
+func varNameFromIdent(id []string) (string, bool) {
+	if len(id) < 2 || id[0] != "$" {
+		if len(id) == 1 && len(id[0]) > 0 {
+			s := id[0]
+			if s[0] == '$' && len(s) > 1 {
+				return s[1:], true
+			}
+		}
+		return "", false
+	}
+	if id[1] == "" {
+		return "", false
+	}
+	return id[1], true
+}
+
+func branchTaint(p *parse.PipeNode, methodArgs map[string]struct{}) string {
+	if p == nil {
+		return ""
+	}
+	for _, c := range p.Cmds {
+		for _, a := range c.Args {
+			if s := firstMethodArgRefInExpr(a, methodArgs); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+func firstMethodArgRefInExpr(n parse.Node, methodArgs map[string]struct{}) string {
+	switch n := n.(type) {
+	case *parse.FieldNode:
+		if len(n.Ident) > 0 {
+			if _, ok := methodArgs[n.Ident[0]]; ok {
+				return n.Ident[0]
+			}
+		}
+	case *parse.VariableNode:
+		if v, ok := vnameFromVariable(n); ok {
+			if _, in := methodArgs[v]; in {
+				return v
+			}
+		}
+	case *parse.ChainNode:
+		return firstMethodArgRefInExpr(n.Node, methodArgs)
+	case *parse.PipeNode:
+		return branchTaint(n, methodArgs)
+	}
+	return ""
 }
 
 func lineOf(n parse.Node) int {
@@ -100,7 +221,7 @@ func lineOfPipe(p *parse.PipeNode) int {
 	return 0
 }
 
-func findPipeFindings(pipe *parse.PipeNode, emitSQL bool, methodArgs map[string]struct{}, allowed map[string]struct{}, shared map[string]*parse.Tree, line int) []UnsafeInterpFinding {
+func findPipeFindings(pipe *parse.PipeNode, emitSQL bool, methodArgs map[string]struct{}, allowed map[string]struct{}, shared map[string]*parse.Tree, line int, taint string, varTaint map[string]string) []UnsafeInterpFinding {
 	if pipe == nil {
 		return nil
 	}
@@ -108,7 +229,7 @@ func findPipeFindings(pipe *parse.PipeNode, emitSQL bool, methodArgs map[string]
 		var out []UnsafeInterpFinding
 		for _, cmd := range pipe.Cmds {
 			for _, arg := range cmd.Args {
-				out = append(out, walkTemplateNode(arg, false, methodArgs, allowed, shared)...)
+				out = append(out, walkTemplateNode(arg, false, methodArgs, allowed, shared, taint, varTaint)...)
 			}
 		}
 		return out
@@ -117,7 +238,7 @@ func findPipeFindings(pipe *parse.PipeNode, emitSQL bool, methodArgs map[string]
 		var out []UnsafeInterpFinding
 		for _, cmd := range pipe.Cmds {
 			for _, arg := range cmd.Args {
-				out = append(out, walkTemplateNode(arg, false, methodArgs, allowed, shared)...)
+				out = append(out, walkTemplateNode(arg, false, methodArgs, allowed, shared, taint, varTaint)...)
 			}
 		}
 		return out
@@ -132,7 +253,7 @@ func findPipeFindings(pipe *parse.PipeNode, emitSQL bool, methodArgs map[string]
 	var out []UnsafeInterpFinding
 	for _, cmd := range pipe.Cmds {
 		for _, arg := range cmd.Args {
-			out = append(out, scanArgForRawInterpolation(arg, methodArgs, allowed, shared, ln)...)
+			out = append(out, scanArgForRawInterpolation(arg, methodArgs, allowed, shared, ln, taint, varTaint)...)
 		}
 	}
 	return out
@@ -154,47 +275,64 @@ func pipeAllowedSink(pipe *parse.PipeNode, allowed map[string]struct{}) bool {
 	return ok
 }
 
-func scanArgForRawInterpolation(n parse.Node, methodArgs map[string]struct{}, allowed map[string]struct{}, shared map[string]*parse.Tree, line int) []UnsafeInterpFinding {
+func scanArgForRawInterpolation(n parse.Node, methodArgs map[string]struct{}, allowed map[string]struct{}, shared map[string]*parse.Tree, line int, taint string, varTaint map[string]string) []UnsafeInterpFinding {
 	switch n := n.(type) {
 	case *parse.FieldNode:
 		if len(n.Ident) == 0 {
 			return nil
 		}
-		if _, ok := methodArgs[n.Ident[0]]; !ok {
-			return nil
+		if _, ok := methodArgs[n.Ident[0]]; ok {
+			return []UnsafeInterpFinding{{MethodArg: n.Ident[0], Line: line, NodeSource: strings.TrimSpace(n.String())}}
 		}
-		return []UnsafeInterpFinding{{MethodArg: n.Ident[0], Line: line, NodeSource: strings.TrimSpace(n.String())}}
+		if taint != "" {
+			return []UnsafeInterpFinding{{MethodArg: taint, Line: line, NodeSource: strings.TrimSpace(n.String())}}
+		}
+		return nil
 	case *parse.VariableNode:
-		if len(n.Ident) >= 2 && n.Ident[0] == "$" {
-			if _, ok := methodArgs[n.Ident[1]]; ok {
-				return []UnsafeInterpFinding{{MethodArg: n.Ident[1], Line: line, NodeSource: strings.TrimSpace(n.String())}}
+		if vname, ok := vnameFromVariable(n); ok {
+			if prov, ok := varTaint[vname]; ok && prov != "" {
+				return []UnsafeInterpFinding{{MethodArg: prov, Line: line, NodeSource: strings.TrimSpace(n.String())}}
+			}
+			if _, ok := methodArgs[vname]; ok {
+				return []UnsafeInterpFinding{{MethodArg: vname, Line: line, NodeSource: strings.TrimSpace(n.String())}}
 			}
 		}
 		return nil
 	case *parse.DotNode:
+		if taint != "" {
+			return []UnsafeInterpFinding{{MethodArg: taint, Line: line, NodeSource: n.String()}}
+		}
 		return []UnsafeInterpFinding{{MethodArg: ".", Line: line, NodeSource: n.String()}}
 	case *parse.ChainNode:
-		return scanChainMethodArg(n, methodArgs, line)
+		return scanChainForRaw(n, methodArgs, line, taint, varTaint)
 	case *parse.PipeNode:
-		return findPipeFindings(n, true, methodArgs, allowed, shared, line)
+		return findPipeFindings(n, true, methodArgs, allowed, shared, line, taint, varTaint)
 	default:
 		return nil
 	}
 }
 
-func scanChainMethodArg(c *parse.ChainNode, methodArgs map[string]struct{}, line int) []UnsafeInterpFinding {
+func scanChainForRaw(c *parse.ChainNode, methodArgs map[string]struct{}, line int, taint string, varTaint map[string]string) []UnsafeInterpFinding {
 	switch r := c.Node.(type) {
 	case *parse.DotNode:
 		if len(c.Field) > 0 {
 			if _, ok := methodArgs[c.Field[0]]; ok {
 				return []UnsafeInterpFinding{{MethodArg: c.Field[0], Line: line, NodeSource: strings.TrimSpace(c.String())}}
 			}
+			if taint != "" {
+				return []UnsafeInterpFinding{{MethodArg: taint, Line: line, NodeSource: strings.TrimSpace(c.String())}}
+			}
 		}
 	case *parse.VariableNode:
-		if len(r.Ident) >= 2 && r.Ident[0] == "$" {
-			if _, ok := methodArgs[r.Ident[1]]; ok {
-				return []UnsafeInterpFinding{{MethodArg: r.Ident[1], Line: line, NodeSource: strings.TrimSpace(c.String())}}
-			}
+		vname, vok := vnameFromVariable(r)
+		if !vok {
+			return nil
+		}
+		if prov, ok := varTaint[vname]; ok && prov != "" {
+			return []UnsafeInterpFinding{{MethodArg: prov, Line: line, NodeSource: strings.TrimSpace(c.String())}}
+		}
+		if _, ok := methodArgs[vname]; ok {
+			return []UnsafeInterpFinding{{MethodArg: vname, Line: line, NodeSource: strings.TrimSpace(c.String())}}
 		}
 	}
 	return nil
@@ -328,7 +466,7 @@ func (ctx *sqlxContext) emitSqlxUnsafeInterpolationWarnings() {
 			continue
 		}
 		opts := method.SqlxOptions()
-		if hasOption(opts, "CONST") || hasOption(opts, "CONSTBIND") || hasOption(opts, "BIND") || hasOption(opts, "NAMED") {
+		if hasOption(opts, "CONST") || hasOption(opts, "CONSTBIND") {
 			continue
 		}
 		body, err := readHeader(method.Header, ctx.Pwd)
@@ -351,7 +489,11 @@ func (ctx *sqlxContext) emitSqlxUnsafeInterpolationWarnings() {
 				atLoc = fmt.Sprintf("%s:%d", ctx.File, f.Line)
 			}
 			fmt.Fprintf(os.Stderr, "defc: warning: method %s at %s interpolates argument %q as raw SQL text outside bind/bindvars.\n", method.Ident, atLoc, arg)
-			fmt.Fprintf(os.Stderr, "  This pattern is a SQL-injection foot-gun at runtime. Use {{ bind $.%s }} (requires the `bind` option), CONSTBIND with ${%s}, or positional ? placeholders instead.\n", arg, arg)
+			if arg == "." {
+				fmt.Fprintf(os.Stderr, "  This pattern is a SQL-injection foot-gun at runtime. Use {{ bind . }} if the intent is to bind the dot value, CONSTBIND where applicable, or positional ? placeholders instead.\n")
+			} else {
+				fmt.Fprintf(os.Stderr, "  This pattern is a SQL-injection foot-gun at runtime. Use {{ bind $.%s }} (requires the `bind` option), CONSTBIND with ${%s}, or positional ? placeholders instead.\n", arg, arg)
+			}
 			fmt.Fprintf(os.Stderr, "  Raw interpolation: %s\n", f.NodeSource)
 			fmt.Fprintf(os.Stderr, "  See https://github.com/x5iu/defc/issues/17 for guidance.\n")
 		}

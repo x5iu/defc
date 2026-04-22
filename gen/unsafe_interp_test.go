@@ -61,7 +61,7 @@ func TestScanUnsafeRawInterpolation_rangeBind(t *testing.T) {
 func TestScanUnsafeRawInterpolation_rangeDot(t *testing.T) {
 	tree := parseMust(t, "m", "{{range .xs}}{{ . }}{{end}}", nil)
 	findings := scanUnsafeRawInterpolation(tree, nil, map[string]struct{}{"xs": {}}, map[string]struct{}{"bind": {}, "bindvars": {}})
-	if len(findings) != 1 || findings[0].MethodArg != "." {
+	if len(findings) != 1 || findings[0].MethodArg != "xs" {
 		t.Fatalf("got %#v", findings)
 	}
 }
@@ -107,6 +107,46 @@ func TestParseInvalidTemplateNoPanic(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "error") && !strings.Contains(err.Error(), "unclosed") {
 		t.Logf("err: %v", err)
+	}
+}
+
+func TestScanUnsafeRawInterpolation_withField(t *testing.T) {
+	tree := parseMust(t, "m", "{{ with .user }}{{ .Name }}{{ end }}", nil)
+	findings := scanUnsafeRawInterpolation(tree, nil, map[string]struct{}{"user": {}}, map[string]struct{}{"bind": {}, "bindvars": {}})
+	if len(findings) != 1 || findings[0].MethodArg != "user" {
+		t.Fatalf("got %#v", findings)
+	}
+}
+
+func TestScanUnsafeRawInterpolation_rangeUserField(t *testing.T) {
+	tree := parseMust(t, "m", "{{ range .users }}{{ .Name }}{{ end }}", nil)
+	findings := scanUnsafeRawInterpolation(tree, nil, map[string]struct{}{"users": {}}, map[string]struct{}{"bind": {}, "bindvars": {}})
+	if len(findings) != 1 || findings[0].MethodArg != "users" {
+		t.Fatalf("got %#v", findings)
+	}
+}
+
+func TestScanUnsafeRawInterpolation_rangeBindLocal(t *testing.T) {
+	tree := parseMust(t, "m", "{{ range $e := .list }}{{ $e }}{{ end }}", nil)
+	findings := scanUnsafeRawInterpolation(tree, nil, map[string]struct{}{"list": {}}, map[string]struct{}{"bind": {}, "bindvars": {}})
+	if len(findings) != 1 || findings[0].MethodArg != "list" {
+		t.Fatalf("got %#v", findings)
+	}
+}
+
+func TestScanUnsafeRawInterpolation_withBindOther(t *testing.T) {
+	tree := parseMust(t, "m", "{{ with .user }}{{ bind $.other }}{{ end }}", nil)
+	findings := scanUnsafeRawInterpolation(tree, nil, map[string]struct{}{"user": {}, "other": {}}, map[string]struct{}{"bind": {}, "bindvars": {}})
+	if len(findings) != 0 {
+		t.Fatalf("got %#v", findings)
+	}
+}
+
+func TestScanUnsafeRawInterpolation_mixedBindAndRaw(t *testing.T) {
+	tree := parseMust(t, "m", "SELECT * FROM t WHERE id = {{ bind $.id }} AND r = {{ .role }}", nil)
+	findings := scanUnsafeRawInterpolation(tree, nil, map[string]struct{}{"id": {}, "role": {}}, map[string]struct{}{"bind": {}, "bindvars": {}})
+	if len(findings) != 1 || findings[0].MethodArg != "role" {
+		t.Fatalf("got %#v", findings)
 	}
 }
 
