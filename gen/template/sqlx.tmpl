@@ -253,6 +253,23 @@ var (
     {{ $offset := printf "offset%s" $method.Ident -}}
     {{ $args := printf "args%s" $method.Ident -}}
     {{ if hasOption ($method.SqlxOptions) "NAMED" }}
+        {{ if $.HasFeature "sqlx/strict-merge" -}}
+        {{ $args }}, {{ $err }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeNamedArgsFunc }}{{ else }}__rt.MergeNamedArgsStrict{{ end }}(map[string]any{
+        {{ range $index, $ident := $sortIn -}}
+            {{ if not (isContextType $ident (index $method.In $ident)) -}}
+                {{- quote $ident }}: {{ $ident -}},
+            {{ end -}}
+        {{ end }}
+        })
+        if {{ $err }} != nil {
+        if !__imp.__withTx { {{ $tx }}.Rollback() }
+        return {{ range $index, $type := $method.Out -}}
+            {{- if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }},
+            {{- end -}}
+        {{- end -}} fmt.Errorf("error merging %s named args: %w", strconv.Quote({{ quote $method.Ident }}), {{ $err }})
+        }
+        {{- else -}}
         {{ $args }} := {{ if $.HasFeature "sqlx/nort" }}{{ $mergeNamedArgsFunc }}{{ else }}__rt.MergeNamedArgs{{ end }}(map[string]any{
         {{ range $index, $ident := $sortIn -}}
             {{ if not (isContextType $ident (index $method.In $ident)) -}}
@@ -260,6 +277,7 @@ var (
             {{ end -}}
         {{ end }}
         })
+        {{- end }}
     {{- else }}
         {{ $offset }} := 0
         {{- if $.HasFeature "sqlx/in" }}
@@ -605,6 +623,90 @@ CoreBeginTx(ctx context.Context, opts *sql.TxOptions) ({{ $coreTxInterface }}, e
     return dst
     }
 
+    {{ if $.HasFeature "sqlx/strict-merge" -}}
+    func {{ $mergeNamedArgsFunc }}(argsMap map[string]any) (map[string]any, error) {
+    namedMap := make(map[string]any, len(argsMap))
+    provenance := make(map[string]string, len(argsMap))
+    var collisions []struct{ Key string; Sources []string }
+    put := func(k string, v any, src string) {
+    if prev, ok := provenance[k]; ok && prev != src {
+    collisions = append(collisions, struct{ Key string; Sources []string }{
+    Key: k, Sources: []string{prev, src},
+    })
+    return
+    }
+    namedMap[k] = v
+    provenance[k] = src
+    }
+    truncateTag := func(tag string) string {
+    for pos, char := range tag {
+    if !(('0' <= char && char <= '9') || ('a' <= char && char <= 'z') || ('A' <= char && char <= 'Z') || char == '_') {
+    return tag[:pos]
+    }
+    }
+    return tag
+    }
+    for name, arg := range argsMap {
+    rv := reflect.ValueOf(arg)
+    if _, notAnArg := arg.({{ $notAnArg }}); notAnArg {
+    continue
+    } else if toNamedArgs, ok := arg.({{ $toNamedArgs }}); ok {
+    src := "ToNamedArgs(" + name + ")"
+    for k, v := range toNamedArgs.ToNamedArgs() {
+    put(k, v, src)
+    }
+    } else if _, ok = arg.(driver.Valuer); ok {
+    put(name, arg, "driver.Valuer("+name+")")
+    } else if _, ok = arg.({{ $toArgs }}); ok {
+    put(name, arg, "ToArgs("+name+")")
+    } else if rv.Kind() == reflect.Map {
+    src := "map(" + name + ")"
+    iter := rv.MapRange()
+    for iter.Next() {
+    k, v := iter.Key(), iter.Value()
+    if k.Kind() == reflect.String {
+    put(k.String(), v.Interface(), src)
+    }
+    }
+    } else if rv.Kind() == reflect.Struct ||
+    (rv.Kind() == reflect.Pointer && rv.Elem().Kind() == reflect.Struct) {
+    rv = reflect.Indirect(rv)
+    rt := rv.Type()
+    for i := 0; i < rt.NumField(); i++ {
+    if sf := rt.Field(i); sf.Anonymous {
+    sft := sf.Type
+    if sft.Kind() == reflect.Pointer {
+    sft = sft.Elem()
+    }
+    for j := 0; j < sft.NumField(); j++ {
+    if tag, exists := sft.Field(j).Tag.Lookup("db"); exists {
+    tag = truncateTag(tag)
+    if tag == "" { continue }
+    put(tag, rv.FieldByIndex([]int{i, j}).Interface(),
+    "struct("+name+"."+sf.Name+"."+sft.Field(j).Name+")")
+    }
+    }
+    } else if tag, exists := sf.Tag.Lookup("db"); exists {
+    tag = truncateTag(tag)
+    if tag == "" { continue }
+    put(tag, rv.Field(i).Interface(),
+    "struct("+name+"."+sf.Name+")")
+    }
+    }
+    } else {
+    put(name, arg, "scalar("+name+")")
+    }
+    }
+    if len(collisions) == 0 {
+    return namedMap, nil
+    }
+    parts := make([]string, 0, len(collisions))
+    for _, c := range collisions {
+    parts = append(parts, fmt.Sprintf("defc: duplicate bind key %q contributed by %s and %s", c.Key, c.Sources[0], c.Sources[1]))
+    }
+    return nil, fmt.Errorf("%s", strings.Join(parts, "; "))
+    }
+    {{- else -}}
     func {{ $mergeNamedArgsFunc }}(argsMap map[string]any) map[string]any {
     namedMap := make(map[string]any, len(argsMap))
     for name, arg := range argsMap {
@@ -664,6 +766,7 @@ CoreBeginTx(ctx context.Context, opts *sql.TxOptions) ({{ $coreTxInterface }}, e
     }
     return namedMap
     }
+    {{- end }}
 
     func {{ $bindVarsFunc }}(data any) string {
     var n int

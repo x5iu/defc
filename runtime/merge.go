@@ -3,7 +3,9 @@ package defc
 import (
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 
 	tok "github.com/x5iu/defc/runtime/token"
 )
@@ -102,6 +104,169 @@ func MergeNamedArgs(argsMap map[string]any) map[string]any {
 		}
 	}
 	return namedMap
+}
+
+// ErrNamedArgsCollision is the sentinel wrapped by every error
+// returned from [MergeNamedArgsStrict]. Use [errors.Is] to detect it.
+var ErrNamedArgsCollision = errors.New("defc: duplicate bind key")
+
+// NamedArgsCollisionError describes a single duplicate bind key. The
+// Sources slice carries the provenance labels of the two (or more)
+// contributors, in discovery order. Because Go randomises map
+// iteration the slice order is not stable across runs; treat it as a
+// set.
+type NamedArgsCollisionError struct {
+	Key     string
+	Sources []string
+}
+
+func (e *NamedArgsCollisionError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	var joined string
+	switch len(e.Sources) {
+	case 0:
+		joined = "<unknown>"
+	case 1:
+		joined = e.Sources[0]
+	case 2:
+		joined = e.Sources[0] + " and " + e.Sources[1]
+	default:
+		joined = strings.Join(e.Sources[:len(e.Sources)-1], ", ") + " and " + e.Sources[len(e.Sources)-1]
+	}
+	return fmt.Sprintf("defc: duplicate bind key %q contributed by %s", e.Key, joined)
+}
+
+func (e *NamedArgsCollisionError) Unwrap() error { return ErrNamedArgsCollision }
+
+// NamedArgsCollisionErrors aggregates multiple collisions discovered
+// during a single merge call. It reports `errors.Is(err,
+// ErrNamedArgsCollision)` true and exposes each entry for
+// [errors.As] traversal.
+type NamedArgsCollisionErrors []NamedArgsCollisionError
+
+func (es NamedArgsCollisionErrors) Error() string {
+	parts := make([]string, 0, len(es))
+	for i := range es {
+		parts = append(parts, (&es[i]).Error())
+	}
+	return strings.Join(parts, "; ")
+}
+
+func (es NamedArgsCollisionErrors) Is(target error) bool {
+	return target == ErrNamedArgsCollision
+}
+
+func (es NamedArgsCollisionErrors) Unwrap() []error {
+	out := make([]error, len(es))
+	for i := range es {
+		e := es[i]
+		out[i] = &e
+	}
+	return out
+}
+
+// MergeNamedArgsStrict behaves like [MergeNamedArgs] except that any
+// duplicate bind key contributed by two distinct sources returns an
+// error that wraps [ErrNamedArgsCollision]. The concrete error type
+// is either *[NamedArgsCollisionError] (single collision) or
+// [NamedArgsCollisionErrors] (multiple collisions). On error the
+// returned map is nil.
+func MergeNamedArgsStrict(argsMap map[string]any) (map[string]any, error) {
+	namedMap := make(map[string]any, len(argsMap))
+	provenance := make(map[string]string, len(argsMap))
+	var collisions []NamedArgsCollisionError
+
+	put := func(k string, v any, src string) {
+		if prev, ok := provenance[k]; ok && prev != src {
+			collisions = append(collisions, NamedArgsCollisionError{
+				Key:     k,
+				Sources: []string{prev, src},
+			})
+			return
+		}
+		namedMap[k] = v
+		provenance[k] = src
+	}
+
+	for name, arg := range argsMap {
+		rv := reflect.ValueOf(arg)
+		if _, notAnArg := arg.(NotAnArg); notAnArg {
+			continue
+		} else if toNamedArgs, ok := arg.(ToNamedArgs); ok {
+			src := "ToNamedArgs(" + name + ")"
+			for k, v := range toNamedArgs.ToNamedArgs() {
+				put(k, v, src)
+			}
+		} else if _, ok = arg.(driver.Valuer); ok {
+			put(name, arg, "driver.Valuer("+name+")")
+		} else if _, ok = arg.(ToArgs); ok {
+			put(name, arg, "ToArgs("+name+")")
+		} else if rv.Kind() == reflect.Map {
+			src := "map(" + name + ")"
+			iter := rv.MapRange()
+			for iter.Next() {
+				k, v := iter.Key(), iter.Value()
+				if k.Kind() == reflect.String {
+					put(k.String(), v.Interface(), src)
+				}
+			}
+		} else if rv.Kind() == reflect.Struct ||
+			(rv.Kind() == reflect.Pointer && rv.Elem().Kind() == reflect.Struct) {
+			rv = reflect.Indirect(rv)
+			rt := rv.Type()
+			for i := 0; i < rt.NumField(); i++ {
+				if sf := rt.Field(i); sf.Anonymous {
+					sft := sf.Type
+					if sft.Kind() == reflect.Pointer {
+						sft = sft.Elem()
+					}
+					for j := 0; j < sft.NumField(); j++ {
+						if tag, exists := sft.Field(j).Tag.Lookup("db"); exists {
+							tag = truncateDBTag(tag)
+							if tag == "" {
+								continue
+							}
+							put(tag,
+								rv.FieldByIndex([]int{i, j}).Interface(),
+								"struct("+name+"."+sf.Name+"."+sft.Field(j).Name+")")
+						}
+					}
+				} else if tag, exists := sf.Tag.Lookup("db"); exists {
+					tag = truncateDBTag(tag)
+					if tag == "" {
+						continue
+					}
+					put(tag, rv.Field(i).Interface(),
+						"struct("+name+"."+sf.Name+")")
+				}
+			}
+		} else {
+			put(name, arg, "scalar("+name+")")
+		}
+	}
+
+	if len(collisions) == 0 {
+		return namedMap, nil
+	}
+	if len(collisions) == 1 {
+		c := collisions[0]
+		return nil, &c
+	}
+	return nil, NamedArgsCollisionErrors(collisions)
+}
+
+func truncateDBTag(tag string) string {
+	for pos, char := range tag {
+		if !(('0' <= char && char <= '9') ||
+			('a' <= char && char <= 'z') ||
+			('A' <= char && char <= 'Z') ||
+			char == '_') {
+			return tag[:pos]
+		}
+	}
+	return tag
 }
 
 func BindVars(data any) string {

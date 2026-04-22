@@ -47,6 +47,7 @@ var (
 		gen.FeatureSqlxFuture,
 		gen.FeatureSqlxCallback,
 		gen.FeatureSqlxAnyCallback,
+		gen.FeatureSqlxStrictMerge,
 		gen.FeatureRpcNoRt,
 	}
 )

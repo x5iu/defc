@@ -30,6 +30,11 @@ const (
 	FeatureSqlxFuture      = "sqlx/future"
 	FeatureSqlxCallback    = "sqlx/callback"
 	FeatureSqlxAnyCallback = "sqlx/any-callback"
+
+	// FeatureSqlxStrictMerge makes named-arg merging return an error
+	// when two distinct sources contribute the same bind key. See
+	// runtime.MergeNamedArgsStrict.
+	FeatureSqlxStrictMerge = "sqlx/strict-merge"
 )
 
 func (builder *CliBuilder) buildSqlx(w io.Writer) error {

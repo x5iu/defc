@@ -179,6 +179,15 @@ defc generate --output=query.go schema.go
 defc generate --features=sqlx/log,sqlx/rebind schema.go
 ```
 
+### Strict NAMED-arg Merge
+
+Opt-in `sqlx/strict-merge` makes `NAMED` parameter merging return an
+error when two distinct sources contribute the same bind key (e.g. a
+struct field and a map key both named `id`), instead of silently
+letting one overwrite the other. Errors wrap
+`runtime.ErrNamedArgsCollision` and carry the provenance labels of
+the colliding contributors.
+
 **Smart Defaults:** The `defc generate` command provides intelligent defaults:
 
 - **Auto-detect mode** by analyzing your interface methods
