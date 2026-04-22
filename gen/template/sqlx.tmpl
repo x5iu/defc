@@ -346,6 +346,16 @@ var (
             {{ $splitSql }} = __imp.__core.Rebind({{ $splitSql }})
         {{ end }}
 
+        {{ if and (not (hasOption ($method.SqlxOptions) "CONST")) (not (hasOption ($method.SqlxOptions) "CONSTBIND")) (not (hasOption ($method.SqlxOptions) "BIND")) }}
+        if len({{ $args }})-{{ $offset }} > {{ $count }} {
+        {{ if $.HasFeature "sqlx/nort" }}
+        {{ printf "__%sWarnDroppedArgs" $.Ident }}({{ quote $method.Ident }}, {{ $splitSql }}, len({{ $args }})-{{ $offset }}, {{ $count }})
+        {{ else }}
+        __rt.WarnDroppedArgs({{ quote $method.Ident }}, {{ $splitSql }}, len({{ $args }})-{{ $offset }}, {{ $count }})
+        {{ end }}
+        }
+        {{ end }}
+
         {{- if $.HasFeature "sqlx/log" }}
             {{ $start }} := time.Now()
         {{- end -}}
@@ -798,5 +808,22 @@ CoreBeginTx(ctx context.Context, opts *sql.TxOptions) ({{ $coreTxInterface }}, e
     }
 
     return tokens
+    }
+
+    var {{ printf "__%sDroppedArgWarn" $.Ident }} sync.Map
+
+    func {{ printf "__%sWarnDroppedArgs" $.Ident }}(method, sql string, collected, used int) {
+    if collected <= used {
+    return
+    }
+    v, _ := {{ printf "__%sDroppedArgWarn" $.Ident }}.LoadOrStore(method, new(sync.Once))
+    v.(*sync.Once).Do(func() {
+    preview := sql
+    if len(preview) > 200 {
+    preview = preview[:200] + "..."
+    }
+    discarded := collected - used
+    log.Printf("defc: method %q rendered SQL %q consumed %d argument(s) but %d argument(s) were collected from the method signature; %d argument(s) were discarded. This usually means a method argument is being interpolated into SQL text via {{ "{{" }} .arg {{"}}"}} instead of {{ "{{" }} bind $.arg {{"}}"}} / CONSTBIND {{ "$" }}{{ "{" }}arg{{ "}" }}. See https://github.com/x5iu/defc/issues/17.", method, preview, used, collected, discarded)
+    })
     }
 {{ end }}

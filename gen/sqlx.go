@@ -192,6 +192,7 @@ func (ctx *sqlxContext) MergedImports() (imports []string) {
 	if ctx.HasFeature(FeatureSqlxNoRt) {
 		imports = append(imports,
 			quote("errors"),
+			quote("log"),
 			quote("strings"),
 			quote("reflect"),
 			quote("sync"),
