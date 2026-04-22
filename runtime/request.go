@@ -33,34 +33,34 @@ type JSONBody[T any] struct {
 func (b *JSONBody[T]) Read(p []byte) (n int, err error) {
 	b.once.Do(func() {
 		var x T
-		vf := reflect.ValueOf(x)
-		if vf.Kind() != reflect.Struct {
+		vt := reflect.TypeOf(x)
+		if vt.Kind() != reflect.Struct {
 			panic("use the value type of a struct rather than a pointer type as the value for generics")
 		}
-		vt := vf.Type()
+		target := reflect.TypeOf(b).Elem()
+		if vt.NumField() == 0 ||
+			!vt.Field(0).Anonymous ||
+			vt.Field(0).Type != target {
+			panic("JSONBody is not the first embedded field of struct type T")
+		}
+		x = *(*T)(unsafe.Pointer(b))
+		vf := reflect.ValueOf(x)
 		// estimate the size of the body in advance
 		var toGrow = 0
-		for i := 0; i < vt.NumField(); i++ {
+		for i := 1; i < vt.NumField(); i++ {
 			sf, sv := vt.Field(i), vf.Field(i)
-			if i == 0 {
-				if !sf.Anonymous || sf.Type != reflect.TypeOf(b).Elem() {
-					panic("JSONBody is not the first embedded field of struct type T")
-				}
-			} else {
-				toGrow += 8 // object keys
-				switch sf.Type.Kind() {
-				case reflect.String:
-					toGrow += 2 + sv.Len()
-				case reflect.Slice:
-					toGrow += sv.Len() * 2
-				default:
-					toGrow += 4
-				}
+			toGrow += 8 // object keys
+			switch sf.Type.Kind() {
+			case reflect.String:
+				toGrow += 2 + sv.Len()
+			case reflect.Slice:
+				toGrow += sv.Len() * 2
+			default:
+				toGrow += 4
 			}
 		}
 		b.data.Grow(toGrow)
 		encoder := json.NewEncoder(&b.data)
-		x = *(*T)(unsafe.Pointer(b))
 		err = encoder.Encode(&x)
 	})
 	if err != nil {
@@ -123,14 +123,18 @@ func escapeQuotes(s string) string {
 func (b *MultipartBody[T]) Read(p []byte) (n int, err error) {
 	b.once.Do(func() {
 		var x T
-		x = *(*T)(unsafe.Pointer(b))
-		s := &fieldScanner{tag: "form", val: reflect.ValueOf(x)}
-		if s.val.Kind() != reflect.Struct {
+		vt := reflect.TypeOf(x)
+		if vt.Kind() != reflect.Struct {
 			panic("use the value type of a struct rather than a pointer type as the value for generics")
 		}
-		if !s.CheckFirstEmbedType(reflect.TypeOf(b).Elem()) {
+		target := reflect.TypeOf(b).Elem()
+		if vt.NumField() == 0 ||
+			!vt.Field(0).Anonymous ||
+			vt.Field(0).Type != target {
 			panic("MultipartBody is not the first embedded field of struct type T")
 		}
+		x = *(*T)(unsafe.Pointer(b))
+		s := &fieldScanner{tag: "form", val: reflect.ValueOf(x), typ: vt}
 		readers := make([]io.Reader, 0, s.val.NumField())
 		for i := 0; s.Scan(); i++ {
 			tag := s.Tag()
