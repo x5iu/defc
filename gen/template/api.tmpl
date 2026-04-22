@@ -497,6 +497,10 @@ var (
             {{ $httpResponse }}.Body.Close()
             }
 
+            {{ $bodyCopy := printf "bodyCopy%s" $method.Ident -}}
+            {{ $detachBytesFunc := printf "__%sDetachBytes" $.Ident -}}
+            {{ $bodyCopy }} := {{ if $.HasFeature "api/nort" }}{{ $detachBytesFunc }}({{ $responseBody }}){{ else }}__rt.DetachBytes({{ $responseBody }}){{ end }}
+
             {{ if not ( $.HasFeature "api/ignore-status" ) }}
                 if {{ $httpResponse }}.StatusCode < 200 || {{ $httpResponse }}.StatusCode > 299 {
                 return {{ range $index, $type := $method.Out -}}
@@ -506,9 +510,9 @@ var (
                 {{- end -}}
                 {{ if $.HasFeature "api/error" -}}
                     {{ if $.HasFeature "api/nort" -}}
-                        {{ $newResponseErrorFunc }}({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+                        {{ $newResponseErrorFunc }}({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $bodyCopy }})
                     {{ else -}}
-                        __rt.NewResponseError({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $responseBody }}.Bytes())
+                        __rt.NewResponseError({{ quote $method.Ident }}, {{ $httpResponse }}.StatusCode, {{ $bodyCopy }})
                     {{ end -}}
                 {{ else -}}
                     fmt.Errorf("response status code %d for '{{ $method.Ident }}' with body: \n\n%s\n\n", {{ $httpResponse }}.StatusCode, {{ $responseBody }}.String())
@@ -516,7 +520,7 @@ var (
                 }
             {{ end }}
 
-            if {{ $err }} = {{ $response }}.FromBytes({{ quote $method.Ident }}, {{ $responseBody }}.Bytes()); {{ $err }} != nil {
+            if {{ $err }} = {{ $response }}.FromBytes({{ quote $method.Ident }}, {{ $bodyCopy }}); {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}
                 {{- if lt $index (sub (len $method.Out) 1) -}}
                     v{{- $index -}}{{- $method.Ident }},
@@ -658,7 +662,15 @@ var (
     }
 
     func {{ $putBufferFunc }}(buffer *bytes.Buffer) {
+    if buffer != nil {
+    buffer.Reset()
+    }
     {{ $bufferPool }}.Put(buffer)
+    }
+
+    {{ $detachBytesFunc := (printf "__%sDetachBytes" $.Ident) }}
+    func {{ $detachBytesFunc }}(buf *bytes.Buffer) []byte {
+    return append([]byte(nil), buf.Bytes()...)
     }
 
     type {{ $responseInterface }} interface {
@@ -743,7 +755,7 @@ var (
             return &{{ $implResponseError }}{
             caller: caller,
             status: status,
-            body:   body,
+            body:   append([]byte(nil), body...),
             }
             }
 

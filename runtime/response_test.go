@@ -31,6 +31,25 @@ test
 	}
 }
 
+func TestNewResponseError_DetachesBody(t *testing.T) {
+	buf := []byte("orig")
+	err := NewResponseError("m", 500, buf)
+	buf[0] = 'X'
+	got := err.Body()
+	if got[0] != 'o' {
+		t.Errorf("body: expected unmutated 'o', got %q", got[0])
+		return
+	}
+	if !bytes.Equal(got, []byte("orig")) {
+		t.Errorf("body: %q != %q", string(got), "orig")
+		return
+	}
+	if len(got) > 0 && len(buf) > 0 && &got[0] == &buf[0] {
+		t.Errorf("body: expected detached backing array, got alias")
+		return
+	}
+}
+
 func TestNewFutureResponseError(t *testing.T) {
 	err := NewFutureResponseError("test", &http.Response{
 		StatusCode: http.StatusInternalServerError,
