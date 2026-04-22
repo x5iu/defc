@@ -31,6 +31,8 @@ generate time:
 
 Error messages include the originating `file:line` for diagnostics.
 
+The `#INCLUDE`/`#SCRIPT` sandbox is designed for Unix-like hosts (macOS/Linux); Windows is not a supported target for these directives.
+
 ## `#SCRIPT` — deprecated
 
 `#SCRIPT` runs an arbitrary command at code-generation time. As of

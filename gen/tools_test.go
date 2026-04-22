@@ -7,7 +7,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -190,7 +189,6 @@ func TestRunCommand(t *testing.T) {
 			t.Fatalf("runCommand: expected error from cancelled context")
 		}
 	})
-	_ = os.Getenv // keep os imported for Setenv compatibility across Go versions
 }
 
 func TestSplitArgs(t *testing.T) {

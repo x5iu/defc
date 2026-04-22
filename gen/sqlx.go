@@ -389,7 +389,7 @@ func isPathUnder(child, parent string) bool {
 	if rel == "." {
 		return true
 	}
-	if strings.HasPrefix(rel, "..") {
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 		return false
 	}
 	return !filepath.IsAbs(rel)
