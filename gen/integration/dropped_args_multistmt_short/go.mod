@@ -1,4 +1,4 @@
-module github.com/x5iu/defc/gen/integration/dropped_args_ms_short
+module github.com/x5iu/defc/gen/integration/dropped_args_multistmt_short
 
 go 1.19
 

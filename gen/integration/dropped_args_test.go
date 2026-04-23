@@ -111,11 +111,11 @@ func TestSqlxDroppedArgsWarning(t *testing.T) {
 }
 
 func TestSqlxMultistmt_noFalsePositiveWhenPlaceholdersMatchArgs(t *testing.T) {
-	runSqlxDroppedArgsModule(t, "dropped_args_ms_ok", false)
+	runSqlxDroppedArgsModule(t, "dropped_args_multistmt_ok", false)
 }
 
 func TestSqlxMultistmt_emitsWhenTotalPlaceholdersLessThanArgCount(t *testing.T) {
-	s := runSqlxDroppedArgsModule(t, "dropped_args_ms_short", true)
+	s := runSqlxDroppedArgsModule(t, "dropped_args_multistmt_short", true)
 	if !strings.Contains(s, "Repo.DoShort") {
 		t.Fatalf("expected Repo.DoShort in stderr, got:\n%s", s)
 	}
