@@ -1,4 +1,4 @@
-module github.com/x5iu/defc/gen/integration/dropwarn
+module github.com/x5iu/defc/gen/integration/dropped_args_ms_ok
 
 go 1.19
 

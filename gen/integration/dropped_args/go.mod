@@ -1,4 +1,4 @@
-module github.com/x5iu/defc/gen/integration/dropwarn_ms_short
+module github.com/x5iu/defc/gen/integration/dropped_args
 
 go 1.19
 

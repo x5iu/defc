@@ -16,7 +16,7 @@ import (
 	"github.com/x5iu/defc/gen"
 )
 
-func runSqlxDropwarnModule(t *testing.T, testDir string, wantDiscarded bool) string {
+func runSqlxDroppedArgsModule(t *testing.T, testDir string, wantDiscarded bool) string {
 	t.Helper()
 	const (
 		testPk      = "main"
@@ -102,7 +102,7 @@ func runSqlxDropwarnModule(t *testing.T, testDir string, wantDiscarded bool) str
 }
 
 func TestSqlxDroppedArgsWarning(t *testing.T) {
-	s := runSqlxDropwarnModule(t, "dropwarn", true)
+	s := runSqlxDroppedArgsModule(t, "dropped_args", true)
 	for _, w := range []string{"DeleteByName", "discarded"} {
 		if !strings.Contains(s, w) {
 			t.Fatalf("stderr missing %q, got:\n%s", w, s)
@@ -111,11 +111,11 @@ func TestSqlxDroppedArgsWarning(t *testing.T) {
 }
 
 func TestSqlxMultistmt_noFalsePositiveWhenPlaceholdersMatchArgs(t *testing.T) {
-	runSqlxDropwarnModule(t, "dropwarn_ms_ok", false)
+	runSqlxDroppedArgsModule(t, "dropped_args_ms_ok", false)
 }
 
 func TestSqlxMultistmt_emitsWhenTotalPlaceholdersLessThanArgCount(t *testing.T) {
-	s := runSqlxDropwarnModule(t, "dropwarn_ms_short", true)
+	s := runSqlxDroppedArgsModule(t, "dropped_args_ms_short", true)
 	if !strings.Contains(s, "Repo.DoShort") {
 		t.Fatalf("expected Repo.DoShort in stderr, got:\n%s", s)
 	}
