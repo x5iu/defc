@@ -40,6 +40,14 @@ func (l *Lexer) Token() string {
 	return l.token
 }
 
+func (l *Lexer) collectAllTokens() []string {
+	var tokens []string
+	for l.Next() {
+		tokens = append(tokens, l.Token())
+	}
+	return tokens
+}
+
 func (l *Lexer) parse() (string, bool) {
 	line := l.Raw
 
@@ -175,10 +183,8 @@ func SplitTokens(line string) (tokens []string) {
 	if exists {
 		return tokens
 	}
-	l := Lexer{Raw: line}
-	for l.Next() {
-		tokens = append(tokens, l.Token())
-	}
+	l := &Lexer{Raw: line}
+	tokens = l.collectAllTokens()
 	splitTokensCache.Add(line, tokens)
 	return tokens
 }
