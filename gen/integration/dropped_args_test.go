@@ -18,6 +18,11 @@ import (
 
 func runSqlxDroppedArgsModule(t *testing.T, testDir string, wantDiscarded bool) string {
 	t.Helper()
+	return runSqlxDroppedArgsModuleWithFeats(t, testDir, wantDiscarded, []string{gen.FeatureSqlxFuture})
+}
+
+func runSqlxDroppedArgsModuleWithFeats(t *testing.T, testDir string, wantDiscarded bool, feats []string) string {
+	t.Helper()
 	const (
 		testPk      = "main"
 		testFile    = "main.go"
@@ -54,7 +59,7 @@ func runSqlxDroppedArgsModule(t *testing.T, testDir string, wantDiscarded bool) 
 		WithFile(testFile, doc).
 		WithPos(pos).
 		WithImports(nil).
-		WithFeats([]string{gen.FeatureSqlxFuture}).
+		WithFeats(feats).
 		WithTemplate("").
 		WithFuncs(nil)
 	var buf bytes.Buffer
@@ -118,5 +123,26 @@ func TestSqlxMultistmt_emitsWhenTotalPlaceholdersLessThanArgCount(t *testing.T) 
 	s := runSqlxDroppedArgsModule(t, "dropped_args_multistmt_short", true)
 	if !strings.Contains(s, "Repo.DoShort") {
 		t.Fatalf("expected Repo.DoShort in stderr, got:\n%s", s)
+	}
+}
+
+func TestSqlxDroppedArgs_sameShapeDifferentLiterals_oneWarning(t *testing.T) {
+	s := runSqlxDroppedArgsModule(t, "dropped_args_literals", true)
+	if strings.Count(s, "defc: method") != 1 {
+		t.Fatalf("want 1 defc: method line, got %d:\n%s", strings.Count(s, "defc: method"), s)
+	}
+}
+
+func TestSqlxDroppedArgs_templateBranchesDifferentShapes_twoWarnings(t *testing.T) {
+	s := runSqlxDroppedArgsModule(t, "dropped_args_branches", true)
+	if strings.Count(s, "defc: method") != 2 {
+		t.Fatalf("want 2 defc: method lines, got %d:\n%s", strings.Count(s, "defc: method"), s)
+	}
+}
+
+func TestSqlxDroppedArgs_nortDifferentDoubleQuotedIdentifierShapes_twoWarnings(t *testing.T) {
+	s := runSqlxDroppedArgsModuleWithFeats(t, "dropped_args_nort_identquotes", true, []string{gen.FeatureSqlxFuture, gen.FeatureSqlxNoRt})
+	if strings.Count(s, "defc: method") != 2 {
+		t.Fatalf("want 2 defc: method lines, got %d:\n%s", strings.Count(s, "defc: method"), s)
 	}
 }

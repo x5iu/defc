@@ -191,6 +191,8 @@ func (ctx *sqlxContext) MergedImports() (imports []string) {
 
 	if ctx.HasFeature(FeatureSqlxNoRt) {
 		imports = append(imports,
+			quote("crypto/sha256"),
+			quote("encoding/hex"),
 			quote("errors"),
 			quote("log"),
 			quote("strings"),
