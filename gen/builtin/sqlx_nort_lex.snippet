@@ -1,0 +1,306 @@
+
+type __DEFC_I__sTokKind int
+
+const (
+	__DEFC_I__sWhitespace __DEFC_I__sTokKind = iota
+	__DEFC_I__sLineComment
+	__DEFC_I__sBlockComment
+	__DEFC_I__sSingleQuoted
+	__DEFC_I__sDoubleQuoted
+	__DEFC_I__sNumericLiteral
+	__DEFC_I__sUnquoted
+)
+
+type __DEFC_I__sTok struct {
+	K   __DEFC_I__sTokKind
+	Raw string
+}
+
+func __DEFC_I__sTokenize(sql string) []__DEFC_I__sTok {
+	var out []__DEFC_I__sTok
+	type stKind int
+	const (
+		stNormal stKind = iota
+		stSQuote
+		stDQuote
+		stLineCom
+		stBlockCom
+	)
+	st := stNormal
+	dquoteStart := -1
+	squoteStart := -1
+	sqlIdentByte := func(c byte) bool {
+		return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+	}
+	prevNotIdent := func(i int) bool {
+		if i == 0 {
+			return true
+		}
+		return !sqlIdentByte(sql[i-1])
+	}
+	nextNotIdent := func(i int) bool {
+		if i >= len(sql) {
+			return true
+		}
+		return !sqlIdentByte(sql[i])
+	}
+	isNumStart := func(i int) bool {
+		c := sql[i]
+		if c >= '0' && c <= '9' {
+			return true
+		}
+		return c == '.' && i+1 < len(sql) && sql[i+1] >= '0' && sql[i+1] <= '9'
+	}
+	dquoteCloses := func(i int) bool {
+		bs := 0
+		for j := i - 1; j >= 0 && sql[j] == '\\'; j-- {
+			bs++
+		}
+		return bs%2 == 0
+	}
+	emitUnquoted := func(c byte) {
+		out = append(out, __DEFC_I__sTok{K: __DEFC_I__sUnquoted, Raw: string(c)})
+	}
+	for i := 0; i < len(sql); {
+		c := sql[i]
+		switch st {
+		case stLineCom:
+			start := i
+			for i < len(sql) && sql[i] != '\n' {
+				i++
+			}
+			out = append(out, __DEFC_I__sTok{K: __DEFC_I__sLineComment, Raw: sql[start:i]})
+			if i < len(sql) {
+				i++
+			}
+			st = stNormal
+			continue
+		case stBlockCom:
+			start := i
+			for i < len(sql) {
+				if sql[i] == '*' && i+1 < len(sql) && sql[i+1] == '/' {
+					i += 2
+					break
+				}
+				i++
+			}
+			out = append(out, __DEFC_I__sTok{K: __DEFC_I__sBlockComment, Raw: sql[start:i]})
+			st = stNormal
+			continue
+		case stSQuote:
+			if c == '\'' {
+				if i+1 < len(sql) && sql[i+1] == '\'' {
+					i += 2
+					continue
+				}
+				out = append(out, __DEFC_I__sTok{K: __DEFC_I__sSingleQuoted, Raw: sql[squoteStart : i+1]})
+				i++
+				st = stNormal
+				squoteStart = -1
+				continue
+			}
+			if c == '\\' && i+1 < len(sql) {
+				i += 2
+				continue
+			}
+			i++
+			continue
+		case stDQuote:
+			if c == '\\' && i+1 < len(sql) {
+				i += 2
+				continue
+			}
+			if c == '"' {
+				if !dquoteCloses(i) {
+					if i+1 < len(sql) {
+						i += 2
+					} else {
+						i++
+					}
+					continue
+				}
+				if i+1 < len(sql) && sql[i+1] == '"' {
+					i += 2
+					continue
+				}
+				out = append(out, __DEFC_I__sTok{K: __DEFC_I__sDoubleQuoted, Raw: sql[dquoteStart : i+1]})
+				i++
+				st = stNormal
+				dquoteStart = -1
+				continue
+			}
+			i++
+			continue
+		case stNormal:
+			if c == '-' && i+1 < len(sql) && sql[i+1] == '-' {
+				i += 2
+				st = stLineCom
+				continue
+			}
+			if c == '/' && i+1 < len(sql) && sql[i+1] == '*' {
+				i += 2
+				st = stBlockCom
+				continue
+			}
+			if c == '\'' {
+				squoteStart = i
+				i++
+				st = stSQuote
+				continue
+			}
+			if c == '"' {
+				dquoteStart = i
+				i++
+				st = stDQuote
+				continue
+			}
+			if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+				start := i
+				i++
+				for i < len(sql) {
+					cc := sql[i]
+					if cc != ' ' && cc != '\t' && cc != '\n' && cc != '\r' {
+						break
+					}
+					i++
+				}
+				out = append(out, __DEFC_I__sTok{K: __DEFC_I__sWhitespace, Raw: sql[start:i]})
+				continue
+			}
+			if isNumStart(i) && prevNotIdent(i) {
+				j := i
+				j++
+				for j < len(sql) {
+					cc := sql[j]
+					if (cc >= '0' && cc <= '9') || cc == '.' {
+						j++
+						continue
+					}
+					if cc == 'e' || cc == 'E' {
+						j++
+						if j < len(sql) && (sql[j] == '+' || sql[j] == '-') {
+							j++
+						}
+						continue
+					}
+					break
+				}
+				if nextNotIdent(j) {
+					out = append(out, __DEFC_I__sTok{K: __DEFC_I__sNumericLiteral, Raw: sql[i:j]})
+					i = j
+					continue
+				}
+			}
+			emitUnquoted(c)
+			i++
+		}
+	}
+	if st == stSQuote {
+		if squoteStart >= 0 {
+			out = append(out, __DEFC_I__sTok{K: __DEFC_I__sSingleQuoted, Raw: sql[squoteStart:]})
+		} else {
+			out = append(out, __DEFC_I__sTok{K: __DEFC_I__sSingleQuoted, Raw: "'"})
+		}
+	} else if st == stDQuote && dquoteStart >= 0 {
+		out = append(out, __DEFC_I__sTok{K: __DEFC_I__sDoubleQuoted, Raw: sql[dquoteStart:]})
+	}
+	return out
+}
+
+func __DEFC_I__NormalizeSQLShape(sql string) string {
+	toks := __DEFC_I__sTokenize(sql)
+	var b strings.Builder
+	pendingSpace := false
+	emitSpace := func() {
+		if b.Len() > 0 {
+			pendingSpace = true
+		}
+	}
+	flushSpace := func() {
+		if pendingSpace && b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		pendingSpace = false
+	}
+	writeByte := func(c byte) {
+		flushSpace()
+		b.WriteByte(c)
+	}
+	writeStr := func(x string) {
+		flushSpace()
+		b.WriteString(x)
+	}
+	for _, t := range toks {
+		switch t.K {
+		case __DEFC_I__sWhitespace:
+			emitSpace()
+		case __DEFC_I__sLineComment, __DEFC_I__sBlockComment:
+			emitSpace()
+		case __DEFC_I__sSingleQuoted:
+			writeStr("?")
+		case __DEFC_I__sDoubleQuoted:
+			writeStr(t.Raw)
+		case __DEFC_I__sNumericLiteral:
+			writeStr("?")
+		case __DEFC_I__sUnquoted:
+			if len(t.Raw) != 1 {
+				continue
+			}
+			c := t.Raw[0]
+			if c >= 'A' && c <= 'Z' {
+				writeByte(c + 32)
+			} else {
+				writeByte(c)
+			}
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func __DEFC_I__SplitTokens(line string) (tokens []string) {
+	var (
+		singleQuoted bool
+		doubleQuoted bool
+		arg          []byte
+	)
+
+	for i := 0; i < len(line); i++ {
+		switch ch := line[i]; ch {
+		case ';', '?':
+			if doubleQuoted || singleQuoted {
+				arg = append(arg, ch)
+			} else {
+				if len(arg) > 0 {
+					tokens = append(tokens, string(arg))
+				}
+				tokens = append(tokens, string(ch))
+				arg = arg[:0]
+			}
+		case ' ', '\t', '\n', '\r':
+			if doubleQuoted || singleQuoted {
+				arg = append(arg, ch)
+			} else if len(arg) > 0 {
+				tokens = append(tokens, string(arg))
+				arg = arg[:0]
+			}
+		case '"':
+			if !(i > 0 && line[i-1] == '\\' || singleQuoted) {
+				doubleQuoted = !doubleQuoted
+			}
+			arg = append(arg, ch)
+		case '\'':
+			if !(i > 0 && line[i-1] == '\\' || doubleQuoted) {
+				singleQuoted = !singleQuoted
+			}
+			arg = append(arg, ch)
+		default:
+			arg = append(arg, ch)
+		}
+	}
+
+	if len(arg) > 0 {
+		tokens = append(tokens, string(arg))
+	}
+
+	return tokens
+}

@@ -403,6 +403,16 @@ func hasOption(opts []string, opt string) bool {
 //go:embed template/sqlx.tmpl
 var sqlxTemplate string
 
+//go:embed builtin/sqlx_nort_lex.snippet
+var sqlxNortLexSnippet string
+
+func (ctx *sqlxContext) EmbeddedNortLex() string {
+	if !ctx.HasFeature(FeatureSqlxNoRt) {
+		return ""
+	}
+	return strings.ReplaceAll(sqlxNortLexSnippet, "__DEFC_I__", "__"+ctx.Ident)
+}
+
 func (ctx *sqlxContext) genSqlxCode(w io.Writer) error {
 	tmpl, err := template.
 		New("defc(sqlx)").
