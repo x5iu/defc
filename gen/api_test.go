@@ -246,3 +246,59 @@ func TestBuildApi(t *testing.T) {
 		}
 	})
 }
+
+func TestGenApiOutputHasNoMIMEParsing(t *testing.T) {
+	const (
+		testPk = "test"
+		testGo = testPk + ".go"
+	)
+	testDir := filepath.Join("testdata", "api")
+	pwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(pwd) }()
+	if err := os.Chdir(testDir); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := os.ReadFile(testGo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pos int
+	lineScanner := bufio.NewScanner(bytes.NewReader(doc))
+	for i := 1; lineScanner.Scan(); i++ {
+		text := lineScanner.Text()
+		if strings.HasPrefix(text, "//go:generate") &&
+			strings.HasSuffix(text, "TestBuildApi/success") {
+			pos = i
+			break
+		}
+	}
+	if err := lineScanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if pos == 0 {
+		t.Fatal("pos not found")
+	}
+	testDirAbs, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	builder := NewCliBuilder(ModeApi).
+		WithFeats([]string{FeatureApiNoRt, FeatureApiFuture}).
+		WithPkg(testPk).
+		WithPwd(testDirAbs).
+		WithFile(testGo, doc).
+		WithPos(pos)
+	var buf bytes.Buffer
+	if err := builder.Build(&buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, sub := range []string{"bufio", "net/textproto", "ReadMIMEHeader"} {
+		if strings.Contains(out, sub) {
+			t.Errorf("generated code must not contain %q", sub)
+		}
+	}
+}

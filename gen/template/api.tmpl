@@ -35,8 +35,17 @@ type {{ $impName }}{{ $.GenericsRepr true }} struct{
 {{ $additionalFuncs := $.AdditionalFuncs }}
 var (
 {{ range $index, $method := $.Methods }} {{ if and (not (and $method.ReturnSlice ($.HasFeature "api/page"))) (not (isInner $method.Ident)) (not (isResponse $method.Ident)) }}
-    {{ printf "addr%sTmpl%s" $.Ident $method.Ident }} = template.Must(template.New("Address{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote ($method.TmplURL) }})) {{ if ne $method.Header "" }}
-        {{ printf "header%sTmpl%s" $.Ident $method.Ident }} = template.Must(template.New("Header{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote $method.TmplHeader }})) {{ end }} {{ end }} {{ end }}
+    {{ printf "addr%sTmpl%s" $.Ident $method.Ident }} = template.Must(template.New("Address{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote ($method.TmplURL) }}))
+    {{ if or (gt (len $method.ApiHeaderFields) 0) (ne $method.ApiBodyTemplate "") }}
+    {{ range $hi, $hf := $method.ApiHeaderFields }}
+    {{ printf "header%sTmpl%s_%d" $.Ident $method.Ident $hi }} = template.Must(template.New("Header{{ $method.Ident }}_{{ $hi }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote $hf.Value }}))
+    {{ end }}
+    {{ if ne $method.ApiBodyTemplate "" }}
+    {{ printf "body%sTmpl%s" $.Ident $method.Ident }} = template.Must(template.New("Body{{ $method.Ident }}"){{ if gt (len $additionalFuncs) 0 }}.Funcs(template.FuncMap{ {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }}, {{ end }} }){{ end }}.Parse({{ quote $method.ApiBodyTemplate }}))
+    {{ end }}
+    {{ end }}
+    {{ end }}
+{{ end }}
 )
 
 {{ $getBufferFunc := (printf "__%sGetBuffer" $.Ident) }}
@@ -64,7 +73,7 @@ var (
         {{- end -}}
         {
         __maxRetry := {{ $method.MaxRetry }}
-        {{ if (and (httpMethodHasBody $httpMethod) (not (headerHasBody $method.TmplHeader))) }}
+        {{ if (and (httpMethodHasBody $httpMethod) (not (apiHeaderSpecProvidesBody $method))) }}
             var (
             __reader = any({{- range $index, $ident := $sortIn -}}
                 {{- if eq $index (sub (len $sortIn) 1) -}}
@@ -93,7 +102,7 @@ var (
         {{- $err := printf "err%s" $method.Ident }}
         {{- $err }} error
         )
-        {{ if (and (httpMethodHasBody $httpMethod) (not (headerHasBody $method.TmplHeader))) }}
+        {{ if (and (httpMethodHasBody $httpMethod) (not (apiHeaderSpecProvidesBody $method))) }}
             if __readerCanReset {
             if {{ $err }} = __reset.Reset(); {{ $err }} != nil {
             return {{ range $index, $type := $method.Out -}}
@@ -191,7 +200,6 @@ var (
         {{- $n := printf "n%s" $method.Ident -}}
         {{- $page := printf "page%s" $method.Ident -}}
         {{- $addrTmpl := printf "addr%sTmpl%s" $.Ident $method.Ident -}}
-        {{- $headerTmpl := printf "header%sTmpl%s" $.Ident $method.Ident -}}
         {{- if $method.ReturnSlice }}
             var (
             {{ if gt (len $method.Out) 1 -}}
@@ -214,16 +222,29 @@ var (
                 }).
                 Parse({{ quote ($method.TmplURL) }}),
                 )
-                {{ if ne $method.Header "" -}}
-                    {{ $headerTmpl }} = template.Must(
-                    template.New("Header{{ $method.Ident }}").
+                {{ if or (gt (len $method.ApiHeaderFields) 0) (ne $method.ApiBodyTemplate "") -}}
+                    {{ range $hi, $hf := $method.ApiHeaderFields }}
+                    {{ printf "header%sTmpl%s_%d" $.Ident $method.Ident $hi }} = template.Must(
+                    template.New("Header{{ $method.Ident }}_{{ $hi }}").
                     Funcs(template.FuncMap{
                     "page": {{ $page }},
                     {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }},
                     {{ end }}
                     }).
-                    Parse({{ quote $method.TmplHeader }}),
+                    Parse({{ quote $hf.Value }}),
                     )
+                    {{ end }}
+                    {{ if ne $method.ApiBodyTemplate "" }}
+                    {{ printf "body%sTmpl%s" $.Ident $method.Ident }} = template.Must(
+                    template.New("Body{{ $method.Ident }}").
+                    Funcs(template.FuncMap{
+                    "page": {{ $page }},
+                    {{ range $key, $func := $additionalFuncs }} {{ quote $key }}: {{ $func }},
+                    {{ end }}
+                    }).
+                    Parse({{ quote $method.ApiBodyTemplate }}),
+                    )
+                    {{ end }}
                 {{- end }}
             {{- end }}
             )
@@ -241,7 +262,7 @@ var (
         {{ end }}
 
         {{ $header := printf "header%s" $method.Ident -}}
-        {{ if ne $method.Header "" -}}
+        {{ if or (gt (len $method.ApiHeaderFields) 0) (ne $method.ApiBodyTemplate "") -}}
             {{ if $.HasFeature "api/nort" }}
                 {{ $header }} := {{ $getBufferFunc }}()
                 defer {{ $putBufferFunc }}({{ $header }})
@@ -303,56 +324,34 @@ var (
         fmt.Errorf("error building '{{ $method.Ident }}' url: %w", {{ $err }})
         }
 
-        {{ $bufReader := printf "bufReader%s" $method.Ident }}
-        {{ $mimeHeader := printf "mimeHeader%s" $method.Ident -}}
-        {{ if ne $method.Header "" -}}
-            if {{ $err }} = {{ $headerTmpl }}.Execute({{ $header }}, map[string]any{
-            {{ if $.HasInner -}}
-                "{{ $.Ident }}": __imp.{{ methodInner }}(),
-            {{ end -}}
-            {{ range $index, $ident := $sortIn -}}
-                "{{- $ident }}": {{ $ident -}},
-            {{ end }}
-            }); {{ $err }} != nil {
-            return {{ range $index, $type := $method.Out -}}
-                {{- if lt $index (sub (len $method.Out) 1) -}}
-                    v{{- $index -}}{{- $method.Ident }},
-                {{- end -}}
+        {{ $bodyBytes := printf "bodyBytes%s" $method.Ident -}}
+        {{ if and (httpMethodHasBody $httpMethod) (apiHeaderSpecProvidesBody $method) }}
+        var {{ $bodyBytes }} []byte
+        if {{ $err }} = {{ printf "body%sTmpl%s" $.Ident $method.Ident }}.Execute({{ $header }}, map[string]any{
+        {{ if $.HasInner -}}
+            "{{ $.Ident }}": __imp.{{ methodInner }}(),
+        {{ end -}}
+        {{ range $index, $ident := $sortIn -}}
+            "{{- $ident }}": {{ $ident -}},
+        {{ end }}
+        }); {{ $err }} != nil {
+        return {{ range $index, $type := $method.Out -}}
+            {{- if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }},
             {{- end -}}
-            fmt.Errorf("error building '{{ $method.Ident }}' header: %w", {{ $err }})
-            }
-            {{ $bufReader }} := bufio.NewReader({{ $header }})
-            {{ $mimeHeader }}, {{ $err }} := textproto.NewReader({{ $bufReader }}).ReadMIMEHeader()
-            if {{ $err }} != nil {
-            return {{ range $index, $type := $method.Out -}}
-                {{- if lt $index (sub (len $method.Out) 1) -}}
-                    v{{- $index -}}{{- $method.Ident }},
-                {{- end -}}
-            {{- end -}}
-            fmt.Errorf("error reading '{{ $method.Ident }}' header: %w", {{ $err }})
-            }
-        {{- end }}
+        {{- end -}}
+        fmt.Errorf("error building '{{ $method.Ident }}' request body template: %w", {{ $err }})
+        }
+        {{ $bodyBytes }} = append([]byte(nil), {{ $header }}.Bytes()...)
+        {{ $header }}.Reset()
+        {{ end }}
 
         {{ $url := printf "url%s" $method.Ident -}}
         {{ $url }} := {{ $addr }}.String()
         {{- $request := printf "request%s" $method.Ident -}}
         {{- if httpMethodHasBody $httpMethod }}
-            {{- if headerHasBody $method.TmplHeader }}
-                {{- if or ($.HasFeature "api/logx") ($.HasFeature "api/get-body") }}
-                    {{- $body := printf "requestBody%s" $method.Ident }}
-                    {{ $body }}, {{ $err }} := io.ReadAll({{ $bufReader }})
-                    if {{ $err }} != nil {
-                    return {{ range $index, $type := $method.Out -}}
-                        {{- if lt $index (sub (len $method.Out) 1) -}}
-                            v{{- $index -}}{{- $method.Ident }},
-                        {{- end -}}
-                    {{- end -}}
-                    fmt.Errorf("error reading '{{ $method.Ident }}' request body: %w", {{ $err }})
-                    }
-                    {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, bytes.NewReader({{ $body }}))
-                {{ else }}
-                    {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, {{ $bufReader }})
-                {{ end -}}
+            {{- if apiHeaderSpecProvidesBody $method }}
+                {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, bytes.NewReader({{ $bodyBytes }}))
             {{ else }}
                 {{ $request }}, {{ $err }} := http.NewRequest{{ if $method.HasContext }}WithContext{{ end }}({{ if $method.HasContext }}ctx, {{ end }}{{ quote $httpMethod }}, {{ $url }}, {{- range $index, $ident := $sortIn -}}
                     {{- if eq $index (sub (len $sortIn) 1) -}}
@@ -375,15 +374,36 @@ var (
         fmt.Errorf("error building '{{ $method.Ident }}' request: %w", {{ $err }})
         }
 
-        {{ if ne $method.Header "" -}}
-            {{ $k := printf "k%s" $method.Ident -}}
-            {{ $vv := printf "vv%s" $method.Ident -}}
-            {{ $v := printf "v%s" $method.Ident -}}
-            for {{ $k }}, {{ $vv }} := range {{ $mimeHeader }} {
-            for _, {{ $v }} := range {{ $vv }} {
-            {{ $request }}.Header.Add({{ $k }}, {{ $v }})
-            }
-            }
+        {{ if gt (len $method.ApiHeaderFields) 0 -}}
+        {{ range $hi, $hf := $method.ApiHeaderFields }}
+        if {{ $err }} = {{ printf "header%sTmpl%s_%d" $.Ident $method.Ident $hi }}.Execute({{ $header }}, map[string]any{
+        {{ if $.HasInner -}}
+            "{{ $.Ident }}": __imp.{{ methodInner }}(),
+        {{ end -}}
+        {{ range $index, $ident := $sortIn -}}
+            "{{- $ident }}": {{ $ident -}},
+        {{ end }}
+        }); {{ $err }} != nil {
+        return {{ range $index, $type := $method.Out -}}
+            {{- if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }},
+            {{- end -}}
+        {{- end -}}
+        fmt.Errorf("error building '{{ $method.Ident }}' header field %s: %w", {{ quote $hf.Name }}, {{ $err }})
+        }
+        {{ $hv := printf "hv%s_%d" $method.Ident $hi }}
+        {{ $hv }} := {{ $header }}.String()
+        if strings.ContainsAny({{ $hv }}, "\r\n\x00") {
+        return {{ range $index, $type := $method.Out -}}
+            {{- if lt $index (sub (len $method.Out) 1) -}}
+                v{{- $index -}}{{- $method.Ident }},
+            {{- end -}}
+        {{- end -}}
+        fmt.Errorf("invalid header value for %s: contains CR, LF, or NUL", {{ quote $hf.Name }})
+        }
+        {{ $request }}.Header.Add({{ quote $hf.Name }}, {{ $hv }})
+        {{ $header }}.Reset()
+        {{ end }}
         {{- end }}
 
         {{ if $.HasFeature "api/gzip" }}
@@ -526,7 +546,7 @@ var (
             }
         {{ end }}
 
-        {{ $addr }}.Reset() {{ if ne $method.Header "" }}
+        {{ $addr }}.Reset() {{ if or (gt (len $method.ApiHeaderFields) 0) (ne $method.ApiBodyTemplate "") }}
             {{ $header }}.Reset(){{ end }}
         {{ if not ($.HasFeature "api/future") }}{{ $responseBody }}.Reset(){{ end }}
 

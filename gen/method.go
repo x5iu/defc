@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"net/http"
 	"regexp"
+	"strings"
 )
 
 // Method represents a method declaration in an interface
@@ -29,6 +30,14 @@ type Method struct {
 
 	// Source represents the raw file content
 	Source []byte
+
+	ApiHeaderFields []HeaderField
+	ApiBodyTemplate string
+}
+
+type HeaderField struct {
+	Name  string
+	Value string
 }
 
 func (method *Method) TxType() (ast.Expr, error) {
@@ -83,25 +92,65 @@ func (method *Method) TmplURL() string {
 
 var minusRe = regexp.MustCompile(`(?m)^[ \t]*?-[ \t]*`)
 
-// TmplHeader should only be used with '--mode=api' arg
-func (method *Method) TmplHeader() string {
-	var (
-		header = method.Header
-		body   string
-	)
-	if idx := index(header, "\r\n\r\n"); idx != -1 {
-		body = trimSpace(header[idx+4:])
-		header = trimSpace(header[:idx])
+func splitApiHeaderAndBody(raw string) (headerPart, bodyPart string) {
+	raw = strings.TrimSpace(raw)
+	if i := strings.Index(raw, "\r\n\r\n"); i >= 0 {
+		return strings.TrimSpace(raw[:i]), strings.TrimSpace(raw[i+4:])
 	}
-	if idx := index(header, "\n\n"); idx != -1 {
-		body = trimSpace(header[idx+2:])
-		header = trimSpace(header[:idx])
+	if i := strings.Index(raw, "\n\n"); i >= 0 {
+		return strings.TrimSpace(raw[:i]), strings.TrimSpace(raw[i+2:])
 	}
-	header = minusRe.ReplaceAllString(header, "") + "\r\n\r\n"
-	if len(body) > 0 {
-		header += body
+	return raw, ""
+}
+
+func isHTTPHeaderTokenChar(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
 	}
-	return header
+	switch c {
+	case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
+		return true
+	}
+	return false
+}
+
+func validateStaticAPIHeaderName(key string) error {
+	if key == "" {
+		return fmt.Errorf("api header field name is empty")
+	}
+	if strings.Contains(key, "{{") || strings.Contains(key, "}}") {
+		return fmt.Errorf("api header field name %q must be static; use OPTIONS(opts) for dynamic headers", key)
+	}
+	for i := 0; i < len(key); i++ {
+		if !isHTTPHeaderTokenChar(key[i]) {
+			return fmt.Errorf("api header field name %q contains invalid byte %q", key, key[i:i+1])
+		}
+	}
+	return nil
+}
+
+func parseApiHeaderSpec(raw string) ([]HeaderField, string, error) {
+	headerText, bodyPart := splitApiHeaderAndBody(raw)
+	headerText = minusRe.ReplaceAllString(headerText, "")
+	var fields []HeaderField
+	for _, line := range strings.Split(headerText, "\n") {
+		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+		if line == "" {
+			continue
+		}
+		colon := strings.IndexByte(line, ':')
+		if colon < 0 {
+			return nil, "", fmt.Errorf("api header line has no ':' separator: %q", line)
+		}
+		key := strings.TrimSpace(line[:colon])
+		val := strings.TrimSpace(line[colon+1:])
+		if err := validateStaticAPIHeaderName(key); err != nil {
+			return nil, "", err
+		}
+		fields = append(fields, HeaderField{Name: key, Value: val})
+	}
+	return fields, bodyPart, nil
 }
 
 var availableMethods = []string{
