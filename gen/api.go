@@ -466,18 +466,18 @@ func (ctx *apiContext) genApiCode(w io.Writer) error {
 	tmpl, err := template.
 		New("defc(api)").
 		Funcs(template.FuncMap{
-			"quote":             quote,
-			"isPointer":         isPointer,
-			"indirect":          indirect,
-			"importContext":     importContext,
-			"sub":               func(x, y int) int { return x - y },
-			"getRepr":           func(node ast.Node) string { return ctx.Doc.Repr(node) },
-			"isEllipsis":        func(node ast.Node) bool { return hasPrefix(ctx.Doc.Repr(node), "...") },
-			"methodResp":        ctx.MethodResponse,
-			"methodInner":       ctx.MethodInner,
-			"isResponse":        isResponse,
-			"isInner":           isInner,
-			"httpMethodHasBody":        httpMethodHasBody,
+			"quote":                     quote,
+			"isPointer":                 isPointer,
+			"indirect":                  indirect,
+			"importContext":             importContext,
+			"sub":                       func(x, y int) int { return x - y },
+			"getRepr":                   func(node ast.Node) string { return ctx.Doc.Repr(node) },
+			"isEllipsis":                func(node ast.Node) bool { return hasPrefix(ctx.Doc.Repr(node), "...") },
+			"methodResp":                ctx.MethodResponse,
+			"methodInner":               ctx.MethodInner,
+			"isResponse":                isResponse,
+			"isInner":                   isInner,
+			"httpMethodHasBody":         httpMethodHasBody,
 			"apiHeaderSpecProvidesBody": apiHeaderSpecProvidesBody,
 		}).
 		Parse(apiTemplate)

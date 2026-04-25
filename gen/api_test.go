@@ -294,6 +294,16 @@ func TestBuildApi(t *testing.T) {
 			return
 		}
 	})
+	t.Run("success_body_only", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		if err := runTest(genFile, builder); err != nil {
+			t.Errorf("build: %s", err)
+			return
+		}
+	})
 }
 
 func TestGenApiOutputHasNoMIMEParsing(t *testing.T) {

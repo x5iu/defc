@@ -93,14 +93,15 @@ func (method *Method) TmplURL() string {
 var minusRe = regexp.MustCompile(`(?m)^[ \t]*?-[ \t]*`)
 
 func splitApiHeaderAndBody(raw string) (headerPart, bodyPart string) {
-	raw = strings.TrimSpace(raw)
 	if i := strings.Index(raw, "\r\n\r\n"); i >= 0 {
-		return strings.TrimSpace(raw[:i]), strings.TrimSpace(raw[i+4:])
+		if i+4 < len(raw) || i == 0 {
+			return strings.TrimSpace(raw[:i]), strings.TrimSpace(raw[i+4:])
+		}
 	}
 	if i := strings.Index(raw, "\n\n"); i >= 0 {
 		return strings.TrimSpace(raw[:i]), strings.TrimSpace(raw[i+2:])
 	}
-	return raw, ""
+	return strings.TrimSpace(raw), ""
 }
 
 func isHTTPHeaderTokenChar(c byte) bool {

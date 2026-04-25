@@ -17,6 +17,8 @@ func TestSplitApiHeaderAndBody(t *testing.T) {
 		{"no_separator", "A: 1\r\n", "A: 1", ""},
 		{"whitespace_only", "   \t\r\n", "", ""},
 		{"crlf_takes_precedence_over_lf", "A: 1\r\n\r\nB1\n\nB2", "A: 1", "B1\n\nB2"},
+		{"body_only_crlf", "\r\n\r\n{{ .b }}", "", "{{ .b }}"},
+		{"body_only_lf", "\n\n{{ .b }}", "", "{{ .b }}"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -110,6 +112,33 @@ func TestParseApiHeaderSpec(t *testing.T) {
 		}
 		if len(fields) != 0 || body != "" {
 			t.Fatalf("got %+v body=%q err=%v", fields, body, err)
+		}
+	})
+	t.Run("body_only_crlf_separator", func(t *testing.T) {
+		fields, body, err := parseApiHeaderSpec("\r\n\r\n{{ .body }}")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fields) != 0 || body != "{{ .body }}" {
+			t.Fatalf("got %+v body=%q", fields, body)
+		}
+	})
+	t.Run("body_only_lf_separator", func(t *testing.T) {
+		fields, body, err := parseApiHeaderSpec("\n\n{{ .body }}")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fields) != 0 || body != "{{ .body }}" {
+			t.Fatalf("got %+v body=%q", fields, body)
+		}
+	})
+	t.Run("crlf_separator_empty_body", func(t *testing.T) {
+		fields, body, err := parseApiHeaderSpec("\r\n\r\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fields) != 0 || body != "" {
+			t.Fatalf("got %+v body=%q", fields, body)
 		}
 	})
 }

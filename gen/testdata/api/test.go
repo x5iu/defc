@@ -190,4 +190,15 @@ type SuccessBodyTemplatePost interface {
 	Run(ctx context.Context, x string) error
 }
 
+//go:generate defc [mode] [output] [features...] TestBuildApi/success_body_only
+type SuccessBodyOnly interface {
+	Response() Generic[defc.Response, defc.FutureResponse]
+
+	// Run POST https://localhost:port/path
+	//
+	//
+	// {{ .x }}
+	Run(ctx context.Context, x string) error
+}
+
 type Generic[T any, U any] struct{}
