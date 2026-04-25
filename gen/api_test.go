@@ -245,6 +245,55 @@ func TestBuildApi(t *testing.T) {
 			return
 		}
 	})
+	t.Run("fail_header_empty_block", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		if err := runTest(genFile, builder); err == nil {
+			t.Errorf("build: expects errors, got nil")
+			return
+		} else if !strings.Contains(err.Error(), "API header block is empty") || !strings.Contains(err.Error(), `"Run"`) {
+			t.Errorf("build: expects empty API header error for Run, got => %s", err)
+			return
+		}
+	})
+	t.Run("fail_body_template_get", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		if err := runTest(genFile, builder); err == nil {
+			t.Errorf("build: expects errors, got nil")
+			return
+		} else if !strings.Contains(err.Error(), "only allowed for POST, PUT, or PATCH") || !strings.Contains(err.Error(), `"Run"`) {
+			t.Errorf("build: expects body-on-GET error, got => %s", err)
+			return
+		}
+	})
+	t.Run("fail_body_template_head", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		if err := runTest(genFile, builder); err == nil {
+			t.Errorf("build: expects errors, got nil")
+			return
+		} else if !strings.Contains(err.Error(), "only allowed for POST, PUT, or PATCH") || !strings.Contains(err.Error(), `"Run"`) {
+			t.Errorf("build: expects body-on-HEAD error, got => %s", err)
+			return
+		}
+	})
+	t.Run("success_body_template_post", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		if err := runTest(genFile, builder); err != nil {
+			t.Errorf("build: %s", err)
+			return
+		}
+	})
 }
 
 func TestGenApiOutputHasNoMIMEParsing(t *testing.T) {

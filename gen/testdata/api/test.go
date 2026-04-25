@@ -147,4 +147,47 @@ type SuccessWithOptions[O any] interface {
 	Run(ctx context.Context) error
 }
 
+//go:generate defc [mode] [output] [features...] TestBuildApi/fail_header_empty_block
+type FailHeaderEmptyBlock interface {
+	Response() Generic[defc.Response, defc.FutureResponse]
+
+	// Run GET https://localhost:port/path
+	//
+	//
+	Run(ctx context.Context) error
+}
+
+//go:generate defc [mode] [output] [features...] TestBuildApi/fail_body_template_get
+type FailBodyTemplateGet interface {
+	Response() Generic[defc.Response, defc.FutureResponse]
+
+	// Run GET https://localhost:port/path
+	// X-A: 1
+	//
+	// {{ .x }}
+	Run(ctx context.Context, x string) error
+}
+
+//go:generate defc [mode] [output] [features...] TestBuildApi/fail_body_template_head
+type FailBodyTemplateHead interface {
+	Response() Generic[defc.Response, defc.FutureResponse]
+
+	// Run HEAD https://localhost:port/path
+	// X-A: 1
+	//
+	// {{ .x }}
+	Run(ctx context.Context, x string) error
+}
+
+//go:generate defc [mode] [output] [features...] TestBuildApi/success_body_template_post
+type SuccessBodyTemplatePost interface {
+	Response() Generic[defc.Response, defc.FutureResponse]
+
+	// Run POST https://localhost:port/path
+	// Content-Type: application/json
+	//
+	// {{ .x }}
+	Run(ctx context.Context, x string) error
+}
+
 type Generic[T any, U any] struct{}

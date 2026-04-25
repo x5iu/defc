@@ -71,17 +71,23 @@ func main() {
 		log.Fatalf("unexpected user with MakeUpdateUserRequest: User(id=%d, name=%q)\n", user.ID, user.Name)
 	}
 	tr := client.Options().Client().Transport.(*Transport)
-	if _, err := client.MalHdr(ctx, "abc\r\nX-Evil: 1", strings.NewReader("PAYLOAD")); err == nil {
-		log.Fatalln("expected error for CRLF in header value")
-	}
-	if tr.malhdrRounds != 0 {
-		log.Fatalf("transport saw malhdr rounds=%d want 0", tr.malhdrRounds)
-	}
-	if _, err := client.MalHdr(ctx, "abc\r\n\r\n{\"evil\":true}", strings.NewReader("PAYLOAD")); err == nil {
-		log.Fatalln("expected error for CRLFCRLF in header value")
-	}
-	if _, err := client.MalHdr(ctx, "abc\x00", strings.NewReader("PAYLOAD")); err == nil {
-		log.Fatalln("expected error for NUL in header value")
+	before := tr.malhdrRounds
+	for _, tc := range []struct {
+		name string
+		tok  string
+	}{
+		{"CRLF", "abc\r\nX-Evil: 1"},
+		{"CRLFCRLF", "abc\r\n\r\n{\"evil\":true}"},
+		{"NUL", "abc\x00"},
+		{"CR_only", "abc\rX"},
+		{"LF_only", "abc\nX"},
+	} {
+		if _, err := client.MalHdr(ctx, tc.tok, strings.NewReader("PAYLOAD")); err == nil {
+			log.Fatalf("%s: expected error", tc.name)
+		}
+		if tr.malhdrRounds != before {
+			log.Fatalf("%s: transport saw malhdr rounds=%d want %d", tc.name, tr.malhdrRounds, before)
+		}
 	}
 	user, err = client.MalHdr(ctx, "hello:世界", strings.NewReader(`{"k":1}`))
 	if err != nil {
@@ -89,6 +95,9 @@ func main() {
 	}
 	if user.ID != 99 || user.Name != "hdr_ok" {
 		log.Fatalf("unexpected MalHdr ok: %+v", user)
+	}
+	if tr.malhdrRounds != before+1 {
+		log.Fatalf("transport saw malhdr rounds=%d want %d after valid MalHdr", tr.malhdrRounds, before+1)
 	}
 }
 
