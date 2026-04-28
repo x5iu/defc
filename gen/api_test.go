@@ -304,6 +304,17 @@ func TestBuildApi(t *testing.T) {
 			return
 		}
 	})
+	t.Run("success_gzip_no_headers", func(t *testing.T) {
+		builder, ok := newBuilder(t)
+		if !ok {
+			return
+		}
+		builder = builder.WithFeats([]string{FeatureApiFuture, FeatureApiGzip})
+		if err := runTest(genFile, builder); err != nil {
+			t.Errorf("build: %s", err)
+			return
+		}
+	})
 }
 
 func TestGenApiOutputHasNoMIMEParsing(t *testing.T) {
@@ -358,6 +369,120 @@ func TestGenApiOutputHasNoMIMEParsing(t *testing.T) {
 	for _, sub := range []string{"bufio", "net/textproto", "ReadMIMEHeader"} {
 		if strings.Contains(out, sub) {
 			t.Errorf("generated code must not contain %q", sub)
+		}
+	}
+}
+
+func TestApiGzipNoHeadersEmitsStringsImport(t *testing.T) {
+	const (
+		testPk = "test"
+		testGo = testPk + ".go"
+	)
+	testDir := filepath.Join("testdata", "api")
+	pwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(pwd) }()
+	if err := os.Chdir(testDir); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := os.ReadFile(testGo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pos int
+	lineScanner := bufio.NewScanner(bytes.NewReader(doc))
+	for i := 1; lineScanner.Scan(); i++ {
+		text := lineScanner.Text()
+		if strings.HasPrefix(text, "//go:generate") &&
+			strings.HasSuffix(text, "TestBuildApi/success_gzip_no_headers") {
+			pos = i
+			break
+		}
+	}
+	if err = lineScanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if pos == 0 {
+		t.Fatal("pos not found")
+	}
+	testDirAbs, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err = NewCliBuilder(ModeApi).
+		WithFeats([]string{FeatureApiFuture, FeatureApiGzip}).
+		WithPkg(testPk).
+		WithPwd(testDirAbs).
+		WithFile(testGo, doc).
+		WithPos(pos).
+		Build(&buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, `"strings"`) {
+		t.Fatalf("api/gzip without custom headers: generated code must import strings, got snippet:\n%s", out)
+	}
+}
+
+func TestApiGeneratedCodeHeaderValueValidation(t *testing.T) {
+	const (
+		testPk = "test"
+		testGo = testPk + ".go"
+	)
+	testDir := filepath.Join("testdata", "api")
+	pwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(pwd) }()
+	if err := os.Chdir(testDir); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := os.ReadFile(testGo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pos int
+	lineScanner := bufio.NewScanner(bytes.NewReader(doc))
+	for i := 1; lineScanner.Scan(); i++ {
+		text := lineScanner.Text()
+		if strings.HasPrefix(text, "//go:generate") &&
+			strings.HasSuffix(text, "TestBuildApi/success") {
+			pos = i
+			break
+		}
+	}
+	if err = lineScanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if pos == 0 {
+		t.Fatal("pos not found")
+	}
+	testDirAbs, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err = NewCliBuilder(ModeApi).
+		WithFeats([]string{FeatureApiNoRt, FeatureApiFuture}).
+		WithPkg(testPk).
+		WithPwd(testDirAbs).
+		WithFile(testGo, doc).
+		WithPos(pos).
+		Build(&buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, s := range []string{
+		"contains disallowed control character 0x%02x",
+		"__c < 0x20 && __c != '\\t'",
+		"__c == 0x7f",
+	} {
+		if !strings.Contains(out, s) {
+			t.Fatalf("expected generated code to contain %q", s)
 		}
 	}
 }

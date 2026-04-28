@@ -213,15 +213,6 @@ func (ctx *apiContext) HasBody() bool {
 	return false
 }
 
-func (ctx *apiContext) hasAnyApiHeaderFields() bool {
-	for _, method := range ctx.Methods {
-		if len(method.ApiHeaderFields) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 func (ctx *apiContext) HasInner() bool {
 	return hasInner(ctx.Methods)
 }
@@ -275,7 +266,7 @@ func (ctx *apiContext) MergedImports() (imports []string) {
 		imports = append(imports, parseImport("__rt github.com/x5iu/defc/runtime"))
 	}
 
-	if ctx.hasAnyApiHeaderFields() {
+	if ctx.HasFeature(FeatureApiGzip) {
 		imports = append(imports, quote("strings"))
 	}
 

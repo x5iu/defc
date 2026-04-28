@@ -81,6 +81,9 @@ func main() {
 		{"NUL", "abc\x00"},
 		{"CR_only", "abc\rX"},
 		{"LF_only", "abc\nX"},
+		{"SOH", "abc\x01"},
+		{"US", "abc\x1f"},
+		{"DEL", "abc\x7f"},
 	} {
 		if _, err := client.MalHdr(ctx, tc.tok, strings.NewReader("PAYLOAD")); err == nil {
 			log.Fatalf("%s: expected error", tc.name)
@@ -89,6 +92,17 @@ func main() {
 			log.Fatalf("%s: transport saw malhdr rounds=%d want %d", tc.name, tr.malhdrRounds, before)
 		}
 	}
+	user, err = client.MalHdr(ctx, "pre\tpost", strings.NewReader(`{"k":1}`))
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if user.ID != 99 || user.Name != "hdr_ok" {
+		log.Fatalf("unexpected MalHdr tab: %+v", user)
+	}
+	if tr.malhdrRounds != before+1 {
+		log.Fatalf("transport saw malhdr rounds=%d want %d after tab MalHdr", tr.malhdrRounds, before+1)
+	}
+	before = tr.malhdrRounds
 	user, err = client.MalHdr(ctx, "hello:世界", strings.NewReader(`{"k":1}`))
 	if err != nil {
 		log.Fatalln(err)
@@ -180,7 +194,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 				panic(fmt.Sprintf("malhdr body %q", b))
 			}
 		}
-		if tok != "hello:世界" {
+		if tok != "hello:世界" && tok != "pre\tpost" {
 			panic(fmt.Sprintf("token %q", tok))
 		}
 		return &http.Response{

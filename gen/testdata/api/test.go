@@ -201,4 +201,12 @@ type SuccessBodyOnly interface {
 	Run(ctx context.Context, x string) error
 }
 
+//go:generate defc [mode] [output] [features...] TestBuildApi/success_gzip_no_headers
+type SuccessGzipNoHeaders interface {
+	Response() Generic[defc.Response, defc.FutureResponse]
+
+	// Run GET https://localhost:port/path
+	Run(ctx context.Context) error
+}
+
 type Generic[T any, U any] struct{}

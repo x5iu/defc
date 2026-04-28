@@ -393,13 +393,16 @@ var (
         }
         {{ $hv := printf "hv%s_%d" $method.Ident $hi }}
         {{ $hv }} := {{ $header }}.String()
-        if strings.ContainsAny({{ $hv }}, "\r\n\x00") {
+        for __i := 0; __i < len({{ $hv }}); __i++ {
+        __c := {{ $hv }}[__i]
+        if (__c < 0x20 && __c != '\t') || __c == 0x7f {
         return {{ range $index, $type := $method.Out -}}
             {{- if lt $index (sub (len $method.Out) 1) -}}
                 v{{- $index -}}{{- $method.Ident }},
             {{- end -}}
         {{- end -}}
-        fmt.Errorf("invalid header value for %s: contains CR, LF, or NUL", {{ quote $hf.Name }})
+        fmt.Errorf("invalid header value for %s: contains disallowed control character 0x%02x", {{ quote $hf.Name }}, __c)
+        }
         }
         {{ $request }}.Header.Add({{ quote $hf.Name }}, {{ $hv }})
         {{ $header }}.Reset()
