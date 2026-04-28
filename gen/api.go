@@ -133,6 +133,27 @@ func (ctx *apiContext) Build(w io.Writer) error {
 		return fmt.Errorf("api/gzip feature requires api/nort feature to be disabled")
 	}
 
+	for _, method := range ctx.Methods {
+		if method.Header == "" {
+			continue
+		}
+		fields, bodyTmpl, err := parseApiHeaderSpec(method.Header)
+		if err != nil {
+			return fmt.Errorf("method %s: %w", quote(method.Ident), err)
+		}
+		if len(fields) == 0 && bodyTmpl == "" {
+			return fmt.Errorf("method %s: API header block is empty", quote(method.Ident))
+		}
+		if bodyTmpl != "" && !httpMethodHasBody(method.MethodHTTP()) {
+			return fmt.Errorf(
+				"method %s: request body in API header block is only allowed for POST, PUT, or PATCH",
+				quote(method.Ident),
+			)
+		}
+		method.ApiHeaderFields = fields
+		method.ApiBodyTemplate = bodyTmpl
+	}
+
 	if err := ctx.genApiCode(w); err != nil {
 		return fmt.Errorf("genApiCode: %w", err)
 	}
@@ -183,18 +204,9 @@ func (ctx *apiContext) HasFeature(feature string) bool {
 	return false
 }
 
-func (ctx *apiContext) HasHeader() bool {
-	for _, method := range ctx.Methods {
-		if method.Header != "" {
-			return true
-		}
-	}
-	return false
-}
-
 func (ctx *apiContext) HasBody() bool {
 	for _, method := range ctx.Methods {
-		if httpMethodHasBody(method.MethodHTTP()) && headerHasBody(method.TmplHeader()) {
+		if httpMethodHasBody(method.MethodHTTP()) && method.ApiBodyTemplate != "" {
 			return true
 		}
 	}
@@ -254,12 +266,12 @@ func (ctx *apiContext) MergedImports() (imports []string) {
 		imports = append(imports, parseImport("__rt github.com/x5iu/defc/runtime"))
 	}
 
-	if ctx.HasHeader() {
-		imports = append(imports, quote("bufio"))
-		imports = append(imports, quote("net/textproto"))
-		if ctx.HasBody() && ctx.HasFeature(FeatureApiLogx) {
-			imports = append(imports, quote("bytes"))
-		}
+	if ctx.HasFeature(FeatureApiGzip) {
+		imports = append(imports, quote("strings"))
+	}
+
+	if ctx.HasBody() && !ctx.HasFeature(FeatureApiNoRt) {
+		imports = append(imports, quote("bytes"))
 	}
 
 	if importContext(ctx.Methods) {
@@ -434,14 +446,8 @@ func httpMethodHasBody(method string) bool {
 	}
 }
 
-func headerHasBody(header string) bool {
-	if idx := index(header, "\r\n\r\n"); idx != -1 {
-		return len(trimSpace(header[idx+4:])) > 0
-	}
-	if idx := index(header, "\n\n"); idx != -1 {
-		return len(trimSpace(header[idx+2:])) > 0
-	}
-	return false
+func apiHeaderSpecProvidesBody(method *Method) bool {
+	return method.ApiBodyTemplate != ""
 }
 
 //go:embed template/api.tmpl
@@ -451,19 +457,19 @@ func (ctx *apiContext) genApiCode(w io.Writer) error {
 	tmpl, err := template.
 		New("defc(api)").
 		Funcs(template.FuncMap{
-			"quote":             quote,
-			"isPointer":         isPointer,
-			"indirect":          indirect,
-			"importContext":     importContext,
-			"sub":               func(x, y int) int { return x - y },
-			"getRepr":           func(node ast.Node) string { return ctx.Doc.Repr(node) },
-			"isEllipsis":        func(node ast.Node) bool { return hasPrefix(ctx.Doc.Repr(node), "...") },
-			"methodResp":        ctx.MethodResponse,
-			"methodInner":       ctx.MethodInner,
-			"isResponse":        isResponse,
-			"isInner":           isInner,
-			"httpMethodHasBody": httpMethodHasBody,
-			"headerHasBody":     headerHasBody,
+			"quote":                     quote,
+			"isPointer":                 isPointer,
+			"indirect":                  indirect,
+			"importContext":             importContext,
+			"sub":                       func(x, y int) int { return x - y },
+			"getRepr":                   func(node ast.Node) string { return ctx.Doc.Repr(node) },
+			"isEllipsis":                func(node ast.Node) bool { return hasPrefix(ctx.Doc.Repr(node), "...") },
+			"methodResp":                ctx.MethodResponse,
+			"methodInner":               ctx.MethodInner,
+			"isResponse":                isResponse,
+			"isInner":                   isInner,
+			"httpMethodHasBody":         httpMethodHasBody,
+			"apiHeaderSpecProvidesBody": apiHeaderSpecProvidesBody,
 		}).
 		Parse(apiTemplate)
 

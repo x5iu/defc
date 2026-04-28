@@ -70,10 +70,54 @@ func main() {
 	if user.ID != 4 || user.Name != "defc_test_0004" {
 		log.Fatalf("unexpected user with MakeUpdateUserRequest: User(id=%d, name=%q)\n", user.ID, user.Name)
 	}
+	tr := client.Options().Client().Transport.(*Transport)
+	before := tr.malhdrRounds
+	for _, tc := range []struct {
+		name string
+		tok  string
+	}{
+		{"CRLF", "abc\r\nX-Evil: 1"},
+		{"CRLFCRLF", "abc\r\n\r\n{\"evil\":true}"},
+		{"NUL", "abc\x00"},
+		{"CR_only", "abc\rX"},
+		{"LF_only", "abc\nX"},
+		{"SOH", "abc\x01"},
+		{"US", "abc\x1f"},
+		{"DEL", "abc\x7f"},
+	} {
+		if _, err := client.MalHdr(ctx, tc.tok, strings.NewReader("PAYLOAD")); err == nil {
+			log.Fatalf("%s: expected error", tc.name)
+		}
+		if tr.malhdrRounds != before {
+			log.Fatalf("%s: transport saw malhdr rounds=%d want %d", tc.name, tr.malhdrRounds, before)
+		}
+	}
+	user, err = client.MalHdr(ctx, "pre\tpost", strings.NewReader(`{"k":1}`))
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if user.ID != 99 || user.Name != "hdr_ok" {
+		log.Fatalf("unexpected MalHdr tab: %+v", user)
+	}
+	if tr.malhdrRounds != before+1 {
+		log.Fatalf("transport saw malhdr rounds=%d want %d after tab MalHdr", tr.malhdrRounds, before+1)
+	}
+	before = tr.malhdrRounds
+	user, err = client.MalHdr(ctx, "hello:世界", strings.NewReader(`{"k":1}`))
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if user.ID != 99 || user.Name != "hdr_ok" {
+		log.Fatalf("unexpected MalHdr ok: %+v", user)
+	}
+	if tr.malhdrRounds != before+1 {
+		log.Fatalf("transport saw malhdr rounds=%d want %d after valid MalHdr", tr.malhdrRounds, before+1)
+	}
 }
 
 type Transport struct {
-	retryCount map[string]int
+	retryCount   map[string]int
+	malhdrRounds int
 }
 
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -128,6 +172,35 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 				Body:       io.NopCloser(bytes.NewBufferString(`{"code":200,"message":"","data":{"id":4,"name":"defc_test_0004"}}`)),
 			}, nil
 		}
+	case "/v1/malhdr":
+		if method != http.MethodPost {
+			panic("malhdr method")
+		}
+		t.malhdrRounds++
+		if req.Header.Get("X-Evil") != "" {
+			panic("X-Evil header must not be set")
+		}
+		tok := req.Header.Get("X-Token")
+		if tok == "" {
+			panic("missing X-Token")
+		}
+		if req.Body != nil {
+			b, err := io.ReadAll(req.Body)
+			if err != nil {
+				panic(err)
+			}
+			req.Body.Close()
+			if string(b) != `{"k":1}` {
+				panic(fmt.Sprintf("malhdr body %q", b))
+			}
+		}
+		if tok != "hello:世界" && tok != "pre\tpost" {
+			panic(fmt.Sprintf("token %q", tok))
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"code":200,"message":"","data":{"id":99,"name":"hdr_ok"}}`)),
+		}, nil
 	case "/v1/users/":
 		switch method {
 		case "POST":
@@ -221,6 +294,10 @@ type Client interface {
 	//
 	// {{ encodejson .req }}
 	MakeUpdateUserRequest(ctx context.Context, req *User) (*User, error)
+
+	// MalHdr POST https://localhost:443/v1/malhdr
+	// X-Token: {{ .tok }}
+	MalHdr(ctx context.Context, tok string, body io.Reader) (*User, error)
 }
 
 type User struct {
